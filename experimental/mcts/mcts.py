@@ -6,6 +6,9 @@ import numpy as np
 import ray
 
 
+USE_RAY = False
+
+
 class TreeNode(object):
   """
   Represents a node in a MCTS tree. These nodes are also stored in a hash table
@@ -37,13 +40,9 @@ class TreeNode(object):
     return None not in self.children
 
   def meanReward(self):
-#    if self.numVisits == 0:
-#      return -9999
     return self.rewards / self.numVisits
 
   def ucb1(self):
-#    if self.numVisits == 0:
-#      return -9999
     exploration_factor = self.c * np.sqrt(2 * np.log(self.parent.numVisits) / self.numVisits)
     bound = self.meanReward() + exploration_factor
     assert(not np.isnan(bound))
@@ -195,6 +194,9 @@ class TreeSearch(object):
 
   @ray.remote
   def runBatch(self, localRoot, rewardMultiplier, batchSize):
+    return self.runBatch(localroot, rewardMultiplier, batchSize)
+
+  def runBatchLocally(self, localRoot, rewardMultiplier, batchSize):
     batchReward = {}
     for _ in range(batchSize):
       leaf = localRoot.selectOrExpand()
@@ -223,18 +225,30 @@ class TreeSearch(object):
 
     while i < budget:
       if self.batchParallelism > 1:
-        broadcastTable = pickle.dumps(nodeTable)
+        if USE_RAY:
+          broadcastTable = ray.put(nodeTable)
+        else:
+          broadcastTable = pickle.dumps(nodeTable)
 
       batchFutures = []
       for _ in range(self.batchParallelism):
         if self.batchParallelism > 1:
-          localTable = pickle.loads(broadcastTable)
+          if USE_RAY:
+            localTable = ray.get(broadcastTable)
+          else:
+            localTable = pickle.loads(broadcastTable)
           localRoot = localTable[rootState]
         else:
           localRoot = globalRoot
-        batchReward = self.runBatch.remote(self, localRoot, rewardMultiplier, self.batchSize)
-        batchFutures.append(batchReward)
-      batchRewards = [ray.get(f) for f in batchFutures]
+        if USE_RAY:
+          batchReward = self.runBatch.remote(self, localRoot, rewardMultiplier, self.batchSize)
+          batchFutures.append(batchReward)
+        else:
+          batchFutures.append(self.runBatchLocally(localRoot, rewardMultiplier, self.batchSize))
+      if USE_RAY:
+        batchRewards = [ray.get(f) for f in batchFutures]
+      else:
+        batchRewards = batchFutures
 
       if self.batchParallelism > 1:
         for batchReward in batchRewards:

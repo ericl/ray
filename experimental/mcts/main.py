@@ -7,6 +7,7 @@ import ray
 import seaborn  # visualization
 import time
 
+import mcts
 from pgame import PGame, PGameState
 from agent import TreeSearchAgent, RandomAgent
 
@@ -19,9 +20,6 @@ def treeAgentFactory(params):
 
 BASELINE_AGENT_CLASS = treeAgentFactory(params = {
   "budget": 100,
-  "batchSize": 1,
-  "batchParallelism": 1,
-  "randomness": 0.0,
 })
 VISUALIZE_HISTO_NUM_BINS = 10
 NUM_RUNS = 20
@@ -40,10 +38,10 @@ def runIteration(agentClass, seed):
     a = player2.getAction(s)
     s = game.nextState(s, a)
   score = s.getScore()
-#  if score > 0:
-#    print("Test agent wins", s)
-#  else:
-#    print("Baseline agent wins", s)
+  if score > 0:
+    print("Test agent wins", s)
+  else:
+    print("Baseline agent wins", s)
   return score
 
 
@@ -59,22 +57,18 @@ def runIterations(agentClass, num):
 
 
 if __name__ == '__main__':
-  ray.init()
+  if mcts.USE_RAY:
+    ray.init()
   test_agents = [
-#    ('random', RandomAgent),
-#    ('baseline', BASELINE_AGENT_CLASS),
-#    ('2x_parallel', treeAgentFactory({
-#      "budget": 100,
-#      "batchSize": 100,
-#      "batchParallelism": 2,
-#      "randomness": 0.0,
-#    })),
-    ('test', treeAgentFactory({
-      "prewarmIters": 0,
+    ('random', RandomAgent),
+    ('baseline', BASELINE_AGENT_CLASS),
+    ('400_serial', treeAgentFactory({
+      "budget": 400,
+    })),
+    ('4x_100_parallel', treeAgentFactory({
       "budget": 100,
-      "batchSize": 1,
+      "batchSize": 100,
       "batchParallelism": 4,
-      "randomness": 0.0,
     })),
   ]
   results = []
