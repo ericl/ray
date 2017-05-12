@@ -72,6 +72,7 @@ if __name__ == '__main__':
     })),
   ]
   results = []
+  # TODO(ekl) also parallelize the experiments with Ray
   for label, a in test_agents:
     runs = runIterations(a, NUM_RUNS)
     results.append((label, runs))
