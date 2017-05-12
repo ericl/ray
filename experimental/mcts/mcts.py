@@ -1,3 +1,4 @@
+import os
 import pickle
 import random
 import time
@@ -6,7 +7,7 @@ import numpy as np
 import ray
 
 
-USE_RAY = False
+USE_RAY = "USE_RAY" in os.environ
 
 
 class TreeNode(object):
