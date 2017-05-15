@@ -142,8 +142,8 @@ class TreeSearch(object):
       {
         "c": .5,
         "budget": 100,
-        "batchSize": 10,
-        "batchParallelism": 4,
+        "batchSize": 100,
+        "batchParallelism": 1,
         "randomness": 0.0,
         "prewarmIters": 0
       },
@@ -235,7 +235,7 @@ class TreeSearch(object):
 
       batchFutures = []
       for _ in range(self.batchParallelism):
-        if USE_RAY:
+        if USE_RAY and self.batchParallelism > 1:
           batchReward = self.runBatch.remote(
             self, rootState, broadcastTable, rewardMultiplier, self.batchSize)
           batchFutures.append(batchReward)
@@ -246,7 +246,7 @@ class TreeSearch(object):
           else:
             localRoot = globalRoot
           batchFutures.append(self.runBatchLocally(localRoot, rewardMultiplier, self.batchSize))
-      if USE_RAY:
+      if USE_RAY and self.batchParallelism > 1:
         batchRewards = [ray.get(f) for f in batchFutures]
       else:
         batchRewards = batchFutures
