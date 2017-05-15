@@ -72,5 +72,5 @@ class PGame(AbstractGame):
 
 
 ray.register_class(PGame)
-ray.register_class(PGameState)
+ray.register_class(PGameState, pickle=True)
 ray.register_class(range, pickle=True)

@@ -60,11 +60,11 @@ if __name__ == '__main__':
   if mcts.USE_RAY:
     ray.init()
   test_agents = [
-    ('random', RandomAgent),
-    ('baseline', BASELINE_AGENT_CLASS),
-    ('400_serial', treeAgentFactory({
-      "budget": 400,
-    })),
+#    ('random', RandomAgent),
+#    ('baseline', BASELINE_AGENT_CLASS),
+#    ('400_serial', treeAgentFactory({
+#      "budget": 400,
+#    })),
     ('4x_100_parallel', treeAgentFactory({
       "budget": 100,
       "batchSize": 100,

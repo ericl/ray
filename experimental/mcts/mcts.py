@@ -194,8 +194,10 @@ class TreeSearch(object):
       parentNode.children[actionIndex] = newNode
 
   @ray.remote
-  def runBatch(self, localRoot, rewardMultiplier, batchSize):
-    return self.runBatch(localroot, rewardMultiplier, batchSize)
+  def runBatch(self, rootState, broadcastTable, rewardMultiplier, batchSize):
+    localTable = pickle.loads(broadcastTable)
+    localRoot = localTable[rootState]
+    return self.runBatchLocally(localRoot, rewardMultiplier, batchSize)
 
   def runBatchLocally(self, localRoot, rewardMultiplier, batchSize):
     batchReward = {}
@@ -227,24 +229,22 @@ class TreeSearch(object):
     while i < budget:
       if self.batchParallelism > 1:
         if USE_RAY:
-          broadcastTable = ray.put(nodeTable)
+          broadcastTable = ray.put(pickle.dumps(nodeTable))
         else:
           broadcastTable = pickle.dumps(nodeTable)
 
       batchFutures = []
       for _ in range(self.batchParallelism):
-        if self.batchParallelism > 1:
-          if USE_RAY:
-            localTable = ray.get(broadcastTable)
-          else:
-            localTable = pickle.loads(broadcastTable)
-          localRoot = localTable[rootState]
-        else:
-          localRoot = globalRoot
         if USE_RAY:
-          batchReward = self.runBatch.remote(self, localRoot, rewardMultiplier, self.batchSize)
+          batchReward = self.runBatch.remote(
+            self, rootState, broadcastTable, rewardMultiplier, self.batchSize)
           batchFutures.append(batchReward)
         else:
+          if self.batchParallelism > 1:
+            localTable = pickle.loads(broadcastTable)
+            localRoot = localTable[rootState]
+          else:
+            localRoot = globalRoot
           batchFutures.append(self.runBatchLocally(localRoot, rewardMultiplier, self.batchSize))
       if USE_RAY:
         batchRewards = [ray.get(f) for f in batchFutures]
