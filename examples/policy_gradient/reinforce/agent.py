@@ -61,7 +61,7 @@ def sum_grad_and_var_all_reduce(grad_and_vars, devices):
   # Note that each grad_and_vars looks like the following:
   #   ((grad0_gpu0, var0_gpu0), ... , (grad0_gpuN, var0_gpuN))
 
-  scaled_grads = [g for _, (g, _) in zip(devices, grad_and_vars)]
+  scaled_grads = [g for _, (g, _) in zip(devices, grad_and_vars) if g is not None]
   summed_grads = nccl.all_sum(scaled_grads)
 
   result = []
@@ -164,10 +164,15 @@ class Agent(object):
     # The final training op which executes in parallel over the model towers.
     if use_gpu:
       average_grad = sum_gradients_all_reduce(grads, devices)
+      self.optimizer = tf.train.AdamOptimizer(config["sgd_stepsize"])
+      ops = []
+      for grad in average_grad:
+        ops.append(self.optimizer.apply_gradients(grad))
+      self.train_op = tf.group(*ops)
     else:
-      average_grad = average_gradients(grads, devices)
-    self.optimizer = tf.train.AdamOptimizer(config["sgd_stepsize"])
-    self.train_op = self.optimizer.apply_gradients(average_grad)
+      average_grad = average_gradients(grads)
+      self.optimizer = tf.train.AdamOptimizer(config["sgd_stepsize"])
+      self.train_op = self.optimizer.apply_gradients(average_grad)
 
     # Metric ops
     with tf.name_scope("test_outputs"):
