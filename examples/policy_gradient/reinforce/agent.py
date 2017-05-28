@@ -6,6 +6,7 @@ import gym.spaces
 import tensorflow as tf
 import os
 
+from tensorflow.contrib import nccl
 from tensorflow.python.ops.data_flow_ops import StagingArea
 
 import ray
@@ -54,6 +55,27 @@ def average_gradients(tower_grads):
     grad_and_var = (grad, v)
     average_grads.append(grad_and_var)
   return average_grads
+
+
+def sum_grad_and_var_all_reduce(grad_and_vars, devices):
+  # Note that each grad_and_vars looks like the following:
+  #   ((grad0_gpu0, var0_gpu0), ... , (grad0_gpuN, var0_gpuN))
+
+  scaled_grads = [g for _, (g, _) in zip(devices, grad_and_vars)]
+  summed_grads = nccl.all_sum(scaled_grads)
+
+  result = []
+  for d, (_, v), g in zip(devices, grad_and_vars, summed_grads):
+    with tf.device(d):
+      result.append((g, v))
+  return result
+
+
+def sum_gradients_all_reduce(tower_grads, devices):
+  new_tower_grads = []
+  for grad_and_vars in zip(*tower_grads):
+    new_tower_grads.append(sum_grad_and_var_all_reduce(grad_and_vars, devices))
+  return list(zip(*new_tower_grads))
 
 
 class Agent(object):
@@ -140,7 +162,10 @@ class Agent(object):
         grads.append(optimizer.compute_gradients(self.ppo_towers[i].loss))
 
     # The final training op which executes in parallel over the model towers.
-    average_grad = average_gradients(grads)
+    if use_gpu:
+      average_grad = sum_gradients_all_reduce(grads, devices)
+    else:
+      average_grad = average_gradients(grads, devices)
     self.optimizer = tf.train.AdamOptimizer(config["sgd_stepsize"])
     self.train_op = self.optimizer.apply_gradients(average_grad)
 
