@@ -124,8 +124,8 @@ class Agent(object):
 
     # Defines the model replicas (i.e. "towers"), one per device.
     self.ppo_towers = []
-    with tf.variable_scope("shared_policy_net"):
-      for i, device in enumerate(devices):
+    for i, device in enumerate(devices):
+      with tf.variable_scope("tower_" + str(i)):
         with tf.device(device):
           obs, adv, acts, plgs = stage.get()
           ppo = ProximalPolicyLoss(
@@ -133,13 +133,11 @@ class Agent(object):
               obs, adv, acts, plgs, self.logit_dim, self.kl_coeff,
               distribution_class, config, self.sess)
           self.ppo_towers.append(ppo)
-        tf.get_variable_scope().reuse_variables()
     grads = []
     for i, device in enumerate(devices):
-      with tf.name_scope("tower_" + str(i)):
-        with tf.device(device):
-          optimizer = tf.train.AdamOptimizer(config["sgd_stepsize"])
-          grads.append(optimizer.compute_gradients(self.ppo_towers[i].loss))
+      with tf.device(device):
+        optimizer = tf.train.AdamOptimizer(config["sgd_stepsize"])
+        grads.append(optimizer.compute_gradients(self.ppo_towers[i].loss))
 
     # The final training op which executes in parallel over the model towers.
     average_grad = average_gradients(grads)
