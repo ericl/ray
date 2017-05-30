@@ -5,6 +5,8 @@ from __future__ import print_function
 import tensorflow as tf
 from tensorflow.contrib import nccl
 from tensorflow.python.ops.data_flow_ops import StagingArea
+from tensorflow.python.client import timeline
+
 import pickle
 import time
 
@@ -13,14 +15,22 @@ from reinforce.distributions import Categorical
 from reinforce.utils import iterate
 
 
+PONG_V0_PICKLED_TRAJECTORY = "/tmp/Pong-v0-trajectory"
 BATCH_SIZE = 256
-MAX_EXAMPLES = 1024
+MAX_EXAMPLES = 2048
+
 DEVICES = ["/cpu:0", "/cpu:1", "/cpu:2", "/cpu:3"]
 NUM_DEVICES = len(DEVICES)
 HAS_GPU = any(['gpu' in d for d in DEVICES])
 
+def truncate(trajectory, size):
+  batch = dict()
+  for key in trajectory:
+    batch[key] = trajectory[key][:size]
+  return batch
 
-# Pong-ram-v0
+
+# For Pong-v0
 observations = tf.placeholder(tf.float32, shape=(None, 80, 80, 3))
 prev_logits = tf.placeholder(tf.float32, shape=(None, 6))
 actions = tf.placeholder(tf.int64, shape=(None,))
@@ -198,12 +208,8 @@ if HAS_GPU:
 # Common main
 #
 
-def truncate(trajectory, size):
-  batch = dict()
-  for key in trajectory:
-    batch[key] = trajectory[key][:size]
-  return batch
-
+trajectory = truncate(
+  pickle.load(open(PONG_V0_PICKLED_TRAJECTORY, 'rb')), MAX_EXAMPLES)
 
 config = {
     "device_count": {"CPU": NUM_DEVICES},
@@ -211,8 +217,6 @@ config = {
 }
 config_proto = tf.ConfigProto(device_count={"CPU": 4})
 sess = tf.Session(config=config_proto)
-trajectory = truncate(
-  pickle.load(open("/tmp/Pong-v0-trajectory", 'rb')), MAX_EXAMPLES)
 total_examples = len(trajectory["observations"])
 print("Total examples", total_examples)
 
@@ -225,6 +229,25 @@ def make_inputs(batch):
   }
 
 
+def run(ops, i, feed_dict={}, trace_as=None):
+  start = time.time()
+  full_trace = trace_as and i == 2
+  if full_trace:
+    run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+  else:
+    run_options = tf.RunOptions(trace_level=tf.RunOptions.NO_TRACE)
+  run_metadata = tf.RunMetadata()
+  sess.run(
+      ops, feed_dict=feed_dict, options=run_options, run_metadata=run_metadata)
+  if full_trace:
+    trace = timeline.Timeline(step_stats=run_metadata.step_stats)
+    out = '/tmp/ray/timeline-{}.json'.format(trace_as)
+    trace_file = open(out, 'w')
+    trace_file.write(trace.generate_chrome_trace_format())
+    print("Wrote trace file to", out)
+  print("iteration", i, time.time() - start, "seconds")
+
+
 def run_experiment(strategy, name):
   sess.run(tf.global_variables_initializer())
   delta = strategy(trajectory)
@@ -235,8 +258,7 @@ def baseline_strategy(trajectory):
   print("Current loss", sess.run(mean_loss, feed_dict=make_inputs(trajectory)))
   start = time.time()
   for i, batch in enumerate(iterate(trajectory, BATCH_SIZE)):
-    print("iterate", i)
-    sess.run(train_op, feed_dict = make_inputs(batch))
+    run(train_op, i, make_inputs(batch), trace_as="baseline")
   delta = time.time() - start
   print("Final loss", sess.run(mean_loss, feed_dict=make_inputs(trajectory)))
   return delta
@@ -247,8 +269,7 @@ def split_parallel_strategy(trajectory):
       strategy1_losses[0], feed_dict=make_inputs(trajectory)))
   start = time.time()
   for i, batch in enumerate(iterate(trajectory, BATCH_SIZE)):
-    print("iterate", i)
-    sess.run(strategy1_train_op, feed_dict = make_inputs(batch))
+    run(strategy1_train_op, i, make_inputs(batch), trace_as="split_par")
   delta = time.time() - start
   print("Final loss", sess.run(
       strategy1_losses[0], feed_dict=make_inputs(trajectory)))
@@ -260,13 +281,11 @@ def split_parallel_pipelined_strategy(trajectory):
   print("Current loss", sess.run(strategy2_losses[0]))
   start = time.time()
   for i, batch in enumerate(iterate(trajectory, BATCH_SIZE)):
-    print("iterate", i)
     if i == 0:
       sess.run(strategy2_stage_op, feed_dict = make_inputs(batch))
     else:
-      sess.run(
-          [strategy2_train_op, strategy2_stage_op],
-          feed_dict = make_inputs(batch))
+      run([strategy2_train_op, strategy2_stage_op], i,
+          make_inputs(batch), trace_as="split_par_pipelined")
   delta = time.time() - start
   sess.run(strategy2_train_op)
   sess.run(strategy2_stage_op, feed_dict = make_inputs(trajectory))
@@ -280,7 +299,7 @@ def split_parallel_nccl_strategy(trajectory):
   start = time.time()
   for i, batch in enumerate(iterate(trajectory, BATCH_SIZE)):
     print("iterate", i)
-    sess.run(strategy3_train_op, feed_dict = make_inputs(batch))
+    run(strategy3_train_op, i, make_inputs(batch), trace_as="split_par_nccl")
   delta = time.time() - start
   print("Final loss", sess.run(
       strategy3_losses[0], feed_dict=make_inputs(trajectory)))
@@ -311,7 +330,6 @@ Averaging strategy:
     - average on cpu
 """
 
-# TODO(ekl) collect timeline files for each experiment
 # TODO(ekl) test having separate models assigned to each GPU
 # TODO(ekl) test slice_input_producer + tf.batch to avoid feed_dict
 #   https://github.com/tensorflow/tensorflow/issues/7817
