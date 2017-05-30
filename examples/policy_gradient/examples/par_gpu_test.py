@@ -19,7 +19,7 @@ PONG_V0_PICKLED_TRAJECTORY = "/tmp/Pong-v0-trajectory"
 BATCH_SIZE = 256
 MAX_EXAMPLES = 2048
 
-DEVICES = ["/cpu:0", "/cpu:1", "/cpu:2", "/cpu:3"]
+DEVICES = ["/gpu:0", "/gpu:1", "/gpu:2", "/gpu:3"]
 NUM_DEVICES = len(DEVICES)
 HAS_GPU = any(['gpu' in d for d in DEVICES])
 
