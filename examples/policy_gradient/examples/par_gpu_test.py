@@ -54,6 +54,11 @@ grad = optimizer.compute_gradients(dummy_loss)
 train_op = optimizer.apply_gradients(grad)
 mean_loss = tf.reduce_mean(dummy_loss)
 
+noop_op = tf.group(
+  tf.reduce_mean(observations),
+  tf.reduce_mean(actions),
+  tf.reduce_mean(prev_logits))
+
 
 #
 # Strategy 1 - use tf.split, then average the gradients
@@ -256,6 +261,16 @@ def run_experiment(strategy, name):
   print("Examples per second", total_examples / delta)
 
 
+def noop_strategy(trajectory):
+  print("Current loss", sess.run(mean_loss, feed_dict=make_inputs(trajectory)))
+  start = time.time()
+  for i, batch in enumerate(iterate(trajectory, BATCH_SIZE)):
+    run(noop_op, i, make_inputs(batch), trace_as="noop")
+  delta = time.time() - start
+  print("Final loss", sess.run(mean_loss, feed_dict=make_inputs(trajectory)))
+  return delta
+
+
 def baseline_strategy(trajectory):
   print("Current loss", sess.run(mean_loss, feed_dict=make_inputs(trajectory)))
   start = time.time()
@@ -308,6 +323,7 @@ def split_parallel_nccl_strategy(trajectory):
   return delta
 
 
+run_experiment(noop_strategy, "Noop feed-dict")
 run_experiment(baseline_strategy, "Baseline")
 run_experiment(split_parallel_strategy, "Split parallel")
 run_experiment(split_parallel_pipelined_strategy, "Split parallel pipelined")
