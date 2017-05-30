@@ -249,9 +249,11 @@ def run(ops, i, feed_dict={}, trace_as=None):
 
 
 def run_experiment(strategy, name):
+  print()
+  print("*** Running experiment", name)
   sess.run(tf.global_variables_initializer())
   delta = strategy(trajectory)
-  print("->", name, "examples per second", total_examples / delta)
+  print("Examples per second", total_examples / delta)
 
 
 def baseline_strategy(trajectory):
