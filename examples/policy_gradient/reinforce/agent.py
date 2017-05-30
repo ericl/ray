@@ -162,7 +162,7 @@ class Agent(object):
         grads.append(optimizer.compute_gradients(self.ppo_towers[i].loss))
 
     # The final training op which executes in parallel over the model towers.
-    if use_gpu:
+    if use_gpu and False:
       average_grad = sum_gradients_all_reduce(grads, devices)
       self.optimizer = tf.train.AdamOptimizer(config["sgd_stepsize"])
       ops = []
