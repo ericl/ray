@@ -19,7 +19,7 @@ PONG_V0_PICKLED_TRAJECTORY = "/tmp/Pong-v0-trajectory"
 BATCH_SIZE = 256
 MAX_EXAMPLES = 2048
 
-DEVICES = ["/gpu:0", "/gpu:1", "/gpu:2", "/gpu:3"]
+DEVICES = ["/cpu:0", "/cpu:1", "/cpu:2", "/cpu:3"]
 NUM_DEVICES = len(DEVICES)
 HAS_GPU = any(['gpu' in d for d in DEVICES])
 
@@ -39,7 +39,9 @@ def create_loss(observations, prev_logits, actions):
   curr_logits = vision_net(observations, num_classes=6)
   curr_dist = Categorical(curr_logits)
   prev_dist = Categorical(prev_logits)
-  ratio = tf.exp(curr_dist.logp(actions) - prev_dist.logp(actions))
+  ratio = tf.exp(
+    curr_dist.logp(actions) -
+    prev_dist.logp(actions))
   loss = tf.reduce_mean(ratio)
   return loss
 
@@ -323,6 +325,53 @@ def split_parallel_nccl_strategy(trajectory):
   return delta
 
 
+def queue_strategy(trajectory):
+  x = tf.convert_to_tensor(trajectory["observations"], dtype=tf.float32)
+  y = tf.convert_to_tensor(trajectory["logprobs"], dtype=tf.float32)
+  z = tf.convert_to_tensor(trajectory["actions"].squeeze())
+  x, y, z = tf.train.slice_input_producer([x, y, z], num_epochs=1)
+  x, y, z = tf.train.batch([x, y, z], batch_size=BATCH_SIZE)
+  with tf.variable_scope("queue_strategy"):
+    s4_loss = create_loss(x, y, z)
+  s4_optimizer = tf.train.AdamOptimizer(5e-5)
+  s4_grad = optimizer.compute_gradients(s4_loss)
+  s4_train_op = optimizer.apply_gradients(s4_grad)
+  coord = tf.train.Coordinator()
+  sess.run([tf.global_variables_initializer(), tf.local_variables_initializer()])
+#  print("Current loss", sess.run(s4_loss, feed_dict={
+#    x: trajectory["observations"],
+#    y: trajectory["logprobs"],
+#    z: trajectory["actions"].squeeze(),
+#  }))
+  start = time.time()
+#  print("pre-enqueuing") 
+#  a_queue_qr = tf.get_collection(tf.GraphKeys.QUEUE_RUNNERS)[0]
+#  print(a_queue_qr)
+#  for i in range(1000):
+#    print("q", i)
+#    sess.run(a_queue_qr.enqueue_ops)
+#  print("done enqueuing")
+  threads = tf.train.start_queue_runners(sess, coord)
+  try:
+    i = 0
+    while not coord.should_stop():
+      run([s4_train_op], i, trace_as="queue_strategy")
+      i += 1
+  except Exception as e:
+    coord.request_stop(e)
+  finally:
+    coord.request_stop()
+  coord.join(threads)
+  delta = time.time() - start
+#  print("Current loss", sess.run(s4_loss, feed_dict={
+#    x: trajectory["observations"],
+#    y: trajectory["logprobs"],
+#    z: trajectory["actions"].squeeze(),
+#  }))
+  return delta
+
+
+run_experiment(queue_strategy, "Queue strategy")
 run_experiment(noop_strategy, "Noop feed-dict")
 run_experiment(baseline_strategy, "Baseline")
 run_experiment(split_parallel_strategy, "Split parallel")
