@@ -343,7 +343,6 @@ def queue_strategy(trajectory):
 #    y: trajectory["logprobs"],
 #    z: trajectory["actions"].squeeze(),
 #  }))
-  start = time.time()
 #  print("pre-enqueuing") 
 #  a_queue_qr = tf.get_collection(tf.GraphKeys.QUEUE_RUNNERS)[0]
 #  print(a_queue_qr)
@@ -352,6 +351,9 @@ def queue_strategy(trajectory):
 #    sess.run(a_queue_qr.enqueue_ops)
 #  print("done enqueuing")
   threads = tf.train.start_queue_runners(sess, coord)
+  print("Waiting for queue to populate")
+  time.sleep(2)
+  start = time.time()
   try:
     i = 0
     while not coord.should_stop():
