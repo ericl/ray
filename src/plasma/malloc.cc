@@ -108,7 +108,12 @@ void *fake_mmap(size_t size) {
 
   int fd = create_buffer(size);
   CHECKM(fd >= 0, "Failed to create buffer during mmap");
+#ifdef __linux__
   void *pointer = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, fd, 0);
+#else
+  void *pointer = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  memset(pointer, 0x0, size);
+#endif
   if (pointer == MAP_FAILED) {
     return pointer;
   }
