@@ -21,7 +21,7 @@ int fake_munmap(void *, size_t);
 #define USE_DL_PREFIX
 #define HAVE_MORECORE 0
 #define DEFAULT_MMAP_THRESHOLD MAX_SIZE_T
-#define DEFAULT_GRANULARITY ((size_t) 128U * 1024U)
+#define DEFAULT_GRANULARITY ((size_t) 512U * 1024U * 1024U)
 
 #include "thirdparty/dlmalloc.c"
 
@@ -108,7 +108,7 @@ void *fake_mmap(size_t size) {
 
   int fd = create_buffer(size);
   CHECKM(fd >= 0, "Failed to create buffer during mmap");
-  void *pointer = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  void *pointer = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, fd, 0);
   if (pointer == MAP_FAILED) {
     return pointer;
   }
