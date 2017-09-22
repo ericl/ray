@@ -263,7 +263,7 @@ def collect_samples(agents,
         # Now concatenate all the prefetched objects
         start = time.time()
         for trajectory in pending:
-            trajectory, rewards, lengths = ray.get(next_trajectory)
+            trajectory, rewards, lengths = ray.get(trajectory)
             total_rewards.extend(rewards)
             trajectory_lengths.extend(lengths)
             num_timesteps_so_far += len(trajectory["dones"])
