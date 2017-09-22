@@ -3,7 +3,9 @@ from __future__ import division
 from __future__ import print_function
 
 import numpy as np
+import pyarrow
 import ray
+import time
 
 from ray.rllib.ppo.filter import NoFilter
 from ray.rllib.ppo.utils import concatenate
@@ -235,6 +237,7 @@ def collect_samples(agents,
     trajectories = []
     total_rewards = []
     trajectory_lengths = []
+    wait_time, fetch_time, get_time = 0, 0, 0
     # This variable maps the object IDs of trajectories that are currently
     # computed to the agent that they are computed on; we start some initial
     # tasks here.
@@ -242,21 +245,50 @@ def collect_samples(agents,
                       config["gamma"], config["lambda"],
                       config["horizon"], config["min_steps_per_task"]):
                   agent for agent in agents}
-    while num_timesteps_so_far < config["timesteps_per_batch"]:
-        # TODO(pcm): Make wait support arbitrary iterators and remove the
-        # conversion to list here.
-        [next_trajectory], waiting_trajectories = ray.wait(
-            list(agent_dict.keys()))
-        agent = agent_dict.pop(next_trajectory)
-        # Start task with next trajectory and record it in the dictionary.
-        agent_dict[agent.compute_steps.remote(
-                       config["gamma"], config["lambda"],
-                       config["horizon"], config["min_steps_per_task"])] = (
-            agent)
-        trajectory, rewards, lengths = ray.get(next_trajectory)
-        total_rewards.extend(rewards)
-        trajectory_lengths.extend(lengths)
-        num_timesteps_so_far += len(trajectory["dones"])
-        trajectories.append(trajectory)
+    if config["oneshot_rollouts"]:
+        pending = []
+        while agent_dict:
+            start = time.time()
+            [next_trajectory], waiting_trajectories = ray.wait(
+                list(agent_dict.keys()))
+            wait_time += time.time() - start
+            start = time.time()
+            agent_dict.pop(next_trajectory)
+            pending.append(next_trajectory)
+            # Trigger prefetch of these objects
+            ray.worker.global_worker.plasma_client.fetch(
+                [pyarrow.plasma.ObjectID(next_trajectory.id())])
+
+            fetch_time += time.time() - start
+        # Now concatenate all the prefetched objects
+        start = time.time()
+        for trajectory in pending:
+            trajectory, rewards, lengths = ray.get(next_trajectory)
+            total_rewards.extend(rewards)
+            trajectory_lengths.extend(lengths)
+            num_timesteps_so_far += len(trajectory["dones"])
+            trajectories.append(trajectory)
+        get_time += time.time() - start
+        print("fetch_time", fetch_time)
+        print("wait_time", wait_time)
+        print("get_time", get_time)
+    else:
+        while num_timesteps_so_far < config["timesteps_per_batch"]:
+            # TODO(pcm): Make wait support arbitrary iterators and remove the
+            # conversion to list here.
+            [next_trajectory], waiting_trajectories = ray.wait(
+                list(agent_dict.keys()))
+            agent = agent_dict.pop(next_trajectory)
+            # Start task with next trajectory and record it in the dictionary.
+            agent_dict[agent.compute_steps.remote(
+                           config["gamma"], config["lambda"],
+                           config["horizon"], config["min_steps_per_task"])] = (
+                agent)
+            trajectory, rewards, lengths = ray.get(next_trajectory)
+            total_rewards.extend(rewards)
+            trajectory_lengths.extend(lengths)
+            num_timesteps_so_far += len(trajectory["dones"])
+            trajectories.append(trajectory)
+    assert num_timesteps_so_far >= config["timesteps_per_batch"]
     return (concatenate(trajectories), np.mean(total_rewards),
             np.mean(trajectory_lengths))

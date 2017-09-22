@@ -41,6 +41,8 @@ DEFAULT_CONFIG = {
         "log_device_placement": False,
         "allow_soft_placement": True,
     },
+    # Whether to launch only one wave of tasks for rollouts
+    "oneshot_rollouts": True,
     # Batch size for policy evaluations for rollouts
     "rollout_batchsize": 1,
     # Total SGD batch size across all devices for SGD
@@ -60,7 +62,7 @@ DEFAULT_CONFIG = {
     # If >1, adds frameskip
     "extra_frameskip": 1,
     # Number of timesteps collected in each outer loop
-    "timesteps_per_batch": 40000,
+    "timesteps_per_batch": 4000,
     # Each tasks performs rollouts until at least this
     # number of steps is obtained
     "min_steps_per_task": 1000,
