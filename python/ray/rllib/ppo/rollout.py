@@ -288,7 +288,6 @@ def collect_samples(agents,
 
     def do_remote_compute(agent):
         if config["trunc_nstep"]:
-            assert config["horizon"] == 0 and config["min_steps_per_task"] == 0
             return agent.compute_partial_steps.remote(
                 config["gamma"], config["lambda"], config["trunc_nstep"])
         else:
@@ -310,7 +309,7 @@ def collect_samples(agents,
 
     if config["oneshot_rollouts"]:
         pending = []
-        while agent_dict:
+        while num_timesteps_so_far < config["timesteps_per_batch"]:
             start = time.time()
             [next_trajectory], waiting_trajectories = ray.wait(
                 list(agent_dict.keys()))
@@ -335,6 +334,9 @@ def collect_samples(agents,
         print("fetch_time", fetch_time)
         print("wait_time", wait_time)
         print("get_time", get_time)
+        print("discarded_stragglers", len(agent_dict))
+        assert num_timesteps_so_far == config["timesteps_per_batch"], \
+            num_timesteps_so_far
     else:
         while num_timesteps_so_far < config["timesteps_per_batch"]:
             # TODO(pcm): Make wait support arbitrary iterators and remove the
@@ -349,6 +351,7 @@ def collect_samples(agents,
             trajectory_lengths.extend(lengths)
             num_timesteps_so_far += len(trajectory["dones"])
             trajectories.append(trajectory)
-    assert num_timesteps_so_far >= config["timesteps_per_batch"]
+        assert (num_timesteps_so_far >= config["timesteps_per_batch"],
+            num_timesteps_so_far)
     return (concatenate(trajectories), np.mean(total_rewards),
             np.mean(trajectory_lengths))

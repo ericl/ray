@@ -62,7 +62,7 @@ DEFAULT_CONFIG = {
     # If >1, adds frameskip
     "extra_frameskip": 1,
     # Number of timesteps collected in each outer loop
-    "timesteps_per_batch": 1000,
+    "timesteps_per_batch": 5000,
     # Each tasks performs rollouts until at least this
     # number of steps is obtained
     "min_steps_per_task": 1000,
@@ -79,7 +79,7 @@ DEFAULT_CONFIG = {
     "tf_debug_inf_or_nan": False,
     # If True, we write tensorflow logs and checkpoints
     "write_logs": True,
-    "trunc_nstep": None
+    "trunc_nstep": 1000
 }
 
 
