@@ -281,60 +281,33 @@ def add_multitrunc_values(trajectory, gamma, lam, reward_filter):
         trajectory["advantages"] + trajectory["vf_preds"]
 
 
-def collect_partial(agents,
-                    config,
-                    observation_filter=NoFilter(),
-                    reward_filter=NoFilter()):
-    num_timesteps_so_far = 0
-    trajectories = []
-    total_rewards = []
-    trajectory_lengths = []
-    # This variable maps the object IDs of trajectories that are currently
-    # computed to the agent that they are computed on; we start some initial
-    # tasks here.
-    agent_dict = {agent.compute_partial_steps.remote(
-                      config["gamma"], config["lambda"],
-                      config["trunc_nstep"]):
-                  agent for agent in agents}
-    while num_timesteps_so_far < config["timesteps_per_batch"]:
-        # TODO(pcm): Make wait support arbitrary iterators and remove the
-        # conversion to list here.
-        [next_trajectory], waiting_trajectories = ray.wait(
-            list(agent_dict.keys()))
-        agent = agent_dict.pop(next_trajectory)
-        # Start task with next trajectory and record it in the dictionary.
-        agent_dict[agent.compute_partial_steps.remote(
-                       config["gamma"], config["lambda"],
-                       config["trunc_nstep"])] = (
-            agent)
-        trajectory, rewards, lengths = ray.get(next_trajectory)
-
-        # TODO(rliaw): make "total_reward" to only recall full rollouts?
-        total_rewards.extend(rewards)
-        trajectory_lengths.extend(lengths)
-        num_timesteps_so_far += len(trajectory["observations"])
-        trajectories.append(trajectory)
-    return (concatenate(trajectories), np.nanmean(total_rewards),
-            np.nanmean(trajectory_lengths))
-
-
 def collect_samples(agents,
                     config,
                     observation_filter=NoFilter(),
                     reward_filter=NoFilter()):
+
+    def do_remote_compute(agent):
+        if config["trunc_nstep"]:
+            assert config["horizon"] == 0 and config["min_steps_per_task"] == 0
+            return agent.compute_partial_steps.remote(
+                config["gamma"], config["lambda"], config["trunc_nstep"])
+        else:
+            return agent.compute_steps.remote(
+                config["gamma"], config["lambda"],
+                config["horizon"], config["min_steps_per_task"])
+
     # TODO(rliaw): observation, reward filters are UNUSED
     num_timesteps_so_far = 0
     trajectories = []
     total_rewards = []
     trajectory_lengths = []
     wait_time, fetch_time, get_time = 0, 0, 0
+
     # This variable maps the object IDs of trajectories that are currently
     # computed to the agent that they are computed on; we start some initial
     # tasks here.
-    agent_dict = {agent.compute_steps.remote(
-                      config["gamma"], config["lambda"],
-                      config["horizon"], config["min_steps_per_task"]):
-                  agent for agent in agents}
+    agent_dict = {do_remote_compute(agent): agent for agent in agents}
+
     if config["oneshot_rollouts"]:
         pending = []
         while agent_dict:
@@ -370,10 +343,7 @@ def collect_samples(agents,
                 list(agent_dict.keys()))
             agent = agent_dict.pop(next_trajectory)
             # Start task with next trajectory and record it in the dictionary.
-            agent_dict[agent.compute_steps.remote(
-                           config["gamma"], config["lambda"],
-                           config["horizon"], config["min_steps_per_task"])] = (
-                agent)
+            agent_dict[do_remote_compute(agent)] = agent
             trajectory, rewards, lengths = ray.get(next_trajectory)
             total_rewards.extend(rewards)
             trajectory_lengths.extend(lengths)

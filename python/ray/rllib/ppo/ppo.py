@@ -13,7 +13,7 @@ from tensorflow.python import debug as tf_debug
 import ray
 from ray.rllib.common import Agent, TrainingResult
 from ray.rllib.ppo.runner import Runner, RemoteRunner
-from ray.rllib.ppo.rollout import collect_samples, collect_partial
+from ray.rllib.ppo.rollout import collect_samples
 from ray.rllib.ppo.utils import shuffle
 
 
@@ -62,7 +62,7 @@ DEFAULT_CONFIG = {
     # If >1, adds frameskip
     "extra_frameskip": 1,
     # Number of timesteps collected in each outer loop
-    "timesteps_per_batch": 4000,
+    "timesteps_per_batch": 1000,
     # Each tasks performs rollouts until at least this
     # number of steps is obtained
     "min_steps_per_task": 1000,
@@ -119,13 +119,8 @@ class PPOAgent(Agent):
         iter_start = time.time()
         weights = ray.put(model.get_weights())
         [a.load_weights.remote(weights) for a in agents]
-        if config["trunc_nstep"] is not None:
-            assert config["horizon"] == 0 and config["min_steps_per_task"] == 0
-            trajectory, total_reward, traj_len_mean = collect_partial(
-                agents, config)
-        else:
-            trajectory, total_reward, traj_len_mean = collect_samples(
-                agents, config)
+        trajectory, total_reward, traj_len_mean = collect_samples(
+            agents, config)
         print("total reward is ", total_reward)
         print("trajectory length mean is ", traj_len_mean)
         print("timesteps:", trajectory["dones"].shape[0])
@@ -168,6 +163,8 @@ class PPOAgent(Agent):
         for i in range(config["num_sgd_iter"]):
             sgd_start = time.time()
             batch_index = 0
+            assert (
+                int(tuples_per_device) % int(model.per_device_batch_size) == 0)
             num_batches = (
                 int(tuples_per_device) // int(model.per_device_batch_size))
             loss, policy_loss, vf_loss, kl, entropy = [], [], [], [], []
