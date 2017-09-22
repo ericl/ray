@@ -94,6 +94,7 @@ class PPOAgent(Agent):
 
     def _init(self):
         self.global_step = 0
+        self.rollouts_time_total = 0
         self.kl_coeff = self.config["kl_coeff"]
         self.model = Runner(self.env_name, 1, self.config, self.logdir, False)
         self.agents = [
@@ -224,10 +225,12 @@ class PPOAgent(Agent):
         elif kl < 0.5 * config["kl_target"]:
             self.kl_coeff *= 0.5
 
+        self.rollouts_time_total += rollouts_time
         info = {
             "kl_divergence": kl,
             "kl_coefficient": self.kl_coeff,
             "rollouts_time": rollouts_time,
+            "rollouts_time_total": self.rollouts_time_total,
             "shuffle_time": shuffle_time,
             "load_time": load_time,
             "sgd_time": sgd_time,
