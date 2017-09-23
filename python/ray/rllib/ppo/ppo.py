@@ -41,8 +41,10 @@ DEFAULT_CONFIG = {
         "log_device_placement": False,
         "allow_soft_placement": True,
     },
+    # Whether to prefetch rollouts data
+    "prefetch": True,
     # Whether to launch only one wave of tasks for rollouts
-    "oneshot_rollouts": True,
+    "oneshot_rollouts": False,
     # Batch size for policy evaluations for rollouts
     "rollout_batchsize": 1,
     # Total SGD batch size across all devices for SGD

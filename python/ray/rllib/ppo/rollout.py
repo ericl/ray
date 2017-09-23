@@ -319,9 +319,10 @@ def collect_samples(agents,
             start = time.time()
             agent_dict.pop(next_trajectory)
             pending.append(next_trajectory)
-            # Trigger prefetch of these objects
-            ray.worker.global_worker.plasma_client.fetch(
-                [pyarrow.plasma.ObjectID(next_trajectory.id())])
+            if config["prefetch"]:
+                # Trigger prefetch of these objects
+                ray.worker.global_worker.plasma_client.fetch(
+                    [pyarrow.plasma.ObjectID(next_trajectory.id())])
             num_timesteps_so_far += config["min_steps_per_task"]
             fetch_time += time.time() - start
         # Now concatenate all the prefetched objects
@@ -341,6 +342,7 @@ def collect_samples(agents,
              str(num_timesteps_so_far) +
              ", perhaps you didn't use enough workers?")
     else:
+        pending = []
         while num_timesteps_so_far < config["timesteps_per_batch"]:
             # TODO(pcm): Make wait support arbitrary iterators and remove the
             # conversion to list here.
@@ -349,7 +351,15 @@ def collect_samples(agents,
             agent = agent_dict.pop(next_trajectory)
             # Start task with next trajectory and record it in the dictionary.
             agent_dict[do_remote_compute(agent)] = agent
-            trajectory, rewards, lengths = ray.get(next_trajectory)
+            # Trigger prefetch of these objects
+            if config["prefetch"]:
+                ray.worker.global_worker.plasma_client.fetch(
+                    [pyarrow.plasma.ObjectID(next_trajectory.id())])
+            pending.append(next_trajectory)
+            num_timesteps_so_far += config["min_steps_per_task"]
+        num_timesteps_so_far = 0
+        for trajectory in pending:
+            trajectory, rewards, lengths = ray.get(trajectory)
             total_rewards.extend(rewards)
             trajectory_lengths.extend(lengths)
             num_timesteps_so_far += len(trajectory["dones"])
