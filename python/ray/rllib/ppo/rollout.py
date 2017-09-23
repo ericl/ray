@@ -289,7 +289,8 @@ def collect_samples(agents,
     def do_remote_compute(agent):
         if config["trunc_nstep"]:
             return agent.compute_partial_steps.remote(
-                config["gamma"], config["lambda"], config["trunc_nstep"])
+                config["gamma"], config["lambda"],
+                config["min_steps_per_task"])
         else:
             return agent.compute_steps.remote(
                 config["gamma"], config["lambda"],
@@ -321,7 +322,7 @@ def collect_samples(agents,
             # Trigger prefetch of these objects
             ray.worker.global_worker.plasma_client.fetch(
                 [pyarrow.plasma.ObjectID(next_trajectory.id())])
-
+            num_timesteps_so_far += config["min_steps_per_task"]
             fetch_time += time.time() - start
         # Now concatenate all the prefetched objects
         start = time.time()
@@ -329,7 +330,6 @@ def collect_samples(agents,
             trajectory, rewards, lengths = ray.get(trajectory)
             total_rewards.extend(rewards)
             trajectory_lengths.extend(lengths)
-            num_timesteps_so_far += len(trajectory["dones"])
             trajectories.append(trajectory)
         get_time += time.time() - start
         print("fetch_time", fetch_time)
@@ -337,7 +337,9 @@ def collect_samples(agents,
         print("get_time", get_time)
         print("discarded_stragglers", len(agent_dict))
         assert num_timesteps_so_far == config["timesteps_per_batch"], \
-            num_timesteps_so_far
+            ("Failed to collect enough steps in oneshot_rollout mode: " +
+             str(num_timesteps_so_far) +
+             ", perhaps you didn't use enough workers?")
     else:
         while num_timesteps_so_far < config["timesteps_per_batch"]:
             # TODO(pcm): Make wait support arbitrary iterators and remove the

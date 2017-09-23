@@ -62,10 +62,10 @@ DEFAULT_CONFIG = {
     # If >1, adds frameskip
     "extra_frameskip": 1,
     # Number of timesteps collected in each outer loop
-    "timesteps_per_batch": 5000,
-    # Each tasks performs rollouts until at least this
-    # number of steps is obtained
-    "min_steps_per_task": 1000,
+    "timesteps_per_batch": 3840,
+    # Each tasks performs rollouts until at least this number of steps is
+    # obtained. This value is exact is trunc_nstep is True.
+    "min_steps_per_task": 960,
     # Number of actors used to collect the rollouts
     "num_workers": 5,
     # Dump TensorFlow timeline after this many SGD minibatches
@@ -79,7 +79,8 @@ DEFAULT_CONFIG = {
     "tf_debug_inf_or_nan": False,
     # If True, we write tensorflow logs and checkpoints
     "write_logs": True,
-    "trunc_nstep": 1000
+    # If True, truncate rollouts at min_steps_per_task
+    "trunc_nstep": True,
 }
 
 
