@@ -262,7 +262,6 @@ class Runner(object):
         # print(trajectory["dones"])
         # import ipdb;ipdb.set_trace()
         # Need to do bookkeeping before filter out useful states
-        import ipdb; ipdb.set_trace()
         for subrewards, subdones in zip(traj_rewards, traj_dones):
             self.cur_traj_stats["reward"] += sum(subrewards)
             self.cur_traj_stats["length"] += len(subrewards)

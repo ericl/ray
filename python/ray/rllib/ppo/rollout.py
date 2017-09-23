@@ -309,7 +309,8 @@ def collect_samples(agents,
 
     if config["oneshot_rollouts"]:
         pending = []
-        while num_timesteps_so_far < config["timesteps_per_batch"]:
+        while num_timesteps_so_far < config["timesteps_per_batch"] and \
+                agent_dict:
             start = time.time()
             [next_trajectory], waiting_trajectories = ray.wait(
                 list(agent_dict.keys()))
