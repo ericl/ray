@@ -336,7 +336,7 @@ def collect_samples(agents,
         print("wait_time", wait_time)
         print("get_time", get_time)
         print("discarded_stragglers", len(agent_dict))
-        assert num_timesteps_so_far == config["timesteps_per_batch"], \
+        assert num_timesteps_so_far >= config["timesteps_per_batch"], \
             ("Failed to collect enough steps in oneshot_rollout mode: " +
              str(num_timesteps_so_far) +
              ", perhaps you didn't use enough workers?")

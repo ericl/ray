@@ -202,7 +202,6 @@ Tower = namedtuple("Tower", ["init_op", "grads", "loss_object"])
 
 
 def make_divisible_by(array, n):
-    assert array.shape[0] % n == 0, (array.shape[0], n)
     return array[0:array.shape[0] - array.shape[0] % n]
 
 

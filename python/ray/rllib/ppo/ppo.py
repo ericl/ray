@@ -80,7 +80,7 @@ DEFAULT_CONFIG = {
     # If True, we write tensorflow logs and checkpoints
     "write_logs": True,
     # If True, truncate rollouts at min_steps_per_task
-    "trunc_nstep": True,
+    "trunc_nstep": False,
 }
 
 
