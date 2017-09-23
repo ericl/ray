@@ -356,5 +356,5 @@ def collect_samples(agents,
             trajectories.append(trajectory)
         assert (num_timesteps_so_far >= config["timesteps_per_batch"],
             num_timesteps_so_far)
-    return (concatenate(trajectories), np.mean(total_rewards),
-            np.mean(trajectory_lengths))
+    return (concatenate(trajectories), np.nanmean(total_rewards),
+            np.nanmean(trajectory_lengths))
