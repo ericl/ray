@@ -38,7 +38,7 @@ AGENTS = {
 
 class Experiment(object):
     def __init__(
-            self, env, alg, stopping_criterion,
+            self, env, alg, stopping_criterion, cp_freq,
             out_dir, i, config, was_resolved, resources):
         self.alg = alg
         self.env = env
@@ -143,7 +143,7 @@ def parse_configuration(yaml_file):
         for i in range(exp_cfg['max_trials']):
             resolved, was_resolved = resolve(exp_cfg['parameters'], i)
             experiments.append(Experiment(
-                env_name, alg_name, stopping_criterion, out_dir, i,
+                env_name, alg_name, stopping_criterion, cp_freq, out_dir, i,
                 resolved, was_resolved, exp_cfg['resources']))
 
     return experiments
@@ -186,7 +186,7 @@ class ExperimentState(object):
 
 class ExperimentRunner(object):
 
-    def __init__(self, experiments, cp_frequency):
+    def __init__(self, experiments):
         self._experiments = experiments
         self._status = {e: ExperimentState(e) for e in self._experiments}
         self._pending = {}
