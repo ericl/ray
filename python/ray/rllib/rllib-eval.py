@@ -164,11 +164,11 @@ class ExperimentState(object):
         self.last_cp_iteration = None  # Could checkpoint at beginning
 
     def need_checkpoint(self):
-        if frequency is None:
+        if self.checkpoint_freq is None:
             return False
         if self.last_cp_iteration is None:
             return True
-        return (self.last_result.training_iteration + 1 - self.last_cp_iteration) == self.checkpoint_freq
+        return (self.last_result.training_iteration + 1) % self.checkpoint_freq == 0
 
     def set_cp_path(path):
         self.checkpoint_path = path
