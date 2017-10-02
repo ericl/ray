@@ -43,6 +43,7 @@ class Experiment(object):
         self.alg = alg
         self.env = env
         self.config = config
+        self.cp_freq = cp_freq
         self.was_resolved = was_resolved
         self.resources = resources
         # TODO(rliaw): Stopping criterion needs direction (min or max)
@@ -158,17 +159,17 @@ class ExperimentState(object):
     def __init__(self, experiment):
         self.state = PENDING
         self.experiment = experiment
-        self.checkpoint_freq = self.experiment.checkpoint_freq
+        self.cp_freq = self.experiment.cp_freq
         self.checkpoint_path = None
         self.last_result = None
         self.last_cp_iteration = None  # Could checkpoint at beginning
 
     def need_checkpoint(self):
-        if self.checkpoint_freq is None:
+        if self.cp_freq is None:
             return False
         if self.last_cp_iteration is None:
             return True
-        return (self.last_result.training_iteration + 1) % self.checkpoint_freq == 0
+        return (self.last_result.training_iteration + 1) % self.cp_freq == 0
 
     def set_cp_path(path):
         self.checkpoint_path = path
