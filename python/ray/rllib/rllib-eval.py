@@ -54,7 +54,10 @@ class Experiment(object):
         self.i = i
 
     def checkpoint(self):
-        return ray.get(self.agent.save())
+        import ipdb; ipdb.set_trace()
+        path = ray.get(self.agent.save.remote())
+        print("checkpointed at " + path)
+        return path
 
     def resource_requirements(self):
         return self.resources
@@ -137,7 +140,7 @@ def parse_configuration(yaml_file):
             np.random.seed(exp_cfg['search']['search_seed'])
         env_name = exp_cfg['env']
         alg_name = exp_cfg['alg']
-        cp_freq = exp_cfg.get('cp_freq')
+        cp_freq = exp_cfg.get('checkpoint_freq')
         stopping_criterion = exp_cfg['stop']
         out_dir = 'file:///tmp/rllib/' + exp_name
         os.makedirs(out_dir, exist_ok=True)
@@ -164,12 +167,12 @@ class ExperimentState(object):
         self.last_result = None
         self.last_cp_iteration = None  # Could checkpoint at beginning
 
-    def need_checkpoint(self):
+    def should_checkpoint(self):
         if self.cp_freq is None:
             return False
         if self.last_cp_iteration is None:
             return True
-        return (self.last_result.training_iteration + 1) % self.cp_freq == 0
+        return (self.last_result.training_iteration) % self.cp_freq == 0
 
     def set_cp_path(path):
         self.checkpoint_path = path
