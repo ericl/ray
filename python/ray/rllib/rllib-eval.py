@@ -54,7 +54,6 @@ class Experiment(object):
         self.i = i
 
     def checkpoint(self):
-        import ipdb; ipdb.set_trace()
         path = ray.get(self.agent.save.remote())
         print("checkpointed at " + path)
         return path
