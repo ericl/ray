@@ -52,8 +52,8 @@ def parse_configuration(yaml_file):
     for exp_name, exp_cfg in configuration.items():
         if 'search' in configuration:
             np.random.seed(exp_cfg['search']['search_seed'])
-        env_name = exp_cfg['env']
-        alg_name = exp_cfg['alg']
+        env_name = exp_cfg['env']  # TODO(rliaw): change to non-rl
+        alg_name = exp_cfg['alg']  # TODO(rliaw): change to non-rl
         cp_freq = exp_cfg.get('checkpoint_freq')
         stopping_criterion = exp_cfg['stop']
         out_dir = '/tmp/rllib/' + exp_name
