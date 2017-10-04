@@ -56,7 +56,8 @@ def parse_configuration(yaml_file):
         alg_name = exp_cfg['alg']
         cp_freq = exp_cfg.get('checkpoint_freq')
         stopping_criterion = exp_cfg['stop']
-        out_dir = 'file:///tmp/rllib/' + exp_name
+        out_dir = '/tmp/rllib/' + exp_name
+        os.makedirs(out_dir, exist_ok=True)
         for i in range(exp_cfg['max_trials']):
             resolved, was_resolved = resolve(exp_cfg['parameters'], i)
             experiments.append(Experiment(

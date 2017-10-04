@@ -95,9 +95,10 @@ class Runner(object):
 
 
 class A3CAgent(Agent):
-    def __init__(self, env_name, config, upload_dir=None):
+    def __init__(self, env_name, config, upload_dir=None, upload_id=""):
         config.update({"alg": "A3C"})
-        Agent.__init__(self, env_name, config, upload_dir=upload_dir)
+        Agent.__init__(self, env_name, config, upload_dir=upload_dir,
+                       upload_id=upload_id)
         self.env = create_env(env_name, config["model"])
         if config.get("use_lstm", True):
             policy_cls = SharedModelLSTM
