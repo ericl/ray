@@ -8,6 +8,7 @@ import gym
 import numpy as np
 import pickle
 import os
+import random
 import tensorflow as tf
 
 import ray
@@ -91,6 +92,7 @@ DEFAULT_CONFIG = dict(
     num_workers=1,
     train_batch_size=32,
     sgd_batch_size=32,
+    num_sgd_iter=1,
     print_freq=1,
     learning_starts=1000,
     gamma=1.0,
@@ -111,7 +113,7 @@ DEFAULT_CONFIG = dict(
 
     # Multi gpu options
     multi_gpu_optimize=False,
-    devices=["/cpu:0", "/cpu:1"])
+    devices=["/gpu:0"])
 
 
 class Actor(object):
@@ -214,8 +216,11 @@ class Actor(object):
             int(self.dqn_graph.multi_gpu_optimizer.per_device_batch_size))
         data_load_time = (time.time() - dt)
         dt = time.time()
-        for i in range(num_batches):
-            self.dqn_graph.multi_gpu_optimizer.optimize(self.sess, i)
+        for _ in range(self.config["num_sgd_iter"]):
+            batches = range(num_batches)
+            random.shuffle(batches)
+            for i in batches:
+                self.dqn_graph.multi_gpu_optimizer.optimize(self.sess, i)
         sgd_time = (time.time() - dt)
         dt = time.time()
         if self.config["prioritized_replay"]:

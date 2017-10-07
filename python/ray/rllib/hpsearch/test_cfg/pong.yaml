@@ -1,7 +1,7 @@
 tune-pong1:
     env: PongDeterministic-v4
     alg: DQN
-    max_trials: 9
+    max_trials: 1
     resources:
        cpu: 1
        gpu: 0
@@ -20,3 +20,4 @@ tune-pong1:
         learning_starts: 10000
         num_workers: 1
         prioritized_replay: True
+        multi_gpu_optimize: True
