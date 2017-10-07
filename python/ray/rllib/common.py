@@ -165,6 +165,9 @@ class Agent(object):
         else:
             self.logdir = os.path.join(upload_dir, prefix)
 
+        if not os.path.exists(self.logdir):
+            os.makedirs(self.logdir)
+
         # TODO(ekl) consider inlining config into the result jsons
         log_path = os.path.join(self.logdir, "config.json")
         with open(log_path, "w") as f:
