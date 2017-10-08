@@ -160,8 +160,10 @@ class Actor(object):
         # Initialize the parameters and copy them to the target network.
         self.sess.run(tf.global_variables_initializer())
         self.dqn_graph.update_target(self.sess)
+
+        # Note that workers don't need target vars to be synced
         self.variables = ray.experimental.TensorFlowVariables(
-            tf.group(self.dqn_graph.q_tp1, self.dqn_graph.q_t), self.sess)
+            self.dqn_graph.q_t, self.sess)
 
         self.episode_rewards = [0.0]
         self.episode_lengths = [0.0]
@@ -214,16 +216,17 @@ class Actor(object):
             self.sess,
             [obses_t, actions, rewards, obses_tp1, dones,
              np.ones_like(rewards)])
-        num_batches = (
-            int(tuples_per_device) //
-            int(self.dqn_graph.multi_gpu_optimizer.per_device_batch_size))
+        per_device_batch_size = (
+            self.dqn_graph.multi_gpu_optimizer.per_device_batch_size)
+        num_batches = (int(tuples_per_device) // int(per_device_batch_size))
         data_load_time = (time.time() - dt)
         dt = time.time()
         for _ in range(self.config["num_sgd_iter"]):
             batches = list(range(num_batches))
             random.shuffle(batches)
             for i in batches:
-                self.dqn_graph.multi_gpu_optimizer.optimize(self.sess, i)
+                self.dqn_graph.multi_gpu_optimizer.optimize(
+                    self.sess, i * per_device_batch_size)
         sgd_time = (time.time() - dt)
         dt = time.time()
         if self.config["prioritized_replay"]:
@@ -384,7 +387,8 @@ class DQNAgent(Agent):
                 if config["multi_gpu_optimize"]:
                     dt = time.time()
                     times = self.actor.do_multi_gpu_optimize(self.cur_timestep)
-                    print("GPU times", times)
+                    if num_loop_iters <= 1:
+                        print("Multi-GPU times", times)
                     learn_time += (time.time() - dt)
                 else:
                     # Minimize the error in Bellman's equation on a batch
@@ -405,9 +409,8 @@ class DQNAgent(Agent):
             if (self.cur_timestep > config["learning_starts"] and
                     self.steps_since_update >
                     config["target_network_update_freq"]):
-                self.actor.dqn_graph.update_target(self.actor.sess)
                 # Update target network periodically.
-                self._update_worker_weights()
+                self.actor.dqn_graph.update_target(self.actor.sess)
                 self.steps_since_update -= config["target_network_update_freq"]
                 self.num_target_updates += 1
 

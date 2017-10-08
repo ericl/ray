@@ -21,9 +21,9 @@ tune-pong-mgpu-3:
           zero_mean: False
           dim: 42
           conv_filters: [
-              [16, [8, 8], 4],
+              [16, [4, 4], 2],
               [32, [4, 4], 2],
-              [512, [6, 6], 1],
+              [512, [11, 11], 1],
           ]
         learning_starts: 10000
         prioritized_replay: True
