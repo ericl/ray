@@ -384,6 +384,7 @@ class DQNAgent(Agent):
                 if config["multi_gpu_optimize"]:
                     dt = time.time()
                     times = self.actor.do_multi_gpu_optimize(self.cur_timestep)
+                    print("GPU times", times)
                     learn_time += (time.time() - dt)
                 else:
                     # Minimize the error in Bellman's equation on a batch
