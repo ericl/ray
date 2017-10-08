@@ -124,7 +124,7 @@ class Actor(object):
         env = gym.make(env_name)
         # TODO(ekl): replace this with RLlib preprocessors
         if "NoFrameskip" in env_name or "Pong" in env_name:
-            env = ScaledFloatFrame(wrap_dqn(env))
+            env = wrap_dqn(env, config["model"])
         self.env = env
         self.config = config
 
@@ -220,7 +220,7 @@ class Actor(object):
         data_load_time = (time.time() - dt)
         dt = time.time()
         for _ in range(self.config["num_sgd_iter"]):
-            batches = range(num_batches)
+            batches = list(range(num_batches))
             random.shuffle(batches)
             for i in batches:
                 self.dqn_graph.multi_gpu_optimizer.optimize(self.sess, i)

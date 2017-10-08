@@ -9,6 +9,8 @@ import numpy as np
 from collections import deque
 from gym import spaces
 
+from ray.rllib.a3c.envs import RLLibPreprocessing
+
 
 class NoopResetEnv(gym.Wrapper):
     def __init__(self, env=None, noop_max=30):
@@ -218,7 +220,7 @@ class ScaledFloatFrame(gym.ObservationWrapper):
         return np.array(obs).astype(np.float32) / 255.0
 
 
-def wrap_dqn(env):
+def wrap_dqn(env, options):
     """Apply a common set of wrappers for Atari games."""
     env = EpisodicLifeEnv(env)
     env = NoopResetEnv(env, noop_max=30)
@@ -226,7 +228,7 @@ def wrap_dqn(env):
         env = MaxAndSkipEnv(env, skip=4)
     if 'FIRE' in env.unwrapped.get_action_meanings():
         env = FireResetEnv(env)
-    env = ProcessFrame80(env)
+    env = RLLibPreprocessing(env.spec.id, env, options)
     env = FrameStack(env, 4)
     env = ClippedRewardsWrapper(env)
     return env

@@ -1,23 +1,36 @@
-tune-pong1:
+tune-pong-mgpu-3:
     env: PongDeterministic-v4
     alg: DQN
     max_trials: 1
     resources:
        cpu: 1
-       gpu: 0
     stop:
-        episode_reward_mean: 19
+        episode_reward_mean: 21
     parameters:
         schedule_max_timesteps: 1000000
-        sample_batch_size:
-            eval: 4 ** (1 + (_i // 3))
-        train_batch_size:
-            eval: list([32, 128, 512])[_i % 3]
+        train_batch_size: 5000
+        sgd_batch_size: 256
+        sample_batch_size: 200
+        num_workers: 1
         target_network_update_freq: 500
         exploration_final_eps: .01
         exploration_fraction: .1
         gamma: 0.99
+        model:
+          grayscale: True
+          zero_mean: False
+          dim: 42
+          conv_filters: [
+              [16, [8, 8], 4],
+              [32, [4, 4], 2],
+              [512, [6, 6], 1],
+          ]
         learning_starts: 10000
-        num_workers: 1
         prioritized_replay: True
         multi_gpu_optimize: True
+        devices: ["/gpu:0"]
+        num_sgd_iter: 1
+        clip_loss_stdev:
+          eval: list([None, 1, 2, None, 1, 2])[_i]
+        grad_norm_clipping:
+          eval: list([10, 10, 10, None, None, None])[_i]
