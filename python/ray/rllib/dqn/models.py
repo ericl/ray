@@ -134,6 +134,16 @@ class ModelAndLoss(object):
         # compute the error (potentially clipped)
         self.td_error = q_t_selected - tf.stop_gradient(q_t_selected_target)
         errors = _huber_loss(self.td_error)
+
+        if config["clip_loss_stdev"]:
+            mean, var = tf.nn.moments(errors, axes=[0])
+            stdev = tf.sqrt(var)
+            clip_stdev = config["clip_loss_stdev"]
+            errors = tf.clip_by_value(
+                errors,
+                errors - clip_stdev * stdev,
+                errors + clip_stdev * stdev)
+
         weighted_error = tf.reduce_mean(importance_weights * errors)
 
         self.loss = weighted_error
@@ -195,7 +205,8 @@ class DQNGraph(object):
                  self.done_mask, self.importance_weights],
                 int(config["sgd_batch_size"] / len(config["devices"])),
                 build_loss,
-                logdir)
+                logdir,
+                grad_norm_clipping = config["grad_norm_clipping"])
             loss_obj = self.multi_gpu_optimizer.get_common_loss()
         else:
             loss_obj = build_loss(
@@ -209,7 +220,6 @@ class DQNGraph(object):
         self.td_error = loss_obj.td_error
 
         # compute optimization op (potentially with gradient clipping)
-        # TODO(ekl) support grad clipping in multi gpu mode
         if config["grad_norm_clipping"] is not None:
             self.grads_and_vars = _minimize_and_clip(
                 optimizer, weighted_error, var_list=q_func_vars,

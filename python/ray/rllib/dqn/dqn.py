@@ -60,6 +60,8 @@ from ray.rllib.dqn.replay_buffer import ReplayBuffer, PrioritizedReplayBuffer
         discount factor
     grad_norm_clipping: int or None
         if not None, clip gradients during optimization at this value
+    clip_loss_stdev:
+        if not None, clips the objective at this stdev
     target_network_update_freq: int
         update the target network every `target_network_update_freq` steps.
     prioritized_replay: True
@@ -97,6 +99,7 @@ DEFAULT_CONFIG = dict(
     learning_starts=1000,
     gamma=1.0,
     grad_norm_clipping=10,
+    clip_loss_stdev=None,
     tf_session_args={
         "device_count": {"CPU": 2},
         "log_device_placement": False,
