@@ -59,7 +59,7 @@ class ExperimentRunner(object):
                 self._pending[exp.train_remote()] = exp
         except:
             print("Error processing event:", sys.exc_info()[0])
-            if exp.status() == RUNNING:
+            if exp.status == RUNNING:
                 self._return_resources(exp.resource_requirements())
                 exp.stop()
 
