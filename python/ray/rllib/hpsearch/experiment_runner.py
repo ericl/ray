@@ -5,6 +5,7 @@ from __future__ import print_function
 import multiprocessing
 import ray
 import sys
+import time
 
 from ray.rllib.hpsearch.experiment import PENDING, RUNNING, TERMINATED
 from ray.rllib.hpsearch.utils import gpu_count
@@ -37,6 +38,7 @@ class ExperimentRunner(object):
             self._pending[exp.train_remote()] = exp
         except:
             print("Error starting agent:", sys.exc_info()[0])
+            time.sleep(10)  # backoff
             self._return_resources(exp.resource_requirements())
             exp.stop(error=True)
 
