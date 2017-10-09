@@ -78,8 +78,11 @@ class Experiment(object):
             self.env, config, self.out_dir, 'trial_{}_{}'.format(
                 self.i, self.param_str()))
 
-    def stop(self):
-        self.status = TERMINATED
+    def stop(self, error=False):
+        if error:
+            self.status = ERROR
+        else:
+            self.status = TERMINATED
         try:
             self.agent.stop.remote()
             self.agent.__ray_terminate__.remote(self.agent._ray_actor_id.id())

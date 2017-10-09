@@ -38,7 +38,7 @@ class ExperimentRunner(object):
         except:
             print("Error starting agent:", sys.exc_info()[0])
             self._return_resources(exp.resource_requirements())
-            exp.stop()
+            exp.stop(error=True)
 
     def process_events(self):
         [result_id], _ = ray.wait(self._pending.keys())
@@ -61,7 +61,7 @@ class ExperimentRunner(object):
             print("Error processing event:", sys.exc_info()[0])
             if exp.status == RUNNING:
                 self._return_resources(exp.resource_requirements())
-                exp.stop()
+                exp.stop(error=True)
 
     def _get_runnable(self):
         for exp in self._experiments:
