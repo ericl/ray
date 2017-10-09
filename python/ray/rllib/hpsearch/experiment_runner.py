@@ -37,10 +37,17 @@ class ExperimentRunner(object):
             exp.start()
             self._pending[exp.train_remote()] = exp
         except:
-            print("Error starting agent:", sys.exc_info()[0])
-            time.sleep(10)  # backoff
-            self._return_resources(exp.resource_requirements())
+            print("Error starting agent, retrying:", sys.exc_info()[0])
+            time.sleep(5)
             exp.stop(error=True)
+            try:
+                exp.start()
+                self._pending[exp.train_remote()] = exp
+            except:
+                print("Error starting agent x2, abort:", sys.exc_info()[0])
+                exp.stop(error=True)
+                # note that we don't return the resources, since they may
+                # have been lost
 
     def process_events(self):
         [result_id], _ = ray.wait(self._pending.keys())
