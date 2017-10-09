@@ -4,9 +4,9 @@ from __future__ import print_function
 
 import multiprocessing
 import ray
+import sys
 
-from ray.rllib.hpsearch.experiment import (
-    PENDING, RUNNING, TERMINATED)
+from ray.rllib.hpsearch.experiment import PENDING, RUNNING, TERMINATED
 from ray.rllib.hpsearch.utils import gpu_count
 
 
@@ -32,28 +32,36 @@ class ExperimentRunner(object):
     def launch_experiment(self):
         exp = self._get_runnable()
         self._commit_resources(exp.resource_requirements())
-        exp.start()
-        self._pending[exp.train_remote()] = exp
+        try:
+            exp.start()
+            self._pending[exp.train_remote()] = exp
+        except:
+            print("Error starting agent:", sys.exc_info()[0])
+            self._return_resources(exp.resource_requirements())
+            exp.stop()
 
     def process_events(self):
         [result_id], _ = ray.wait(self._pending.keys())
         exp = self._pending[result_id]
         del self._pending[result_id]
-        result = ray.get(result_id)
-        print("result", result)
-        exp.update_progress(result)
+        try:
+            result = ray.get(result_id)
+            print("result", result)
+            exp.update_progress(result)
 
-        if exp.should_stop(result):
-            self._return_resources(exp.resource_requirements())
-            exp.stop()
-        else:
-            # TODO(rliaw): This implements checkpoint in a blocking manner
-            if exp.should_checkpoint():
-                exp.checkpoint()
-            self._pending[exp.train_remote()] = exp
-
-        # TODO(ekl) also switch to other experiments if the current one
-        # doesn't look promising, i.e. bandits
+            if exp.should_stop(result):
+                self._return_resources(exp.resource_requirements())
+                exp.stop()
+            else:
+                # TODO(rliaw): This implements checkpoint in a blocking manner
+                if exp.should_checkpoint():
+                    exp.checkpoint()
+                self._pending[exp.train_remote()] = exp
+        except:
+            print("Error processing event:", sys.exc_info()[0])
+            if exp.status() == RUNNING:
+                self._return_resources(exp.resource_requirements())
+                exp.stop()
 
     def _get_runnable(self):
         for exp in self._experiments:

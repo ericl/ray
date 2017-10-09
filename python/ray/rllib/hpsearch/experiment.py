@@ -23,6 +23,7 @@ import ray.rllib.external_agent as external
 PENDING = 'PENDING'
 RUNNING = 'RUNNING'
 TERMINATED = 'TERMINATED'
+ERROR = 'ERROR'
 
 AGENTS = {
     'PPO': (ppo.PPOAgent, ppo.DEFAULT_CONFIG),
@@ -79,9 +80,14 @@ class Experiment(object):
 
     def stop(self):
         self.status = TERMINATED
-        self.agent.stop.remote()
-        self.agent.__ray_terminate__.remote(self.agent._ray_actor_id.id())
-        self.agent = None
+        try:
+            self.agent.stop.remote()
+            self.agent.__ray_terminate__.remote(self.agent._ray_actor_id.id())
+        except:
+            print("Error stopping agent:", sys.exc_info()[0])
+            self.status = ERROR
+        finally:
+            self.agent = None
 
     def train_remote(self):
         return self.agent.train.remote()
