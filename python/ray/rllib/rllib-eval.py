@@ -36,16 +36,17 @@ class GridSearch(object):
     def next(self):
         cfg = self.cfg.copy()
         was_resolved = {}
+        print(self.grid_values)
         for i, (k, values) in enumerate(self.grid_values):
             idx = self.value_indices[i]
             cfg[k] = values[idx]
-            self._increment(i)
             was_resolved[k] = True
+        self._increment(0)
         return cfg, was_resolved
 
     def _increment(self, i):
         self.value_indices[i] += 1
-        if self.value_indices[i] >= len(self.grid_values[i]):
+        if self.value_indices[i] >= len(self.grid_values[i][1]):
             self.value_indices[i] = 0
             if i + 1 < len(self.value_indices):
                 self._increment(i + 1)

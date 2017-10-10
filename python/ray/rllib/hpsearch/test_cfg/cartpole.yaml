@@ -11,9 +11,7 @@ tune-cartpole:
         schedule_max_timesteps: 100000
         lr: .001
         sample_batch_size:
-            grid_search: [1, 2, 4]
-        exploration_fraction:
-            eval: random.choice([.01, .02])
+            grid_search: [1, 2, 4, 8, 16]
         exploration_final_eps: 0.02
         dueling:
             grid_search: [True, False]
