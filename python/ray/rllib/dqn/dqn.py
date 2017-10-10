@@ -362,25 +362,25 @@ class DQNAgent(Agent):
         iter_init_timesteps = self.cur_timestep
 
         num_loop_iters = 0
-        steps_per_iter = config["sample_batch_size"] * config["num_workers"]
         while (self.cur_timestep - iter_init_timesteps <
                config["timesteps_per_iteration"]):
             dt = time.time()
             if self.workers:
                 worker_steps = ray.get([
                     w.collect_steps.remote(
-                        config["sample_batch_size"], self.cur_timestep)
+                        config["sample_batch_size"] // len(self.workers),
+                        self.cur_timestep)
                     for w in self.workers])
                 for steps in worker_steps:
                     for obs, action, rew, new_obs, done in steps:
                         self.actor.replay_buffer.add(
                             obs, action, rew, new_obs, done)
             else:
-                self.actor.do_steps(    
+                self.actor.do_steps(
                     config["sample_batch_size"], self.cur_timestep)
             num_loop_iters += 1
-            self.cur_timestep += steps_per_iter
-            self.steps_since_update += steps_per_iter
+            self.cur_timestep += config["sample_batch_size"]
+            self.steps_since_update += config["sample_batch_size"]
             sample_time += time.time() - dt
 
             if self.cur_timestep > config["learning_starts"]:
@@ -446,10 +446,11 @@ class DQNAgent(Agent):
             ("apply_time", apply_time),
             ("learn_time", learn_time),
             ("samples_per_s",
-                num_loop_iters * np.float64(steps_per_iter) / sample_time),
+                num_loop_iters * np.float64(config["sample_batch_size"]) /
+                sample_time),
             ("learn_samples_per_s",
-                num_loop_iters * np.float64(config["train_batch_size"]) *
-                np.float64(config["num_workers"]) / learn_time),
+                num_loop_iters * np.float64(config["train_batch_size"]) /
+                learn_time),
         ]
 
         for k, v in info:
