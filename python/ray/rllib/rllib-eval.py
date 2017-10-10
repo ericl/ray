@@ -23,6 +23,34 @@ from ray.rllib.hpsearch.experiment_runner import ExperimentRunner
 from ray.rllib.hpsearch.utils import gpu_count
 
 
+class GridSearch(object):
+    def __init__(self, agent_cfg):
+        self.cfg = agent_cfg
+        self.grid_values = []
+        for p, val in agent_cfg.items():
+            if type(val) == dict and 'grid_search' in val:
+                assert type(val['grid_search'] == list)
+                self.grid_values.append((p, val['grid_search']))
+        self.value_indices = [0] * len(self.grid_values)
+
+    def next(self):
+        cfg = self.cfg.copy()
+        was_resolved = {}
+        for i, (k, values) in enumerate(self.grid_values):
+            idx = self.value_indices[i]
+            cfg[k] = values[idx]
+            self._increment(i)
+            was_resolved[k] = True
+        return cfg, was_resolved
+
+    def _increment(self, i):
+        self.value_indices[i] += 1
+        if self.value_indices[i] >= len(self.grid_values[i]):
+            self.value_indices[i] = 0
+            if i + 1 < len(self.value_indices):
+                self._increment(i + 1)
+
+
 def parse_configuration(yaml_file):
     ''' Parses yaml_file for specifying experiment setup
         and return Experiment objects, one for each trial '''
@@ -31,11 +59,10 @@ def parse_configuration(yaml_file):
 
     experiments = []
 
-    def resolve(agent_cfg, i):
+    def resolve(agent_cfg, was_resolved, i):
         ''' Resolves issues such as distributions and such '''
         assert type(agent_cfg) == dict
         cfg = agent_cfg.copy()
-        was_resolved = {}
         for p, val in cfg.items():
             if type(val) == dict and 'eval' in val:
                 cfg[p] = eval(val['eval'], {
@@ -45,8 +72,6 @@ def parse_configuration(yaml_file):
                     '_i': i,
                 })
                 was_resolved[p] = True
-            else:
-                was_resolved[p] = False
         return cfg, was_resolved
 
     for exp_name, exp_cfg in configuration.items():
@@ -58,8 +83,10 @@ def parse_configuration(yaml_file):
         stopping_criterion = exp_cfg['stop']
         out_dir = '/tmp/rllib/' + exp_name
         os.makedirs(out_dir, exist_ok=True)
+        grid_search = GridSearch(exp_cfg['parameters'])
         for i in range(exp_cfg['max_trials']):
-            resolved, was_resolved = resolve(exp_cfg['parameters'], i)
+            grid_out, was_resolved = grid_search.next()
+            resolved, was_resolved = resolve(grid_out, was_resolved, i)
             experiments.append(Experiment(
                 env_name, alg_name, stopping_criterion, cp_freq, out_dir, i,
                 resolved, was_resolved, exp_cfg['resources']))

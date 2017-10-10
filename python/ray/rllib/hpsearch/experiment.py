@@ -110,7 +110,7 @@ class Experiment(object):
     def param_str(self):
         return '_'.join(
             [k + '=' + str(v) for k, v in self.config.items()
-                if self.was_resolved[k]])
+                if self.was_resolved.get(k)])
 
     def progress_string(self):
         if self.last_result is None:

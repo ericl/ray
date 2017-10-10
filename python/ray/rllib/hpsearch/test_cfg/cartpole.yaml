@@ -10,10 +10,13 @@ tune-cartpole:
     parameters:
         schedule_max_timesteps: 100000
         lr: .001
-        sample_batch_size: 1
-        exploration_fraction: 0.1
+        sample_batch_size:
+            grid_search: [1, 2, 4]
+        exploration_fraction:
+            eval: random.choice([.01, .02])
         exploration_final_eps: 0.02
-        dueling: False
+        dueling:
+            grid_search: [True, False]
         hiddens: []
         model:
             fcnet_hiddens: [64]
