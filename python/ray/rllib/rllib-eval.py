@@ -101,8 +101,10 @@ if __name__ == '__main__':
     # TODO(ekl) implement crash recovery from status files
     
     def debug_print(title='Status'):
-        print('== {} ==\n{}'.format(title, runner.debug_string()))
-        print('Tensorboard dir: {}'.format(experiments[0].out_dir))
+        print('== {} =='.format(title))
+        for logdir in sorted(set([e.out_dir for e in experiments])):
+            print('Tensorboard logdir: {}'.format(logdir))
+        print(runner.debug_string())
         print()
 
     debug_print('Starting')

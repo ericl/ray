@@ -11,6 +11,7 @@ import time
 import uuid
 import smart_open
 import ray
+import tensorflow as tf
 
 if sys.version_info[0] == 2:
     import cStringIO as StringIO
@@ -178,6 +179,7 @@ class Agent(object):
 
         self.result_logger = RLLibLogger(
             os.path.join(self.logdir, "result.json"))
+        self._file_writer = tf.summary.FileWriter(self.logdir)
 
         self.iteration = 0
         self.time_total = 0.0
@@ -219,6 +221,17 @@ class Agent(object):
         # encoded as null as required by Athena.
         json.dump(result._asdict(), self.result_logger, cls=RLLibEncoder)
         self.result_logger.write("\n")
+        train_stats = tf.Summary(value=[
+            tf.Summary.Value(
+                tag="rllib/time_this_iter_s",
+                simple_value=result.time_this_iter_s),
+            tf.Summary.Value(
+                tag="rllib/episode_reward_mean",
+                simple_value=result.episode_reward_mean),
+            tf.Summary.Value(
+                tag="rllib/episode_len_mean",
+                simple_value=result.episode_len_mean)])
+        self._file_writer.add_summary(train_stats, result.training_iteration)
 
     def save(self):
         """Saves the current model state to a checkpoint.
@@ -249,7 +262,8 @@ class Agent(object):
 
     def stop(self):
         """Releases all resources used by this agent."""
-        pass
+
+        self._file_writer.close()
 
     def compute_action(self, observation):
         """Computes an action using the current trained policy."""
