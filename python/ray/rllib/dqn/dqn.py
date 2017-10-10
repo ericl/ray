@@ -4,7 +4,6 @@ from __future__ import print_function
 
 import time
 
-import gym
 import numpy as np
 import pickle
 import os
@@ -120,10 +119,10 @@ DEFAULT_CONFIG = dict(
 
 
 class Actor(object):
-    def __init__(self, env_name, config, logdir):
-        env = gym.make(env_name)
+    def __init__(self, env_creator, config, logdir):
+        env = env_creator()
         # TODO(ekl): replace this with RLlib preprocessors
-        if "NoFrameskip" in env_name or "Pong" in env_name:
+        if "NoFrameskip" in env.spec.id or "Pong" in env.spec.id:
             env = wrap_dqn(env, config["model"])
         self.env = env
         self.config = config
@@ -307,29 +306,19 @@ class Actor(object):
 
 @ray.remote
 class RemoteActor(Actor):
-    def __init__(self, env_name, config, logdir, gpu_mask):
+    def __init__(self, env_creator, config, logdir, gpu_mask):
         os.environ["CUDA_VISIBLE_DEVICES"] = ""
-        Actor.__init__(self, env_name, config, logdir)
+        Actor.__init__(self, env_creator, config, logdir)
 
     def stop(self):
         sys.exit(0)
 
 
 class DQNAgent(Agent):
-    def __init__(self, env_name, config, upload_dir=None, upload_id=''):
-        config.update({"alg": "DQN"})
+    _agent_name = "DQN"
 
-        Agent.__init__(self, env_name, config, upload_dir=upload_dir, upload_id=upload_id)
-
-        with tf.Graph().as_default():
-            self._init(config, env_name)
-
-    def stop(self):
-        for w in self.workers:
-            w.stop.remote()
-
-    def _init(self, config, env_name):
-        self.actor = Actor(env_name, config, self.logdir)
+    def _init(self):
+        self.actor = Actor(self.env_creator, self.config, self.logdir)
         # Use remote workers
         if config["num_workers"] > 1:
             self.workers = [
@@ -348,6 +337,10 @@ class DQNAgent(Agent):
         self.file_writer = tf.summary.FileWriter(
             self.logdir, self.actor.sess.graph)
         self.saver = tf.train.Saver(max_to_keep=None)
+
+    def stop(self):
+        for w in self.workers:
+            w.stop.remote()
 
     def _update_worker_weights(self):
         if self.workers:
