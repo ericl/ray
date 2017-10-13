@@ -27,7 +27,7 @@ DEFAULT_CONFIG = {
 }
 
 
-@ray.remote
+@ray.remote(num_gpus=1)
 class Runner(object):
     """Actor object to start running simulation on workers.
 
