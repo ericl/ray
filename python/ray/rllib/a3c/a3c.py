@@ -123,9 +123,10 @@ class A3CAgent(Agent):
         while batch_list:
             batch, info = ray.get(batch_list[0])
             batch_list = batch_list[1:]
-            gradient, _ = self.policy.get_gradients(batch)
-            self.policy.model_update(gradient)
-            self.parameters = self.policy.get_weights()
+            if info["size"] > 1:
+                gradient, _ = self.policy.get_gradients(batch)
+                self.policy.model_update(gradient)
+                self.parameters = self.policy.get_weights()
             if batches_so_far < max_batches:
                 batches_so_far += 1
                 batch_list.extend(
