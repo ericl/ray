@@ -78,19 +78,21 @@ class Runner(object):
         self.summary_writer = summary_writer
         self.runner.start_runner(self.policy.sess, summary_writer)
 
-    def compute_gradient(self, params):
+    def compute_batch(self, params):
         self.policy.set_weights(params)
         rollout = self.pull_batch_from_queue()
         batch = process_rollout(rollout, gamma=0.99, lambda_=1.0)
-        gradient, info = self.policy.get_gradients(batch)
-        if "summary" in info:
-            self.summary_writer.add_summary(
-                tf.Summary.FromString(info['summary']),
-                self.policy.local_steps)
-            self.summary_writer.flush()
-        info = {"id": self.id,
-                "size": len(batch.a)}
-        return gradient, info
+        return batch, {"id": self.id, "size": len(batch.a)}
+
+#        gradient, info = self.policy.get_gradients(batch)
+#        if "summary" in info:
+#            self.summary_writer.add_summary(
+#                tf.Summary.FromString(info['summary']),
+#                self.policy.local_steps)
+#            self.summary_writer.flush()
+#        info = {"id": self.id,
+#                "size": len(batch.a)}
+#        return gradient, info
 
 
 class A3CAgent(Agent):
@@ -113,20 +115,21 @@ class A3CAgent(Agent):
         self.parameters = self.policy.get_weights()
 
     def _train(self):
-        gradient_list = [
-            agent.compute_gradient.remote(self.parameters)
+        batch_list = [
+            agent.compute_batch.remote(self.parameters)
             for agent in self.agents]
         max_batches = self.config["num_batches_per_iteration"]
-        batches_so_far = len(gradient_list)
-        while gradient_list:
-            done_id, gradient_list = ray.wait(gradient_list)
-            gradient, info = ray.get(done_id)[0]
-            self.policy.model_update(gradient)
+        batches_so_far = len(batch_list)
+        while batch_list:
+            done_id, batch_list = ray.wait(batch_list)
+            batch, info = ray.get(done_id)[0]
+            self.policy.model_update(
+                self.policy.get_gradients(batch))
             self.parameters = self.policy.get_weights()
             if batches_so_far < max_batches:
                 batches_so_far += 1
-                gradient_list.extend(
-                    [self.agents[info["id"]].compute_gradient.remote(
+                batch_list.extend(
+                    [self.agents[info["id"]].compute_batch.remote(
                         self.parameters)])
         res = self._fetch_metrics_from_workers()
         return res
