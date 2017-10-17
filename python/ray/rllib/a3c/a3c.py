@@ -121,8 +121,8 @@ class A3CAgent(Agent):
         max_batches = self.config["num_batches_per_iteration"]
         batches_so_far = len(batch_list)
         while batch_list:
-            done_id, batch_list = ray.wait(batch_list)
-            batch, info = ray.get(done_id)[0]
+            batch, info = ray.get(batch_list[0])
+            batch_list = batch_list[1:]
             gradient, _ = self.policy.get_gradients(batch)
             self.policy.model_update(gradient)
             self.parameters = self.policy.get_weights()
