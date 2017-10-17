@@ -12,9 +12,8 @@ class Policy(object):
     def __init__(self, ob_space, action_space, name="local", summarize=True):
         self.local_steps = 0
         self.summarize = summarize
-        worker_device = "/job:localhost/replica:0/task:0/cpu:0"
         self.g = tf.Graph()
-        with self.g.as_default(), tf.device(worker_device):
+        with self.g.as_default():
             with tf.variable_scope(name):
                 self.setup_graph(ob_space, action_space)
                 assert all([hasattr(self, attr)
