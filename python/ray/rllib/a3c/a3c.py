@@ -129,9 +129,11 @@ class A3CAgent(Agent):
             if info["size"] > 1:
                 start = time.time()
                 gradient, _ = self.policy.get_gradients(batch)
+                print("grad time", time.time() - start)
+                start = time.time()
                 self.policy.model_update(gradient)
                 self.parameters = self.policy.get_weights()
-                print("grad time", time.time() - start)
+                print("apply time", time.time() - start)
             if batches_so_far < max_batches:
                 batches_so_far += 1
                 batch_list.extend(
