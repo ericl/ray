@@ -7,6 +7,7 @@ import pickle
 import tensorflow as tf
 import six.moves.queue as queue
 import os
+import time
 
 import ray
 from ray.rllib.a3c.runner import RunnerThread, process_rollout
@@ -121,12 +122,16 @@ class A3CAgent(Agent):
         max_batches = self.config["num_batches_per_iteration"]
         batches_so_far = len(batch_list)
         while batch_list:
+            start = time.time()
             batch, info = ray.get(batch_list[0])
+            print("batch wait", time.time() - start)
             batch_list = batch_list[1:]
             if info["size"] > 1:
+                start = time.time()
                 gradient, _ = self.policy.get_gradients(batch)
                 self.policy.model_update(gradient)
                 self.parameters = self.policy.get_weights()
+                print("grad time", time.time() - start)
             if batches_so_far < max_batches:
                 batches_so_far += 1
                 batch_list.extend(
