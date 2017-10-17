@@ -11,7 +11,7 @@ import threading
 
 
 def discount(x, gamma):
-    return scipy.signal.lfilter([1], [1, -gamma], x[::-1], axis=0)[::-1]
+    return np.copy(scipy.signal.lfilter([1], [1, -gamma], x[::-1], axis=0)[::-1])
 
 
 def process_rollout(rollout, gamma, lambda_=1.0):

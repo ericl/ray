@@ -123,8 +123,8 @@ class A3CAgent(Agent):
         while batch_list:
             done_id, batch_list = ray.wait(batch_list)
             batch, info = ray.get(done_id)[0]
-            self.policy.model_update(
-                self.policy.get_gradients(batch))
+            gradient, _ = self.policy.get_gradients(batch)
+            self.policy.model_update(gradient)
             self.parameters = self.policy.get_weights()
             if batches_so_far < max_batches:
                 batches_so_far += 1

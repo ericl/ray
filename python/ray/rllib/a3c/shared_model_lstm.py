@@ -47,7 +47,7 @@ class SharedModelLSTM(Policy):
         feed_dict = {
             self.x: batch.si,
             self.ac: batch.a,
-            self.adv: batch.adv,
+            self.adv: batch.adv.squeeze(),
             self.r: batch.r,
             self.state_in[0]: batch.features[0],
             self.state_in[1]: batch.features[1]
