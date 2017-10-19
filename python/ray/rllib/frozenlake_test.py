@@ -25,6 +25,8 @@ parser.add_argument("--hole-fraction", default=0.15, type=float,
                     help="Fraction of squares which are holes.")
 parser.add_argument("--deterministic", default=True, type=bool,
                     help="Whether the env is deterministic.")
+parser.add_argument("--one-hot", default=True, type=bool,
+                    help="Whether to one-hot encode the coordinates.")
 parser.add_argument("--render", action='store_true',
                     help="Whether to periodically render episodes")
 
@@ -54,21 +56,31 @@ def wrap_render(env):
     return RenderSamples(env)
 
 
-def wrap_convert_cartesian(env, grid_size):
+def wrap_convert_cartesian(env, grid_size, one_hot):
     class ConvertToCartesianCoords(gym.ObservationWrapper):
-        def __init__(self, env, grid_size):
+        def __init__(self, env, grid_size, one_hot):
             super(ConvertToCartesianCoords, self).__init__(env)
             self.grid_size = grid_size
-            self.observation_space = spaces.Box(
-                low=0, high=grid_size, shape=(2,))
+            self.one_hot = one_hot
+            if self.one_hot:
+                self.observation_space = spaces.Box(
+                    low=0, high=1, shape=(self.grid_size * 2,))
+            else:
+                self.observation_space = spaces.Box(
+                    low=0, high=grid_size, shape=(2,))
 
         def _observation(self, obs):
-            new_obs = np.array(
-                (obs % self.grid_size, obs // self.grid_size))
-            # TODO(ekl) maybe we should one-hot encode this?
+            x = obs % self.grid_size
+            y = obs // self.grid_size
+            if one_hot:
+                new_obs = np.zeros(self.grid_size * 2)
+                new_obs[x] = 1
+                new_obs[self.grid_size + y] = 1
+            else:
+                new_obs = np.array((x, y))
             return new_obs
 
-    return ConvertToCartesianCoords(env, grid_size)
+    return ConvertToCartesianCoords(env, grid_size, one_hot)
 
 
 def wrap_reward_bonus(env, grid_size):
@@ -86,11 +98,11 @@ def wrap_reward_bonus(env, grid_size):
                 if new_obs[0] < edge or new_obs[1] < edge:
                     rew -= 1
                 else:
-                    rew += 8  # large bonus for succeeding
+                    rew += 7  # successful runs should have score of 10 total
             else:
                 # give bonuses for partial progress
-                rew += float(new_obs[0] - self.obs[0]) / self.grid_size
-                rew += float(new_obs[1] - self.obs[1]) / self.grid_size
+                rew += float(new_obs[0] - self.obs[0]) / (self.grid_size - 1)
+                rew += float(new_obs[1] - self.obs[1]) / (self.grid_size - 1)
             self.obs = new_obs
             return new_obs, rew, done, info
 
@@ -106,10 +118,13 @@ def make_desc(grid_size, hole_fraction):
     rows = []
     for y in range(grid_size):
         cells = ""
-        hole_indices = list(range(grid_size))
-        random.shuffle(hole_indices)
-        hole_indices = hole_indices[
-            :max(1, int(hole_fraction * grid_size))]
+        if hole_fraction > 0:
+            hole_indices = list(range(grid_size))
+            random.shuffle(hole_indices)
+            hole_indices = hole_indices[
+                :max(1, int(hole_fraction * grid_size))]
+        else:
+            hole_indices = []
         for x in range(grid_size):
             if x == 0 and y == 0:
                 cells += "S"
@@ -143,7 +158,7 @@ def env_creator(args, name):
         )
         env = wrap_reward_bonus(
             wrap_convert_cartesian(
-                gym.make(name), args.grid_size),
+                gym.make(name), args.grid_size, args.one_hot),
             args.grid_size)
         if args.render:
             env = wrap_render(env)
