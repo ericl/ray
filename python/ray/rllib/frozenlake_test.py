@@ -19,16 +19,18 @@ parser = make_parser("Test out Frozenlake")
 
 parser.add_argument("--num-gpus", default=None, type=int,
                     help="Number of GPUs to allocate to Ray.")
-parser.add_argument("--grid-size", default=8, type=int,
+parser.add_argument("--grid-size", default=4, type=int,
                     help="Size N of the NxN frozen lake grid.")
 parser.add_argument("--hole-fraction", default=0.15, type=float,
                     help="Fraction of squares which are holes.")
 parser.add_argument("--deterministic", default=True, type=bool,
                     help="Whether the env is deterministic.")
-parser.add_argument("--one-hot", default=False, type=bool,
+parser.add_argument("--one-hot", action='store_true',
                     help="Whether to one-hot encode the coordinates.")
 parser.add_argument("--render", action='store_true',
                     help="Whether to periodically render episodes")
+parser.add_argument("--test-increasing-sizes", action='store_true',
+                    help="Whether to test different sized grids")
 
 
 # TODO(ekl) why can't Ray pickle the class directly without a wrapper fn?
@@ -180,8 +182,18 @@ def main(args):
         args.deterministic and "Deterministic" or "",
         args.grid_size, args.grid_size)
 
-    for _ in range(args.num_trials):
-        creator = env_creator(args, name)
+    for i in range(args.num_trials):
+        import argparse
+        if args.test_increasing_sizes:
+            v = vars(args)
+            v['grid_size'] += i
+            a = argparse.Namespace(**v)
+        else:
+            a = args
+        name = 'FrozenLake{}-{}x{}-v0'.format(
+            args.deterministic and "Deterministic" or "",
+            a.grid_size, a.grid_size)
+        creator = env_creator(a, name)
         creator.env_name = name
         runner.add_trial(
             Trial(
