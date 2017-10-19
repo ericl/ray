@@ -2,9 +2,12 @@
 
 import random
 import sys
+import time
 
 import gym
+from gym import spaces
 from gym.envs.registration import register
+import numpy as np
 
 import ray
 from ray.tune.config_parser import make_parser, parse_to_trials
@@ -22,6 +25,75 @@ parser.add_argument("--hole-fraction", default=0.15, type=float,
                     help="Fraction of squares which are holes.")
 parser.add_argument("--deterministic", default=True, type=bool,
                     help="Whether the env is deterministic.")
+parser.add_argument("--render", default=False, type=bool,
+                    help="Whether to periodically render episodes")
+
+
+# TODO(ekl) why can't Ray pickle the class directly without a wrapper fn?
+def wrap_render(env):
+    class RenderSamples(gym.Wrapper):
+        def __init__(self, env):
+            super(RenderSamples, self).__init__(env)
+            self.last_render_time = 0
+            self.render = False
+
+        def _step(self, action):
+            res = self.env.step(action)
+            if self.render:
+                self.env.render()
+            return res
+
+        def _reset(self):
+            if time.time() - self.last_render_time > 2:
+                self.last_render_time = time.time()
+                self.render = True
+            else:
+                self.render = False
+            return self.env.reset()
+
+    return RenderSamples(env)
+
+
+def wrap_convert_cartesian(env, grid_size):
+    class ConvertToCartesianCoords(gym.ObservationWrapper):
+        def __init__(self, env, grid_size):
+            super(ConvertToCartesianCoords, self).__init__(env)
+            self.grid_size = grid_size
+            self.observation_space = spaces.Box(
+                low=0, high=grid_size, shape=(2,))
+
+        def _observation(self, obs):
+            new_obs = np.array(
+                (obs % self.grid_size, obs // self.grid_size))
+            return new_obs
+
+    return ConvertToCartesianCoords(env, grid_size)
+
+
+def wrap_reward_bonus(env, grid_size):
+    class RewardBonus(gym.Wrapper):
+        def __init__(self, env, grid_size):
+            super(RewardBonus, self).__init__(env)
+            self.obs = None
+            self.grid_size = grid_size
+
+        def _step(self, action):
+            new_obs, rew, done, info = self.env.step(action)
+            self.obs = new_obs
+            # give bonuses for partial progress
+            rew += float(new_obs[0] - self.obs[0]) / self.grid_size
+            rew += float(new_obs[1] - self.obs[1]) / self.grid_size
+            if done:
+                # give a penalty for falling into a hole
+                if new_obs[0] < self.grid_size or new_obs[1] < self.grid_size:
+                    rew -= 1
+            return new_obs, rew, done, info
+
+        def _reset(self):
+            self.obs = self.env.reset()
+            return self.obs
+
+    return RewardBonus(env, grid_size)
 
 
 def make_desc(grid_size, hole_fraction):
@@ -29,13 +101,17 @@ def make_desc(grid_size, hole_fraction):
     rows = []
     for y in range(grid_size):
         cells = ""
+        hole_indices = list(range(grid_size))
+        random.shuffle(hole_indices)
+        hole_indices = hole_indices[
+            :max(1, int(hole_fraction * grid_size))]
         for x in range(grid_size):
             if x == 0 and y == 0:
                 cells += "S"
             elif x == grid_size - 1 and y == grid_size - 1:
                 cells += "G"
             else:
-                if random.random() < hole_fraction:
+                if x in hole_indices:
                     cells += "H"
                 else:
                     cells += "F"
@@ -60,7 +136,12 @@ def env_creator(args, name):
             max_episode_steps=200,
             reward_threshold=0.99, # optimum = 1
         )
-        env = gym.make(name)
+        env = wrap_reward_bonus(
+            wrap_convert_cartesian(
+                gym.make(name), args.grid_size),
+            args.grid_size)
+        if args.render:
+            env = wrap_render(env)
         return env
 
     return make_lake
@@ -74,10 +155,12 @@ def main(args):
         args.grid_size, args.grid_size)
 
     for _ in range(args.num_trials):
+        creator = env_creator(args, name)
+        creator.env_name = name
         runner.add_trial(
             Trial(
-                env_creator(args, name), args.alg, args.config, args.local_dir,
-                name, args.resources, args.stop, args.checkpoint_freq))
+                creator, args.alg, args.config, args.local_dir,
+                None, args.resources, args.stop, args.checkpoint_freq))
 
     while not runner.is_finished():
         runner.step()
