@@ -25,7 +25,7 @@ parser.add_argument("--hole-fraction", default=0.15, type=float,
                     help="Fraction of squares which are holes.")
 parser.add_argument("--deterministic", default=True, type=bool,
                     help="Whether the env is deterministic.")
-parser.add_argument("--render", default=False, type=bool,
+parser.add_argument("--render", action='store_true',
                     help="Whether to periodically render episodes")
 
 
@@ -65,6 +65,7 @@ def wrap_convert_cartesian(env, grid_size):
         def _observation(self, obs):
             new_obs = np.array(
                 (obs % self.grid_size, obs // self.grid_size))
+            # TODO(ekl) maybe we should one-hot encode this?
             return new_obs
 
     return ConvertToCartesianCoords(env, grid_size)
@@ -79,14 +80,18 @@ def wrap_reward_bonus(env, grid_size):
 
         def _step(self, action):
             new_obs, rew, done, info = self.env.step(action)
-            self.obs = new_obs
-            # give bonuses for partial progress
-            rew += float(new_obs[0] - self.obs[0]) / self.grid_size
-            rew += float(new_obs[1] - self.obs[1]) / self.grid_size
             if done:
                 # give a penalty for falling into a hole
-                if new_obs[0] < self.grid_size or new_obs[1] < self.grid_size:
+                edge = self.grid_size - 1
+                if new_obs[0] < edge or new_obs[1] < edge:
                     rew -= 1
+                else:
+                    rew += 8  # large bonus for succeeding
+            else:
+                # give bonuses for partial progress
+                rew += float(new_obs[0] - self.obs[0]) / self.grid_size
+                rew += float(new_obs[1] - self.obs[1]) / self.grid_size
+            self.obs = new_obs
             return new_obs, rew, done, info
 
         def _reset(self):
