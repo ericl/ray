@@ -131,7 +131,13 @@ def make_desc(grid_size, hole_fraction):
             elif x == grid_size - 1 and y == grid_size - 1:
                 cells += "G"
             else:
-                if x in hole_indices:
+                if x < 2 and y < 2:
+                    near_corners = True
+                elif x > grid_size - 3 and y > grid_size - 3:
+                    near_corners = True
+                else:
+                    near_corners = False
+                if x in hole_indices and not near_corners:
                     cells += "H"
                 else:
                     cells += "F"
