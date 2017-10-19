@@ -16,7 +16,7 @@ parser = make_parser("Test out Frozenlake")
 
 parser.add_argument("--num-gpus", default=None, type=int,
                     help="Number of GPUs to allocate to Ray.")
-parser.add_argument("--grid-size", default=4, type=int,
+parser.add_argument("--grid-size", default=8, type=int,
                     help="Size N of the NxN frozen lake grid.")
 parser.add_argument("--hole-fraction", default=0.15, type=float,
                     help="Fraction of squares which are holes.")
@@ -24,17 +24,43 @@ parser.add_argument("--deterministic", default=True, type=bool,
                     help="Whether the env is deterministic.")
 
 
+def make_desc(grid_size, hole_fraction):
+    random.seed(0)
+    rows = []
+    for y in range(grid_size):
+        cells = ""
+        for x in range(grid_size):
+            if x == 0 and y == 0:
+                cells += "S"
+            elif x == grid_size - 1 and y == grid_size - 1:
+                cells += "G"
+            else:
+                if random.random() < hole_fraction:
+                    cells += "H"
+                else:
+                    cells += "F"
+        rows.append(cells)
+    return rows
+
+
 def env_creator(args, name):
+    desc = make_desc(args.grid_size, args.hole_fraction)
+    print("== Frozen lake grid ==")
+    for row in desc:
+        print(row.replace("H", "^").replace("F", "."))
+
     def make_lake():
         register(
             id=name,
             entry_point='gym.envs.toy_text:FrozenLakeEnv',
-            kwargs={'map_name' : '8x8'},
+            kwargs={
+                'desc': desc,
+                'is_slippery': not args.deterministic,
+            },
             max_episode_steps=200,
             reward_threshold=0.99, # optimum = 1
         )
-        env = gym.make(env)
-        print(env.spec)
+        env = gym.make(name)
         return env
 
     return make_lake
