@@ -25,7 +25,7 @@ parser.add_argument("--hole-fraction", default=0.15, type=float,
                     help="Fraction of squares which are holes.")
 parser.add_argument("--deterministic", default=True, type=bool,
                     help="Whether the env is deterministic.")
-parser.add_argument("--one-hot", default=True, type=bool,
+parser.add_argument("--one-hot", default=False, type=bool,
                     help="Whether to one-hot encode the coordinates.")
 parser.add_argument("--render", action='store_true',
                     help="Whether to periodically render episodes")
