@@ -139,10 +139,16 @@ def make_desc(grid_size, hole_fraction):
                     near_corners = True
                 else:
                     near_corners = False
+                if x > grid_size - 6 and y > grid_size - 6:
+                    near_goal = True
+                else:
+                    near_goal = False
                 if x in hole_indices and not near_corners:
                     cells += "H"
-                else:
+                elif near_goal:
                     cells += "F"
+                else:
+                    cells += "S"
         rows.append(cells)
     return rows
 
