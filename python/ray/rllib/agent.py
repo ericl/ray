@@ -38,7 +38,7 @@ class Agent(object):
         logdir (str): Directory in which training outputs should be placed.
     """
 
-    _allow_unknown_configs = False
+    _allow_unknown_configs = True
     _auto_configs = set(["experiment_tag", "alg", "env_name", "experiment_id"])
 
     def __init__(
