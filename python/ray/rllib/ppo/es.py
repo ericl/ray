@@ -29,7 +29,7 @@ class PPOESAgent(Agent):
             del inner_config[k]
         inner_config["verbose"] = Falset
         self.replicas = [
-            ray.remote(ppo.PPOAgent).remote(self.env_creator, inner_config)
+            ray.remote(num_gpus=1)(ppo.PPOAgent).remote(self.env_creator, inner_config)
             for _ in range(self.config["es_num_replicas"])]
 
     def _train(self):
