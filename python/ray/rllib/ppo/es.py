@@ -37,11 +37,13 @@ class PPOESAgent(Agent):
         pending = {r.train.remote(): r for r in self.replicas}
         start = time.time()
         best_result = None
+        timesteps = 0
         while pending:
             [result], _ = ray.wait(list(pending.keys()))
             agent = pending[result]
             del pending[result]
             result = ray.get(result)
+            timesteps += result.timesteps_this_iter
             if (not best_result or result.episode_reward_mean >
                     best_result.episode_reward_mean):
                 best_result = result
@@ -60,4 +62,4 @@ class PPOESAgent(Agent):
             loser.restore.remote(winner.save.remote())
             loser.perturb.remote(self.config["es_noise_stdev"])
 
-        return best_result
+        return best_result._replace(timesteps_this_iter=timesteps)
