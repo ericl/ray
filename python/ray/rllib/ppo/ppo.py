@@ -77,7 +77,9 @@ DEFAULT_CONFIG = {
     # is detected
     "tf_debug_inf_or_nan": False,
     # If True, we write tensorflow logs and checkpoints
-    "write_logs": True
+    "write_logs": True,
+    # Whether to print extended debug logs
+    "verbose": True,
 }
 
 
@@ -144,7 +146,8 @@ class PPOAgent(Agent):
               ", stepsize=" + str(config["sgd_stepsize"]) + "):")
         names = [
             "iter", "total loss", "policy loss", "vf loss", "kl", "entropy"]
-        print(("{:>15}" * len(names)).format(*names))
+        if self.config["verbose"]:
+            print(("{:>15}" * len(names)).format(*names))
         trajectory = shuffle(trajectory)
         shuffle_end = time.time()
         tuples_per_device = model.load_data(
@@ -185,9 +188,10 @@ class PPOAgent(Agent):
             kl = np.mean(kl)
             entropy = np.mean(entropy)
             sgd_end = time.time()
-            print(
-                "{:>15}{:15.5e}{:15.5e}{:15.5e}{:15.5e}{:15.5e}".format(
-                    i, loss, policy_loss, vf_loss, kl, entropy))
+            if self.config["verbose"]:
+                print(
+                    "{:>15}{:15.5e}{:15.5e}{:15.5e}{:15.5e}{:15.5e}".format(
+                        i, loss, policy_loss, vf_loss, kl, entropy))
 
             values = []
             if i == config["num_sgd_iter"] - 1:
@@ -224,15 +228,15 @@ class PPOAgent(Agent):
             "sgd_time": sgd_time,
             "sample_throughput": len(trajectory["observations"]) / sgd_time
         }
-
-        print("kl div:", kl)
-        print("kl coeff:", self.kl_coeff)
-        print("rollouts time:", rollouts_time)
-        print("shuffle time:", shuffle_time)
-        print("load time:", load_time)
-        print("sgd time:", sgd_time)
-        print("sgd examples/s:", len(trajectory["observations"]) / sgd_time)
-        print("total time so far:", time.time() - self.start_time)
+        if self.config["verbose"]:
+            print("kl div:", kl)
+            print("kl coeff:", self.kl_coeff)
+            print("rollouts time:", rollouts_time)
+            print("shuffle time:", shuffle_time)
+            print("load time:", load_time)
+            print("sgd time:", sgd_time)
+            print("sgd examples/s:", len(trajectory["observations"]) / sgd_time)
+            print("total time so far:", time.time() - self.start_time)
 
         result = TrainingResult(
             episode_reward_mean=total_reward,
@@ -269,3 +273,8 @@ class PPOAgent(Agent):
     def compute_action(self, observation):
         observation = self.model.observation_filter(observation, update=False)
         return self.model.common_policy.compute([observation])[0][0]
+
+    def perturb(self, noise_stdev):
+        weights = self.model.variables.get_flat()
+        perturbation = noise_stdev * np.random.randn(len(weights)).astype(np.float32)
+        self.model.variables.set_flat(weights + perturbation)

@@ -39,6 +39,7 @@ class Agent(object):
     """
 
     _allow_unknown_configs = False
+    _auto_configs = set(["experiment_tag", "alg", "env_name", "experiment_id"])
 
     def __init__(
             self, env_creator, config, local_dir='/tmp/ray',
@@ -69,7 +70,7 @@ class Agent(object):
         self.config = self._default_config.copy()
         if not self._allow_unknown_configs:
             for k in config.keys():
-                if k not in self.config:
+                if k not in self.config and k not in self._auto_configs:
                     raise Exception(
                         "Unknown agent config `{}`, "
                         "all agent configs: {}".format(k, self.config.keys()))
@@ -323,6 +324,9 @@ def get_agent_class(alg):
     if alg == "PPO":
         from ray.rllib import ppo
         return ppo.PPOAgent
+    elif alg == "PPO_ES":
+        from ray.rllib.ppo import es
+        return es.PPOESAgent
     elif alg == "ES":
         from ray.rllib import es
         return es.ESAgent
