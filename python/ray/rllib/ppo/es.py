@@ -27,7 +27,7 @@ class PPOESAgent(Agent):
         inner_config = self.config.copy()
         for k in OUTER_CONFIG.keys():
             del inner_config[k]
-        inner_config["verbose"] = Falset
+        inner_config["verbose"] = False
         self.replicas = [
             ray.remote(num_gpus=1)(ppo.PPOAgent).remote(self.env_creator, inner_config)
             for _ in range(self.config["es_num_replicas"])]
