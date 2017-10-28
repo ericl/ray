@@ -63,7 +63,5 @@ class PPOESAgent(Agent):
             if random.random() > 0.5:
                 loser.restore.remote(winner.save.remote())
                 loser.perturb.remote(self.config["es_noise_stdev"])
-            else:
-                winner.perturb.remote(self.config["es_noise_stdev"])
 
         return best_result._replace(timesteps_this_iter=timesteps)
