@@ -59,7 +59,10 @@ class PPOESAgent(Agent):
         mid = len(ranked) // 2
         top_half, bottom_half = ranked[mid:], ranked[:mid]
         for winner, loser in zip(top_half, bottom_half):
-            loser.restore.remote(winner.save.remote())
-            loser.perturb.remote(self.config["es_noise_stdev"])
+            if random.random() > 0.5:
+                loser.restore.remote(winner.save.remote())
+                loser.perturb.remote(self.config["es_noise_stdev"])
+            else:
+                winner.perturb.remote(self.config["es_noise_stdev"])
 
         return best_result._replace(timesteps_this_iter=timesteps)
