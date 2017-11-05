@@ -25,6 +25,8 @@ parser.add_argument("--hole-fraction", default=0.15, type=float,
                     help="Fraction of squares which are holes.")
 parser.add_argument("--deterministic", default=True, type=bool,
                     help="Whether the env is deterministic.")
+parser.add_argument("--center", default=True, type=bool,
+                    help="Whether to (0,0) center the observations.")
 parser.add_argument("--one-hot", action='store_true',
                     help="Whether to one-hot encode the coordinates.")
 parser.add_argument("--render", action='store_true',
@@ -58,7 +60,7 @@ def wrap_render(env):
     return RenderSamples(env)
 
 
-def wrap_convert_cartesian(env, grid_size, one_hot):
+def wrap_convert_cartesian(env, grid_size, one_hot, center):
     class ConvertToCartesianCoords(gym.ObservationWrapper):
         def __init__(self, env, grid_size, one_hot):
             super(ConvertToCartesianCoords, self).__init__(env)
@@ -78,6 +80,9 @@ def wrap_convert_cartesian(env, grid_size, one_hot):
                 new_obs = np.zeros(self.grid_size * 2)
                 new_obs[x] = 1
                 new_obs[self.grid_size + y] = 1
+            elif center:
+                new_obs = np.array(
+                    (x - self.grid_size // 2, y - self.grid_size // 2))
             else:
                 new_obs = np.array((x, y))
             return new_obs
@@ -85,7 +90,7 @@ def wrap_convert_cartesian(env, grid_size, one_hot):
     return ConvertToCartesianCoords(env, grid_size, one_hot)
 
 
-def wrap_reward_bonus(env, grid_size):
+def wrap_reward_bonus(env, grid_size, center):
     class RewardBonus(gym.Wrapper):
         def __init__(self, env, grid_size):
             super(RewardBonus, self).__init__(env)
@@ -96,7 +101,10 @@ def wrap_reward_bonus(env, grid_size):
             new_obs, rew, done, info = self.env.step(action)
             if done:
                 # give a penalty for falling into a hole
-                edge = self.grid_size - 1
+                if center:
+                    edge = self.grid_size - self.grid_size // 2 - 1
+                else:
+                    edge = self.grid_size - 1
                 if new_obs[0] < edge or new_obs[1] < edge:
                     rew -= 1
                 else:
@@ -172,8 +180,8 @@ def env_creator(args, name):
         )
         env = wrap_reward_bonus(
             wrap_convert_cartesian(
-                gym.make(name), args.grid_size, args.one_hot),
-            args.grid_size)
+                gym.make(name), args.grid_size, args.one_hot, args.center),
+            args.grid_size, args.center)
         if args.render:
             env = wrap_render(env)
         return env
