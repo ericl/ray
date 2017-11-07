@@ -11,6 +11,8 @@ import yaml
 import ray
 from ray.tune.trial_runner import TrialRunner
 from ray.tune.trial import Trial
+from ray.tune.trial_scheduler import MedianStoppingRule, FIFOScheduler
+from ray.tune.hyperband import HyperBandScheduler
 from ray.tune.variant_generator import generate_trials
 
 
@@ -34,10 +36,22 @@ parser.add_argument("--num-gpus", default=None, type=int,
                     help="Number of GPUs to allocate to Ray.")
 parser.add_argument("-f", "--config-file", required=True, type=str,
                     help="Read experiment options from this JSON/YAML file.")
+parser.add_argument("--scheduler", default="FIFO", type=str,
+                    help="FIFO, MedianStopping, or HyperBand")
 
 
-def run_experiments(experiments, **ray_args):
-    runner = TrialRunner()
+def get_scheduler_instance(sched):
+    if sched == "FIFO":
+        return FIFOScheduler()
+    elif sched == "MedianStopping":
+        return MedianStoppingRule()
+    elif sched == "HyperBand":
+        return HyperBandScheduler(200, eta=30)
+    else:
+        assert False, "Unknown scheduler: {}".format(sched)
+
+def run_experiments(experiments, scheduler, **ray_args):
+    runner = TrialRunner(get_scheduler_instance(scheduler))
 
     for name, spec in experiments.items():
         for trial in generate_trials(spec, name):
@@ -63,5 +77,5 @@ if __name__ == "__main__":
     with open(args.config_file) as f:
         experiments = yaml.load(f)
     run_experiments(
-        experiments, redis_address=args.redis_address,
+        experiments, args.scheduler, redis_address=args.redis_address,
         num_cpus=args.num_cpus, num_gpus=args.num_gpus)

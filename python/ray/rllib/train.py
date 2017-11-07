@@ -33,8 +33,12 @@ parser.add_argument("--num-cpus", default=None, type=int,
                     help="Number of CPUs to allocate to Ray.")
 parser.add_argument("--num-gpus", default=None, type=int,
                     help="Number of GPUs to allocate to Ray.")
+parser.add_argument("--experiment-name", default="default", type=str,
+                    help="Name of experiment dir.")
 parser.add_argument("-f", "--config-file", default=None, type=str,
                     help="If specified, use config options from this file.")
+parser.add_argument("--scheduler", default="FIFO", type=str,
+                    help="FIFO, MedianStopping, or HyperBand")
 
 
 if __name__ == "__main__":
@@ -44,7 +48,7 @@ if __name__ == "__main__":
             experiments = yaml.load(f)
     else:
         experiments = {
-            "default": {  # i.e. log to /tmp/ray/default
+            args.experiment_name: {  # i.e. log to /tmp/ray/default
                 "alg": args.alg,
                 "env": args.env,
                 "resources": resources_to_json(args.resources),
@@ -62,5 +66,6 @@ if __name__ == "__main__":
             parser.error("the following arguments are required: --env")
 
     run_experiments(
-        experiments, redis_address=args.redis_address,
+        experiments, scheduler=args.scheduler,
+        redis_address=args.redis_address,
         num_cpus=args.num_cpus, num_gpus=args.num_gpus)

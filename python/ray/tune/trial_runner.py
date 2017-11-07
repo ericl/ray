@@ -41,9 +41,13 @@ class TrialRunner(object):
         self._avail_resources = Resources(cpu=0, gpu=0)
         self._committed_resources = Resources(cpu=0, gpu=0)
         self._resources_initialized = False
+        self._total_time = 0
 
     def is_finished(self):
         """Returns whether all trials have finished running."""
+
+        if self._total_time > 20000:
+            return True
 
         for t in self._trials:
             if t.status in [Trial.PENDING, Trial.RUNNING, Trial.PAUSED]:
@@ -148,6 +152,7 @@ class TrialRunner(object):
             result = ray.get(result_id)
             print("result", result)
             trial.last_result = result
+            self._total_time += result.time_this_iter_s
 
             if trial.should_stop(result):
                 self._scheduler_alg.on_trial_complete(self, trial, result)
