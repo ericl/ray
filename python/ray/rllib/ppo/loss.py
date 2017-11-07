@@ -11,7 +11,7 @@ from ray.rllib.models import ModelCatalog
 class ProximalPolicyLoss(object):
 
     def __init__(
-            self, observation_space, action_space,
+            self, model_creator, observation_space, action_space,
             observations, returns, advantages, actions,
             prev_logits, prev_vf_preds, logit_dim,
             kl_coeff, distribution_class, config, sess):
@@ -22,8 +22,11 @@ class ProximalPolicyLoss(object):
         # Saved so that we can compute actions given different observations
         self.observations = observations
 
-        self.curr_logits = ModelCatalog.get_model(
-            observations, logit_dim, config["model"]).outputs
+        if model_creator:
+            self.curr_logits = model_creator(observations, logit_dim).outputs
+        else:
+            self.curr_logits = ModelCatalog.get_model(
+                observations, logit_dim, config["model"]).outputs
         self.curr_dist = distribution_class(self.curr_logits)
         self.sampler = self.curr_dist.sample()
 

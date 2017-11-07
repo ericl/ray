@@ -37,7 +37,7 @@ class Runner(object):
     network weights. When run as a remote agent, only this graph is used.
     """
 
-    def __init__(self, env_creator, batchsize, config, logdir, is_remote):
+    def __init__(self, env_creator, model_creator, batchsize, config, logdir, is_remote):
         if is_remote:
             os.environ["CUDA_VISIBLE_DEVICES"] = ""
             devices = ["/cpu:0"]
@@ -100,6 +100,7 @@ class Runner(object):
 
         def build_loss(obs, rets, advs, acts, plog, pvf_preds):
             return ProximalPolicyLoss(
+                model_creator,
                 self.env.observation_space, self.env.action_space,
                 obs, rets, advs, acts, plog, pvf_preds, self.logit_dim,
                 self.kl_coeff, self.distribution_class, self.config,

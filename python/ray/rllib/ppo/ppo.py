@@ -77,7 +77,9 @@ DEFAULT_CONFIG = {
     # is detected
     "tf_debug_inf_or_nan": False,
     # If True, we write tensorflow logs and checkpoints
-    "write_logs": True
+    "write_logs": True,
+    # Override model creation function
+    "model_creator_id": None,
 }
 
 
@@ -88,11 +90,15 @@ class PPOAgent(Agent):
     def _init(self):
         self.global_step = 0
         self.kl_coeff = self.config["kl_coeff"]
+        if self.config["model_creator_id"]:
+            model_creator = ray.local_scheduler.ObjectID(self.config["model_creator_id"])
+        else:
+            model_creator = None
         self.model = Runner(
-            self.env_creator, 1, self.config, self.logdir, False)
+            self.env_creator, model_creator, 1, self.config, self.logdir, False)
         self.agents = [
             RemoteRunner.remote(
-                self.env_creator, 1, self.config, self.logdir, True)
+                self.env_creator, model_creator, 1, self.config, self.logdir, True)
             for _ in range(self.config["num_workers"])]
         self.start_time = time.time()
         if self.config["write_logs"]:
