@@ -91,7 +91,8 @@ class PPOAgent(Agent):
         self.global_step = 0
         self.kl_coeff = self.config["kl_coeff"]
         if self.config["model_creator_id"]:
-            model_creator = ray.local_scheduler.ObjectID(self.config["model_creator_id"])
+            model_creator = ray.get(ray.local_scheduler.ObjectID(
+                pickle.loads(self.config["model_creator_id"])))
         else:
             model_creator = None
         self.model = Runner(
