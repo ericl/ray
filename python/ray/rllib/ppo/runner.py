@@ -48,7 +48,7 @@ class Runner(object):
         self.logdir = logdir
         self.env = BatchedEnv(env_creator, batchsize, config)
         if is_remote:
-            config_proto = tf.ConfigProto()
+            config_proto = tf.ConfigProto(**config["tf_remote_session_args"])
         else:
             config_proto = tf.ConfigProto(**config["tf_session_args"])
         self.preprocessor = self.env.preprocessor

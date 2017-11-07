@@ -6,6 +6,7 @@ import os
 import time
 
 import numpy as np
+import base64
 import pickle
 import tensorflow as tf
 from tensorflow.python import debug as tf_debug
@@ -39,6 +40,10 @@ DEFAULT_CONFIG = {
     "devices": ["/cpu:%d" % i for i in range(4)],
     "tf_session_args": {
         "device_count": {"CPU": 4},
+        "log_device_placement": False,
+        "allow_soft_placement": True,
+    },
+    "tf_remote_session_args": {
         "log_device_placement": False,
         "allow_soft_placement": True,
     },
@@ -92,7 +97,7 @@ class PPOAgent(Agent):
         self.kl_coeff = self.config["kl_coeff"]
         if self.config["model_creator_id"]:
             model_creator = ray.get(ray.local_scheduler.ObjectID(
-                pickle.loads(self.config["model_creator_id"])))
+                base64.b64decode(self.config["model_creator_id"])))
         else:
             model_creator = None
         self.model = Runner(
