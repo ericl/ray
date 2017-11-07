@@ -1,12 +1,42 @@
-tune-cartpole:
+tune-cartpole-a3c:
     env: CartPole-v0
     alg: A3C
-    checkpoint_freq: 10
-    max_trials: 20
+    checkpoint_freq: 5
+    max_trials: 1
     resources:
        cpu: 1
     stop:
-        episode_reward_mean: 200
-        time_total_s: 900
+        training_iteration: 10
     parameters:
         use_lstm: false
+
+tune-cartpole-dqn:
+    env: CartPole-v0
+    alg: DQN
+    checkpoint_freq: 5
+    max_trials: 1
+    resources:
+       cpu: 1
+    stop:
+        training_iteration: 10
+    parameters:
+        sample_batch_size:
+            eval: 4 ** (1 + (_i // 3))
+        train_batch_size:
+            eval: list([32, 128, 512])[_i % 3]
+        target_network_update_freq: 500
+        exploration_final_eps: .01
+        exploration_fraction: .1
+
+tune-cartpole-ppo:
+    env: CartPole-v0
+    alg: PPO
+    checkpoint_freq: 5
+    max_trials: 1
+    resources:
+       cpu: 1
+    stop:
+        training_iteration: 10
+    parameters:
+        timesteps_per_batch: 300
+        min_steps_per_task": 50
