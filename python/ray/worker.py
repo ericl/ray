@@ -28,7 +28,8 @@ import ray.services as services
 import ray.signature as signature
 import ray.local_scheduler
 import ray.plasma
-from ray.utils import FunctionProperties, random_string, binary_to_hex
+from ray.utils import (FunctionProperties, random_string, binary_to_hex,
+                       is_cython)
 
 SCRIPT_MODE = 0
 WORKER_MODE = 1
@@ -48,10 +49,6 @@ NIL_ID = 20 * b"\xff"
 NIL_LOCAL_SCHEDULER_ID = NIL_ID
 NIL_FUNCTION_ID = NIL_ID
 NIL_ACTOR_ID = NIL_ID
-
-# When performing ray.get, wait 1 second before attemping to reconstruct and
-# fetch the object again.
-GET_TIMEOUT_MILLISECONDS = 1000
 
 # This must be kept in sync with the `error_types` array in
 # common/state/error_table.h.
@@ -372,10 +369,11 @@ class Worker(object):
                 # long time, if the store is blocked, it can block the manager
                 # as well as a consequence.
                 results = []
-                get_request_size = 10000
-                for i in range(0, len(object_ids), get_request_size):
+                for i in range(0, len(object_ids),
+                               ray._config.worker_get_request_size()):
                     results += self.plasma_client.get(
-                        object_ids[i:(i + get_request_size)],
+                        object_ids[i:(i +
+                                      ray._config.worker_get_request_size())],
                         timeout,
                         self.serialization_context)
                 return results
@@ -420,12 +418,13 @@ class Worker(object):
         # Do an initial fetch for remote objects. We divide the fetch into
         # smaller fetches so as to not block the manager for a prolonged period
         # of time in a single call.
-        fetch_request_size = 10000
         plain_object_ids = [plasma.ObjectID(object_id.id())
                             for object_id in object_ids]
-        for i in range(0, len(object_ids), fetch_request_size):
+        for i in range(0, len(object_ids),
+                       ray._config.worker_fetch_request_size()):
             self.plasma_client.fetch(
-                plain_object_ids[i:(i + fetch_request_size)])
+                plain_object_ids[i:(i +
+                                    ray._config.worker_fetch_request_size())])
 
         # Get the objects. We initially try to get the objects immediately.
         final_results = self.retrieve_and_deserialize(plain_object_ids, 0)
@@ -436,7 +435,7 @@ class Worker(object):
                            if val is plasma.ObjectNotAvailable)
         was_blocked = (len(unready_ids) > 0)
         # Try reconstructing any objects we haven't gotten yet. Try to get them
-        # until at least GET_TIMEOUT_MILLISECONDS milliseconds passes, then
+        # until at least get_timeout_milliseconds milliseconds passes, then
         # repeat.
         while len(unready_ids) > 0:
             for unready_id in unready_ids:
@@ -447,12 +446,15 @@ class Worker(object):
             # prolonged period of time in a single call.
             object_ids_to_fetch = list(map(
                 plasma.ObjectID, unready_ids.keys()))
-            for i in range(0, len(object_ids_to_fetch), fetch_request_size):
+            for i in range(0, len(object_ids_to_fetch),
+                           ray._config.worker_fetch_request_size()):
                 self.plasma_client.fetch(
-                    object_ids_to_fetch[i:(i + fetch_request_size)])
+                    object_ids_to_fetch[i:(
+                        i + ray._config.worker_fetch_request_size())])
             results = self.retrieve_and_deserialize(
                 object_ids_to_fetch,
-                max([GET_TIMEOUT_MILLISECONDS, int(0.01 * len(unready_ids))]))
+                max([ray._config.get_timeout_milliseconds(),
+                     int(0.01 * len(unready_ids))]))
             # Remove any entries for objects we received during this iteration
             # so we don't retrieve the same object twice.
             for i, val in enumerate(results):
@@ -1094,7 +1096,7 @@ def get_address_info_from_redis_helper(redis_address, node_ip_address):
     # Build the address information.
     object_store_addresses = []
     for manager in plasma_managers:
-        address = manager[b"address"].decode("ascii")
+        address = manager[b"manager_address"].decode("ascii")
         port = services.get_port(address)
         object_store_addresses.append(
             services.ObjectStoreAddress(
@@ -2280,7 +2282,8 @@ def export_remote_function(function_id, func_name, func, func_invoker,
     func_name_global_valid = func.__name__ in func.__globals__
     func_name_global_value = func.__globals__.get(func.__name__)
     # Allow the function to reference itself as a global variable
-    func.__globals__[func.__name__] = func_invoker
+    if not is_cython(func):
+        func.__globals__[func.__name__] = func_invoker
     try:
         pickled_func = pickle.dumps(func)
     finally:
@@ -2329,9 +2332,11 @@ def compute_function_id(func_name, func):
     function_id_hash.update(func_name.encode("ascii"))
     # If we are running a script or are in IPython, include the source code in
     # the hash. If we are in a regular Python interpreter we skip this part
-    # because the source code is not accessible.
+    # because the source code is not accessible. If the function is a built-in
+    # (e.g., Cython), the source code is not accessible.
     import __main__ as main
-    if hasattr(main, "__file__") or in_ipython():
+    if (hasattr(main, "__file__") or in_ipython()) \
+            and inspect.isfunction(func):
         function_id_hash.update(inspect.getsource(func).encode("ascii"))
     # Compute the function ID.
     function_id = function_id_hash.digest()
@@ -2363,7 +2368,7 @@ def remote(*args, **kwargs):
                               num_custom_resource, max_calls,
                               checkpoint_interval, func_id=None):
         def remote_decorator(func_or_class):
-            if inspect.isfunction(func_or_class):
+            if inspect.isfunction(func_or_class) or is_cython(func_or_class):
                 function_properties = FunctionProperties(
                     num_return_vals=num_return_vals,
                     num_cpus=num_cpus,
@@ -2419,7 +2424,7 @@ def remote(*args, **kwargs):
             func_invoker.is_remote = True
             func_name = "{}.{}".format(func.__module__, func.__name__)
             func_invoker.func_name = func_name
-            if sys.version_info >= (3, 0):
+            if sys.version_info >= (3, 0) or is_cython(func):
                 func_invoker.__doc__ = func.__doc__
             else:
                 func_invoker.func_doc = func.func_doc

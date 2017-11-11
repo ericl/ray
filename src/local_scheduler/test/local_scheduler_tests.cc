@@ -75,8 +75,9 @@ LocalSchedulerMock *LocalSchedulerMock_init(int num_workers,
   const char *node_ip_address = "127.0.0.1";
   const char *redis_addr = node_ip_address;
   int redis_port = 6379;
-  const double static_resource_conf[ResourceIndex_MAX] = {kDefaultNumCPUs,
-                                                          kDefaultNumGPUs};
+  const double static_resource_conf[ResourceIndex_MAX] = {
+      RayConfig::instance().default_num_CPUs(),
+      RayConfig::instance().default_num_GPUs()};
   LocalSchedulerMock *mock =
       (LocalSchedulerMock *) malloc(sizeof(LocalSchedulerMock));
   memset(mock, 0, sizeof(LocalSchedulerMock));
@@ -425,7 +426,7 @@ TEST object_reconstruction_suppression_test(void) {
     exit(0);
   } else {
     /* Connect a plasma manager client so we can call object_table_add. */
-    const char *db_connect_args[] = {"address", "127.0.0.1:12346"};
+    const char *db_connect_args[] = {"manager_address", "127.0.0.1:12346"};
     DBHandle *db = db_connect(std::string("127.0.0.1"), 6379, "plasma_manager",
                               "127.0.0.1", 2, db_connect_args);
     db_attach(db, local_scheduler->loop, false);
@@ -462,7 +463,7 @@ TEST task_dependency_test(void) {
   LocalSchedulerClient *worker = state->workers.front();
   int64_t task_size;
   TaskSpec *spec = example_task_spec(1, 1, &task_size);
-  ObjectID oid = TaskSpec_arg_id(spec, 0);
+  ObjectID oid = TaskSpec_arg_id(spec, 0, 0);
 
   /* Check that the task gets queued in the waiting queue if the task is
    * submitted, but the input and workers are not available. */
@@ -537,8 +538,8 @@ TEST task_multi_dependency_test(void) {
   LocalSchedulerClient *worker = state->workers.front();
   int64_t task_size;
   TaskSpec *spec = example_task_spec(2, 1, &task_size);
-  ObjectID oid1 = TaskSpec_arg_id(spec, 0);
-  ObjectID oid2 = TaskSpec_arg_id(spec, 1);
+  ObjectID oid1 = TaskSpec_arg_id(spec, 0, 0);
+  ObjectID oid2 = TaskSpec_arg_id(spec, 1, 0);
 
   /* Check that the task gets queued in the waiting queue if the task is
    * submitted, but the inputs and workers are not available. */

@@ -122,7 +122,7 @@ struct SchedulingAlgorithmState {
   std::unordered_map<ObjectID, ObjectEntry, UniqueIDHasher> local_objects;
   /** A hash map of the objects that are not available locally. These are
    *  currently being fetched by this local scheduler. The key is the object
-   *  ID. Every kLocalSchedulerFetchTimeoutMilliseconds, a Plasma fetch
+   *  ID. Every local_scheduler_fetch_timeout_milliseconds, a Plasma fetch
    *  request will be sent the object IDs in this table. Each entry also holds
    *  an array of queued tasks that are dependent on it. */
   std::unordered_map<ObjectID, ObjectEntry, UniqueIDHasher> remote_objects;
@@ -516,7 +516,7 @@ void queue_actor_task(LocalSchedulerState *state,
 
 /**
  * Fetch a queued task's missing object dependency. The fetch request will be
- * retried every kLocalSchedulerFetchTimeoutMilliseconds until the object is
+ * retried every local_scheduler_fetch_timeout_milliseconds until the object is
  * available locally.
  *
  * @param state The scheduler state.
@@ -567,7 +567,7 @@ void fetch_missing_dependency(LocalSchedulerState *state,
 
 /**
  * Fetch a queued task's missing object dependencies. The fetch requests will
- * be retried every kLocalSchedulerFetchTimeoutMilliseconds until all
+ * be retried every local_scheduler_fetch_timeout_milliseconds until all
  * objects are available locally.
  *
  * @param state The scheduler state.
@@ -583,8 +583,9 @@ void fetch_missing_dependencies(
   int64_t num_args = TaskSpec_num_args(task);
   int num_missing_dependencies = 0;
   for (int64_t i = 0; i < num_args; ++i) {
-    if (TaskSpec_arg_by_ref(task, i)) {
-      ObjectID obj_id = TaskSpec_arg_id(task, i);
+    int count = TaskSpec_arg_id_count(task, i);
+    for (int j = 0; j < count; ++j) {
+      ObjectID obj_id = TaskSpec_arg_id(task, i, j);
       if (algorithm_state->local_objects.count(obj_id) == 0) {
         /* If the entry is not yet available locally, record the dependency. */
         fetch_missing_dependency(state, algorithm_state, task_entry_it,
@@ -609,8 +610,9 @@ void fetch_missing_dependencies(
 bool can_run(SchedulingAlgorithmState *algorithm_state, TaskSpec *task) {
   int64_t num_args = TaskSpec_num_args(task);
   for (int i = 0; i < num_args; ++i) {
-    if (TaskSpec_arg_by_ref(task, i)) {
-      ObjectID obj_id = TaskSpec_arg_id(task, i);
+    int count = TaskSpec_arg_id_count(task, i);
+    for (int j = 0; j < count; ++j) {
+      ObjectID obj_id = TaskSpec_arg_id(task, i, j);
       if (algorithm_state->local_objects.count(obj_id) == 0) {
         /* The object is not present locally, so this task cannot be scheduled
          * right now. */
@@ -629,7 +631,7 @@ int fetch_object_timeout_handler(event_loop *loop, timer_id id, void *context) {
   /* Only try the fetches if we are connected to the object store manager. */
   if (state->plasma_conn->get_manager_fd() == -1) {
     LOG_INFO("Local scheduler is not connected to a object store manager");
-    return kLocalSchedulerFetchTimeoutMilliseconds;
+    return RayConfig::instance().local_scheduler_fetch_timeout_milliseconds();
   }
 
   std::vector<ObjectID> object_id_vec;
@@ -644,10 +646,13 @@ int fetch_object_timeout_handler(event_loop *loop, timer_id id, void *context) {
 
   /* Divide very large fetch requests into smaller fetch requests so that a
    * single fetch request doesn't block the plasma manager for a long time. */
-  int64_t fetch_request_size = 10000;
-  for (int64_t j = 0; j < num_object_ids; j += fetch_request_size) {
+  for (int64_t j = 0; j < num_object_ids;
+       j += RayConfig::instance().local_scheduler_fetch_request_size()) {
     int num_objects_in_request =
-        std::min(num_object_ids, j + fetch_request_size) - j;
+        std::min(
+            num_object_ids,
+            j + RayConfig::instance().local_scheduler_fetch_request_size()) -
+        j;
     auto arrow_status = state->plasma_conn->Fetch(
         num_objects_in_request,
         reinterpret_cast<plasma::ObjectID *>(&object_ids[j]));
@@ -662,18 +667,19 @@ int fetch_object_timeout_handler(event_loop *loop, timer_id id, void *context) {
 
   /* Print a warning if this method took too long. */
   int64_t end_time = current_time_ms();
-  int64_t max_time_for_handler = 1000;
-  if (end_time - start_time > max_time_for_handler) {
+  if (end_time - start_time >
+      RayConfig::instance().max_time_for_handler_milliseconds()) {
     LOG_WARN("fetch_object_timeout_handler took %" PRId64 " milliseconds.",
              end_time - start_time);
   }
 
-  /* Wait at least kLocalSchedulerFetchTimeoutMilliseconds before running
+  /* Wait at least local_scheduler_fetch_timeout_milliseconds before running
    * this timeout handler again. But if we're waiting for a large number of
    * objects, wait longer (e.g., 10 seconds for one million objects) so that we
    * don't overwhelm the plasma manager. */
-  return std::max(kLocalSchedulerFetchTimeoutMilliseconds,
-                  int64_t(0.01 * num_object_ids));
+  return std::max(
+      RayConfig::instance().local_scheduler_fetch_timeout_milliseconds(),
+      int64_t(0.01 * num_object_ids));
 }
 
 /* TODO(swang): This method is not covered by any valgrind tests. */
@@ -687,8 +693,8 @@ int reconstruct_object_timeout_handler(event_loop *loop,
   /* This vector is used to track which object IDs to reconstruct next. If the
    * vector is empty, we repopulate it with all of the keys of the remote object
    * table. During every pass through this handler, we call reconstruct on up to
-   * 10000 elements of the vector (after first checking that the object IDs are
-   * still missing). */
+   * max_num_to_reconstruct elements of the vector (after first checking that
+   * the object IDs are still missing). */
   static std::vector<ObjectID> object_ids_to_reconstruct;
 
   /* If the set is empty, repopulate it. */
@@ -698,7 +704,6 @@ int reconstruct_object_timeout_handler(event_loop *loop,
     }
   }
 
-  int64_t max_num_to_reconstruct = 10000;
   int64_t num_reconstructed = 0;
   for (size_t i = 0; i < object_ids_to_reconstruct.size(); i++) {
     ObjectID object_id = object_ids_to_reconstruct[i];
@@ -708,7 +713,7 @@ int reconstruct_object_timeout_handler(event_loop *loop,
       reconstruct_object(state, object_id);
     }
     num_reconstructed++;
-    if (num_reconstructed == max_num_to_reconstruct) {
+    if (num_reconstructed == RayConfig::instance().max_num_to_reconstruct()) {
       break;
     }
   }
@@ -718,14 +723,15 @@ int reconstruct_object_timeout_handler(event_loop *loop,
 
   /* Print a warning if this method took too long. */
   int64_t end_time = current_time_ms();
-  int64_t max_time_for_handler = 1000;
-  if (end_time - start_time > max_time_for_handler) {
+  if (end_time - start_time >
+      RayConfig::instance().max_time_for_handler_milliseconds()) {
     LOG_WARN("reconstruct_object_timeout_handler took %" PRId64
              " milliseconds.",
              end_time - start_time);
   }
 
-  return kLocalSchedulerReconstructionTimeoutMilliseconds;
+  return RayConfig::instance()
+      .local_scheduler_reconstruction_timeout_milliseconds();
 }
 
 /**
@@ -1439,8 +1445,9 @@ void handle_object_removed(LocalSchedulerState *state,
        it != algorithm_state->waiting_task_queue->end(); ++it) {
     int64_t num_args = TaskSpec_num_args(it->spec);
     for (int64_t i = 0; i < num_args; ++i) {
-      if (TaskSpec_arg_by_ref(it->spec, i)) {
-        ObjectID arg_id = TaskSpec_arg_id(it->spec, i);
+      int count = TaskSpec_arg_id_count(it->spec, i);
+      for (int j = 0; j < count; ++j) {
+        ObjectID arg_id = TaskSpec_arg_id(it->spec, i, j);
         if (ObjectID_equal(arg_id, removed_object_id)) {
           fetch_missing_dependency(state, algorithm_state, it,
                                    removed_object_id.to_plasma_id(), i);

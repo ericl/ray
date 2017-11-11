@@ -101,7 +101,7 @@ void process_status_request(ClientConnection *client_conn, ObjectID object_id);
  * @return Status of object_id as defined in plasma.h
  */
 int request_status(ObjectID object_id,
-                   const std::vector<std::string> &manager_vector,
+                   const std::vector<DBClientID> &manager_vector,
                    void *context);
 
 /**
@@ -292,12 +292,6 @@ ClientConnection *ClientConnection_init(PlasmaManagerState *state,
  */
 void ClientConnection_free(ClientConnection *client_conn);
 
-void object_table_subscribe_callback(ObjectID object_id,
-                                     int64_t data_size,
-                                     int manager_count,
-                                     const char *manager_vector[],
-                                     void *context);
-
 std::unordered_map<ObjectID, std::vector<WaitRequest *>, UniqueIDHasher> &
 object_wait_requests_from_type(PlasmaManagerState *manager_state, int type) {
   /* We use different types of hash tables for different requests. */
@@ -464,7 +458,7 @@ PlasmaManagerState *PlasmaManagerState_init(const char *store_socket_name,
     db_connect_args[1] = store_socket_name;
     db_connect_args[2] = "manager_socket_name";
     db_connect_args[3] = manager_socket_name;
-    db_connect_args[4] = "address";
+    db_connect_args[4] = "manager_address";
     db_connect_args[5] = manager_address_str.c_str();
     state->db =
         db_connect(std::string(redis_primary_addr), redis_primary_port,
@@ -540,10 +534,10 @@ void process_message(event_loop *loop,
 int write_object_chunk(ClientConnection *conn, PlasmaRequestBuffer *buf) {
   LOG_DEBUG("Writing data to fd %d", conn->fd);
   ssize_t r, s;
-  /* Try to write one BUFSIZE at a time. */
+  /* Try to write one buf_size at a time. */
   s = buf->data_size + buf->metadata_size - conn->cursor;
-  if (s > BUFSIZE)
-    s = BUFSIZE;
+  if (s > RayConfig::instance().buf_size())
+    s = RayConfig::instance().buf_size();
   r = write(conn->fd, buf->data + conn->cursor, s);
 
   if (r != s) {
@@ -641,10 +635,10 @@ int read_object_chunk(ClientConnection *conn, PlasmaRequestBuffer *buf) {
             buf->data + conn->cursor);
   ssize_t r, s;
   CHECK(buf != NULL);
-  /* Try to read one BUFSIZE at a time. */
+  /* Try to read one buf_size at a time. */
   s = buf->data_size + buf->metadata_size - conn->cursor;
-  if (s > BUFSIZE) {
-    s = BUFSIZE;
+  if (s > RayConfig::instance().buf_size()) {
+    s = RayConfig::instance().buf_size();
   }
   r = read(conn->fd, buf->data + conn->cursor, s);
 
@@ -941,12 +935,13 @@ int fetch_timeout_handler(event_loop *loop, timer_id id, void *context) {
   }
   free(object_ids_to_request);
 
-  /* Wait at least MANAGER_TIMEOUT before running this timeout handler again.
-   * But if we're waiting for a large number of objects, wait longer (e.g., 10
-   * seconds for one million objects) so that we don't overwhelm other
-   * components like Redis with too many requests (and so that we don't
-   * overwhelm this manager with responses). */
-  return std::max(MANAGER_TIMEOUT, int(0.01 * num_object_ids));
+  /* Wait at least manager_timeout_milliseconds before running this timeout
+   * handler again. But if we're waiting for a large number of objects, wait
+   * longer (e.g., 10 seconds for one million objects) so that we don't
+   * overwhelm other components like Redis with too many requests (and so that
+   * we don't overwhelm this manager with responses). */
+  return std::max(RayConfig::instance().manager_timeout_milliseconds(),
+                  int64_t(0.01 * num_object_ids));
 }
 
 bool is_object_local(PlasmaManagerState *state, ObjectID object_id) {
@@ -1002,35 +997,24 @@ void fatal_table_callback(ObjectID id, void *user_context, void *user_data) {
   CHECK(0);
 }
 
-void object_present_callback(ObjectID object_id,
-                             const std::vector<std::string> &manager_vector,
-                             void *context) {
-  PlasmaManagerState *manager_state = (PlasmaManagerState *) context;
-  /* This callback is called from object_table_subscribe, which guarantees that
-   * the manager vector contains at least one element. */
-  CHECK(manager_vector.size() >= 1);
-
-  /* Update the in-progress remote wait requests. */
-  update_object_wait_requests(manager_state, object_id,
-                              plasma::PLASMA_QUERY_ANYWHERE,
-                              ObjectStatus_Remote);
-}
-
 /* This callback is used by both fetch and wait. Therefore, it may have to
  * handle outstanding fetch and wait requests. */
-void object_table_subscribe_callback(
-    ObjectID object_id,
-    int64_t data_size,
-    const std::vector<std::string> &manager_vector,
-    void *context) {
+void object_table_subscribe_callback(ObjectID object_id,
+                                     int64_t data_size,
+                                     const std::vector<DBClientID> &manager_ids,
+                                     void *context) {
   PlasmaManagerState *manager_state = (PlasmaManagerState *) context;
+  const std::vector<std::string> managers =
+      db_client_table_get_ip_addresses(manager_state->db, manager_ids);
   /* Run the callback for fetch requests if there is a fetch request. */
   auto it = manager_state->fetch_requests.find(object_id);
   if (it != manager_state->fetch_requests.end()) {
-    request_transfer(object_id, manager_vector, context);
+    request_transfer(object_id, managers, context);
   }
   /* Run the callback for wait requests. */
-  object_present_callback(object_id, manager_vector, context);
+  update_object_wait_requests(manager_state, object_id,
+                              plasma::PLASMA_QUERY_ANYWHERE,
+                              ObjectStatus_Remote);
 }
 
 void process_fetch_requests(ClientConnection *client_conn,
@@ -1169,7 +1153,7 @@ void process_wait_request(ClientConnection *client_conn,
  */
 void request_status_done(ObjectID object_id,
                          bool never_created,
-                         const std::vector<std::string> &manager_vector,
+                         const std::vector<DBClientID> &manager_vector,
                          void *context) {
   ClientConnection *client_conn = (ClientConnection *) context;
   int status = request_status(object_id, manager_vector, context);
@@ -1180,7 +1164,7 @@ void request_status_done(ObjectID object_id,
 }
 
 int request_status(ObjectID object_id,
-                   const std::vector<std::string> &manager_vector,
+                   const std::vector<DBClientID> &manager_vector,
                    void *context) {
   ClientConnection *client_conn = (ClientConnection *) context;
 
@@ -1466,8 +1450,8 @@ void process_message(event_loop *loop,
 
   /* Print a warning if this method took too long. */
   int64_t end_time = current_time_ms();
-  int64_t max_time_for_handler = 1000;
-  if (end_time - start_time > max_time_for_handler) {
+  if (end_time - start_time >
+      RayConfig::instance().max_time_for_handler_milliseconds()) {
     LOG_WARN("process_message of type %" PRId64 " took %" PRId64
              " milliseconds.",
              type, end_time - start_time);
@@ -1481,14 +1465,15 @@ int heartbeat_handler(event_loop *loop, timer_id id, void *context) {
   int64_t current_time = current_time_ms();
   CHECK(current_time >= state->previous_heartbeat_time);
   if (current_time - state->previous_heartbeat_time >
-      NUM_HEARTBEATS_TIMEOUT * HEARTBEAT_TIMEOUT_MILLISECONDS) {
+      RayConfig::instance().num_heartbeats_timeout() *
+          RayConfig::instance().heartbeat_timeout_milliseconds()) {
     LOG_FATAL("The last heartbeat was sent %" PRId64 " milliseconds ago.",
               current_time - state->previous_heartbeat_time);
   }
   state->previous_heartbeat_time = current_time;
 
   plasma_manager_send_heartbeat(state->db);
-  return HEARTBEAT_TIMEOUT_MILLISECONDS;
+  return RayConfig::instance().heartbeat_timeout_milliseconds();
 }
 
 void start_server(const char *store_socket_name,
@@ -1532,10 +1517,12 @@ void start_server(const char *store_socket_name,
                                           g_manager_state, NULL, NULL, NULL);
   /* Set up a recurring timer that will loop through the outstanding fetch
    * requests and reissue requests for transfers of those objects. */
-  event_loop_add_timer(g_manager_state->loop, MANAGER_TIMEOUT,
+  event_loop_add_timer(g_manager_state->loop,
+                       RayConfig::instance().manager_timeout_milliseconds(),
                        fetch_timeout_handler, g_manager_state);
   /* Publish the heartbeats to all subscribers of the plasma manager table. */
-  event_loop_add_timer(g_manager_state->loop, HEARTBEAT_TIMEOUT_MILLISECONDS,
+  event_loop_add_timer(g_manager_state->loop,
+                       RayConfig::instance().heartbeat_timeout_milliseconds(),
                        heartbeat_handler, g_manager_state);
   /* Run the event loop. */
   event_loop_run(g_manager_state->loop);

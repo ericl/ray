@@ -315,7 +315,8 @@ static int PyTask_init(PyTask *self, PyObject *args, PyObject *kwds) {
   for (Py_ssize_t i = 0; i < size; ++i) {
     PyObject *arg = PyList_GetItem(arguments, i);
     if (PyObject_IsInstance(arg, (PyObject *) &PyObjectIDType)) {
-      TaskSpec_args_add_ref(g_task_builder, ((PyObjectID *) arg)->object_id);
+      TaskSpec_args_add_ref(g_task_builder, &((PyObjectID *) arg)->object_id,
+                            1);
     } else {
       /* We do this check because we cast a signed int to an unsigned int. */
       PyObject *data = PyObject_CallMethodObjArgs(pickle_module, pickle_dumps,
@@ -391,9 +392,10 @@ static PyObject *PyTask_arguments(PyObject *self) {
   int64_t num_args = TaskSpec_num_args(task);
   PyObject *arg_list = PyList_New((Py_ssize_t) num_args);
   for (int i = 0; i < num_args; ++i) {
-    if (TaskSpec_arg_by_ref(task, i)) {
-      ObjectID object_id = TaskSpec_arg_id(task, i);
-      PyList_SetItem(arg_list, i, PyObjectID_make(object_id));
+    int count = TaskSpec_arg_id_count(task, i);
+    if (count > 0) {
+      assert(count == 1);
+      PyList_SetItem(arg_list, i, PyObjectID_make(TaskSpec_arg_id(task, i, 0)));
     } else {
       CHECK(pickle_module != NULL);
       CHECK(pickle_loads != NULL);
@@ -507,9 +509,6 @@ PyObject *PyTask_make(TaskSpec *task_spec, int64_t task_size) {
 
 /* Define the methods for the module. */
 
-#define SIZE_LIMIT 100
-#define NUM_ELEMENTS_LIMIT 1000
-
 #if PY_MAJOR_VERSION >= 3
 #define PyInt_Check PyLong_Check
 #endif
@@ -531,7 +530,7 @@ PyObject *PyTask_make(TaskSpec *task_spec, int64_t task_size) {
  */
 int is_simple_value(PyObject *value, int *num_elements_contained) {
   *num_elements_contained += 1;
-  if (*num_elements_contained >= NUM_ELEMENTS_LIMIT) {
+  if (*num_elements_contained >= RayConfig::instance().num_elements_limit()) {
     return 0;
   }
   if (PyInt_Check(value) || PyLong_Check(value) || value == Py_False ||
@@ -540,21 +539,26 @@ int is_simple_value(PyObject *value, int *num_elements_contained) {
   }
   if (PyBytes_CheckExact(value)) {
     *num_elements_contained += PyBytes_Size(value);
-    return (*num_elements_contained < NUM_ELEMENTS_LIMIT);
+    return (*num_elements_contained <
+            RayConfig::instance().num_elements_limit());
   }
   if (PyUnicode_CheckExact(value)) {
     *num_elements_contained += PyUnicode_GET_SIZE(value);
-    return (*num_elements_contained < NUM_ELEMENTS_LIMIT);
+    return (*num_elements_contained <
+            RayConfig::instance().num_elements_limit());
   }
-  if (PyList_CheckExact(value) && PyList_Size(value) < SIZE_LIMIT) {
+  if (PyList_CheckExact(value) &&
+      PyList_Size(value) < RayConfig::instance().size_limit()) {
     for (Py_ssize_t i = 0; i < PyList_Size(value); ++i) {
       if (!is_simple_value(PyList_GetItem(value, i), num_elements_contained)) {
         return 0;
       }
     }
-    return (*num_elements_contained < NUM_ELEMENTS_LIMIT);
+    return (*num_elements_contained <
+            RayConfig::instance().num_elements_limit());
   }
-  if (PyDict_CheckExact(value) && PyDict_Size(value) < SIZE_LIMIT) {
+  if (PyDict_CheckExact(value) &&
+      PyDict_Size(value) < RayConfig::instance().size_limit()) {
     PyObject *key, *val;
     Py_ssize_t pos = 0;
     while (PyDict_Next(value, &pos, &key, &val)) {
@@ -563,15 +567,18 @@ int is_simple_value(PyObject *value, int *num_elements_contained) {
         return 0;
       }
     }
-    return (*num_elements_contained < NUM_ELEMENTS_LIMIT);
+    return (*num_elements_contained <
+            RayConfig::instance().num_elements_limit());
   }
-  if (PyTuple_CheckExact(value) && PyTuple_Size(value) < SIZE_LIMIT) {
+  if (PyTuple_CheckExact(value) &&
+      PyTuple_Size(value) < RayConfig::instance().size_limit()) {
     for (Py_ssize_t i = 0; i < PyTuple_Size(value); ++i) {
       if (!is_simple_value(PyTuple_GetItem(value, i), num_elements_contained)) {
         return 0;
       }
     }
-    return (*num_elements_contained < NUM_ELEMENTS_LIMIT);
+    return (*num_elements_contained <
+            RayConfig::instance().num_elements_limit());
   }
   return 0;
 }

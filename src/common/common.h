@@ -25,13 +25,7 @@ extern "C" {
 #include "plasma/common.h"
 #include "arrow/util/macros.h"
 
-/** The duration between heartbeats. These are sent by the plasma manager and
- *  local scheduler. */
-#define HEARTBEAT_TIMEOUT_MILLISECONDS 100
-/** If a component has not sent a heartbeat in the last NUM_HEARTBEATS_TIMEOUT
- *  heartbeat intervals, the global scheduler or monitor process will report it
- *  as dead to the db_client table. */
-#define NUM_HEARTBEATS_TIMEOUT 100
+#include "state/ray_config.h"
 
 /** Definitions for Ray logging levels. */
 #define RAY_COMMON_DEBUG 0
@@ -223,6 +217,14 @@ typedef UniqueID DBClientID;
  * @return True if the db client IDs are the same and false otherwise.
  */
 bool DBClientID_equal(DBClientID first_id, DBClientID second_id);
+
+/**
+ * Compare a db client ID to the nil ID.
+ *
+ * @param id The db client ID to compare to nil.
+ * @return True if the db client ID is equal to nil.
+ */
+bool DBClientID_is_nil(ObjectID id);
 
 #define MAX(x, y) ((x) >= (y) ? (x) : (y))
 #define MIN(x, y) ((x) <= (y) ? (x) : (y))
