@@ -345,7 +345,7 @@ class _MockAgent(Agent):
 
 class _SigmoidFakeData(_MockAgent):
     """Agent that returns sigmoid learning curves.
-    
+
     This can be helpful for evaluating early stopping algorithms."""
 
     _agent_name = "SigmoidFakeData"

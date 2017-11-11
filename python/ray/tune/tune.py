@@ -50,6 +50,7 @@ def get_scheduler_instance(sched):
     else:
         assert False, "Unknown scheduler: {}".format(sched)
 
+
 def run_experiments(experiments, scheduler, **ray_args):
     runner = TrialRunner(get_scheduler_instance(scheduler))
 
