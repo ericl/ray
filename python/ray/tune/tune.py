@@ -36,23 +36,24 @@ parser.add_argument("--num-gpus", default=None, type=int,
                     help="Number of GPUs to allocate to Ray.")
 parser.add_argument("-f", "--config-file", required=True, type=str,
                     help="Read experiment options from this JSON/YAML file.")
-parser.add_argument("--scheduler", default="FIFO", type=str,
-                    help="FIFO, MedianStopping, or HyperBand")
 
 
-def get_scheduler_instance(sched):
+def make_scheduler(args):
+    sched = args.scheduler
     if sched == "FIFO":
-        return FIFOScheduler()
+        return FIFOScheduler(**args.scheduler_config)
     elif sched == "MedianStopping":
-        return MedianStoppingRule()
+        return MedianStoppingRule(**args.scheduler_config)
     elif sched == "HyperBand":
-        return HyperBandScheduler(200, eta=30)
+        return HyperBandScheduler(**args.scheduler_config)
     else:
         assert False, "Unknown scheduler: {}".format(sched)
 
 
-def run_experiments(experiments, scheduler, **ray_args):
-    runner = TrialRunner(get_scheduler_instance(scheduler))
+def run_experiments(experiments, scheduler=None, **ray_args):
+    if scheduler is None:
+        scheduler = make_scheduler(args)
+    runner = TrialRunner(scheduler)
 
     for name, spec in experiments.items():
         for trial in generate_trials(spec, name):
@@ -78,5 +79,5 @@ if __name__ == "__main__":
     with open(args.config_file) as f:
         experiments = yaml.load(f)
     run_experiments(
-        experiments, args.scheduler, redis_address=args.redis_address,
+        experiments, make_scheduler(args), redis_address=args.redis_address,
         num_cpus=args.num_cpus, num_gpus=args.num_gpus)

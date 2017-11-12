@@ -9,7 +9,7 @@ import sys
 import yaml
 
 from ray.tune.config_parser import make_parser, resources_to_json
-from ray.tune.tune import run_experiments
+from ray.tune.tune import make_scheduler, run_experiments
 
 
 EXAMPLE_USAGE = """
@@ -37,8 +37,6 @@ parser.add_argument("--experiment-name", default="default", type=str,
                     help="Name of experiment dir.")
 parser.add_argument("-f", "--config-file", default=None, type=str,
                     help="If specified, use config options from this file.")
-parser.add_argument("--scheduler", default="FIFO", type=str,
-                    help="FIFO, MedianStopping, or HyperBand")
 
 
 if __name__ == "__main__":
@@ -66,6 +64,6 @@ if __name__ == "__main__":
             parser.error("the following arguments are required: --env")
 
     run_experiments(
-        experiments, scheduler=args.scheduler,
+        experiments, scheduler=make_scheduler(args),
         redis_address=args.redis_address,
         num_cpus=args.num_cpus, num_gpus=args.num_gpus)
