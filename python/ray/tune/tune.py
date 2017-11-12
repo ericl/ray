@@ -9,10 +9,11 @@ import sys
 import yaml
 
 import ray
-from ray.tune.trial_runner import TrialRunner
-from ray.tune.trial import Trial
-from ray.tune.trial_scheduler import MedianStoppingRule, FIFOScheduler
 from ray.tune.hyperband import HyperBandScheduler
+from ray.tune.median_stopping_rule import MedianStoppingRule
+from ray.tune.trial import Trial
+from ray.tune.trial_runner import TrialRunner
+from ray.tune.trial_scheduler import FIFOScheduler
 from ray.tune.variant_generator import generate_trials
 
 

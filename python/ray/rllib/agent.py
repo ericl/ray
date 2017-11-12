@@ -4,23 +4,17 @@ from __future__ import print_function
 
 from datetime import datetime
 
-import json
 import logging
 import numpy as np
 import os
 import pickle
-import sys
 import tempfile
 import time
 import uuid
 
 import tensorflow as tf
+from ray.tune.logger import UnifiedLogger
 from ray.tune.result import TrainingResult
-
-if sys.version_info[0] == 2:
-    import cStringIO as StringIO
-elif sys.version_info[0] == 3:
-    import io as StringIO
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -102,9 +96,9 @@ class Agent(object):
         else:
             log_upload_uri = None
 
-        logger.info(
-            "%s agent created with logdir '%s' and upload uri '%s'",
-            self.__class__.__name__, self.logdir, log_upload_uri)
+        print(
+            "{} agent created with logdir '{}' and upload uri '{}'".format(
+                self.__class__.__name__, self.logdir, log_upload_uri))
 
         if log_results:
             self._result_logger = UnifiedLogger(

@@ -3,9 +3,15 @@ from __future__ import division
 from __future__ import print_function
 
 import json
+import numpy as np
+import os
+import sys
 import tensorflow as tf
 
-from ray.tune.result import TrainingResult
+if sys.version_info[0] == 2:
+    import cStringIO as StringIO
+elif sys.version_info[0] == 3:
+    import io as StringIO
 
 
 class Logger(object):
@@ -57,7 +63,7 @@ class _JsonLogger(Logger):
     def _init(self):
         config_out = os.path.join(self.logdir, "config.json")
         with open(config_out, "w") as f:
-            json.dump(self.config, f, sort_keys=True, cls=_CustomJsonEncoder)
+            json.dump(self.config, f, sort_keys=True, cls=_CustomEncoder)
         local_file = os.path.join(self.logdir, "result.json")
         self.local_out = open(local_file, "w")
         if self.uri:
@@ -116,7 +122,7 @@ class _VizKitLogger(Logger):
 
 class _CustomEncoder(json.JSONEncoder):
     def __init__(self, nan_str="null", **kwargs):
-        super(_CustomJsonEncoder, self).__init__(**kwargs)
+        super(_CustomEncoder, self).__init__(**kwargs)
         self.nan_str = nan_str
 
     def iterencode(self, o, _one_shot=False):
