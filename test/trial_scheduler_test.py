@@ -4,10 +4,11 @@ from __future__ import print_function
 
 import unittest
 
+from ray.tune.hyperband import HyperBandScheduler
+from ray.tune.median_stopping_rule import MedianStoppingRule
 from ray.tune.result import TrainingResult
 from ray.tune.trial import Trial
-from ray.tune.trial_scheduler import MedianStoppingRule, TrialScheduler
-from ray.tune.hyperband import HyperBandScheduler
+from ray.tune.trial_scheduler import TrialScheduler
 
 
 def result(t, rew):
