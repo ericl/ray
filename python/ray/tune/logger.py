@@ -25,11 +25,14 @@ class Logger(object):
         "time_this_iter_s", "mean_loss", "mean_accuracy",
         "episode_reward_mean", "episode_len_mean"]
 
-    def __init__(self, config, local_logdir, upload_uri=None):
+    def __init__(self, config, logdir, upload_uri=None):
         self.config = config
-        self.logdir = local_logdir
+        self.logdir = logdir
         self.uri = upload_uri
         self._init()
+
+    def _init(self):
+        pass
 
     def on_result(self, result):
         """Given a result, appends it to the existing log."""
@@ -49,6 +52,7 @@ class UnifiedLogger(Logger):
         self._loggers = []
         for cls in [_JsonLogger, _TFLogger, _VizKitLogger]:
             self._loggers.append(cls(self.config, self.logdir, self.uri))
+        print("Unified logger created with logdir '{}'".format(self.logdir))
 
     def on_result(self, result):
         for logger in self._loggers:
@@ -57,6 +61,11 @@ class UnifiedLogger(Logger):
     def close(self):
         for logger in self._loggers:
             logger.close()
+
+
+class NoopLogger(Logger):
+    def on_result(self, result):
+        pass
 
 
 class _JsonLogger(Logger):

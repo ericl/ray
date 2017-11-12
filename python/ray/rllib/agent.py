@@ -33,25 +33,18 @@ class Agent(object):
     """
 
     _allow_unknown_configs = False
+    _default_logdir = "/tmp/ray"
 
     def __init__(
-            self, env_creator, config, local_dir='/tmp/ray',
-            upload_dir=None, experiment_tag=None, log_results=True):
+            self, env_creator, config, logger_creator=None):
         """Initialize an RLLib agent.
 
         Args:
             env_creator (str|func): Name of the OpenAI gym environment to train
                 against, or a function that creates such an env.
             config (obj): Algorithm-specific configuration data.
-            local_dir (str): Directory where results and temporary files will
-                be placed.
-            upload_dir (str): Optional remote URI like s3://bucketname/ where
-                results will be uploaded.
-            experiment_tag (str): Optional string containing extra metadata
-                about the experiment, e.g. a summary of parameters. This string
-                will be included in the logdir path and when displaying agent
-                progress.
-            log_results (bool): Whether to log results automatically.
+            logger_creator (func): Function that creates a ray.tune.Logger
+                object. If unspecified, a default logger is created.
         """
         self._initialize_ok = False
         self._experiment_id = uuid.uuid4().hex
@@ -74,37 +67,20 @@ class Agent(object):
                         "Unknown agent config `{}`, "
                         "all agent configs: {}".format(k, self.config.keys()))
         self.config.update(config)
-        self.config.update({
-            "experiment_tag": experiment_tag,
-            "alg": self._agent_name,
-            "env_name": env_name,
-            "experiment_id": self._experiment_id,
-        })
 
-        logdir_suffix = "{}_{}_{}".format(
-            env_name,
-            self._agent_name,
-            experiment_tag or datetime.today().strftime("%Y-%m-%d_%H-%M-%S"))
-
-        if not os.path.exists(local_dir):
-            os.makedirs(local_dir)
-
-        self.logdir = tempfile.mkdtemp(prefix=logdir_suffix, dir=local_dir)
-
-        if upload_dir:
-            log_upload_uri = os.path.join(upload_dir, logdir_suffix)
+        if logger_creator:
+            self._result_logger = logger_creator(self.config)
+            self.logdir = self._result_logger.logdir
         else:
-            log_upload_uri = None
-
-        print(
-            "{} agent created with logdir '{}' and upload uri '{}'".format(
-                self.__class__.__name__, self.logdir, log_upload_uri))
-
-        if log_results:
-            self._result_logger = UnifiedLogger(
-                self.config, self.logdir, log_upload_uri)
-        else:
-            self._result_logger = None
+            logdir_suffix = "{}_{}_{}".format(
+                env_name,
+                self._agent_name,
+                datetime.today().strftime("%Y-%m-%d_%H-%M-%S"))
+            if not os.path.exists(self._default_logdir):
+                os.makedirs(self._default_logdir)
+            self.logdir = tempfile.mkdtemp(
+                prefix=logdir_suffix, dir=self._default_logdir)
+            self._result_logger = UnifiedLogger(self.config, self.logdir, None)
 
         self._iteration = 0
         self._time_total = 0.0

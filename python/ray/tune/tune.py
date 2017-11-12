@@ -5,6 +5,7 @@ from __future__ import division
 from __future__ import print_function
 
 import argparse
+import json
 import sys
 import yaml
 
@@ -35,6 +36,10 @@ parser.add_argument("--num-cpus", default=None, type=int,
                     help="Number of CPUs to allocate to Ray.")
 parser.add_argument("--num-gpus", default=None, type=int,
                     help="Number of GPUs to allocate to Ray.")
+parser.add_argument("--scheduler", default="FIFO", type=str,
+                    help="FIFO, MedianStopping, or HyperBand")
+parser.add_argument("--scheduler-config", default="{}", type=json.loads,
+                    help="Config options to pass to the scheduler.")
 parser.add_argument("-f", "--config-file", required=True, type=str,
                     help="Read experiment options from this JSON/YAML file.")
 
