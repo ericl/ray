@@ -26,13 +26,14 @@ class MedianStoppingRule(FIFOScheduler):
         min_samples_required (int): Min samples to compute median over.
         hard_stop (bool): If true, pauses trials instead of stopping
             them. When all other trials are complete, paused trials will be
-            resumed.
+            resumed and allowed to run FIFO.
     """
 
     def __init__(
             self, time_attr='time_total_s', reward_attr='episode_reward_mean',
             grace_period=60.0, min_samples_required=3, hard_stop=True):
         FIFOScheduler.__init__(self)
+        self._stopped_trials = set()
         self._completed_trials = set()
         self._results = collections.defaultdict(list)
         self._grace_period = grace_period
@@ -40,7 +41,6 @@ class MedianStoppingRule(FIFOScheduler):
         self._reward_attr = reward_attr
         self._time_attr = time_attr
         self._hard_stop = hard_stop
-        self._num_stopped = 0
 
     def on_trial_result(self, trial_runner, trial, result):
         """Callback for early stopping.
@@ -50,6 +50,10 @@ class MedianStoppingRule(FIFOScheduler):
         averages of all completed trials' objectives reported up to step `t`.
         """
 
+        if trial in self._stopped_trials:
+            assert not self._hard_stop
+            return TrialScheduler.CONTINUE  # fall back to FIFO
+
         time = getattr(result, self._time_attr)
         self._results[trial].append(result)
         median_result = self._get_median_result(time)
@@ -58,7 +62,7 @@ class MedianStoppingRule(FIFOScheduler):
             trial, best_result, median_result, time))
         if best_result < median_result and time > self._grace_period:
             print("MedianStoppingRule: early stopping {}".format(trial))
-            self._num_stopped += 1
+            self._stopped_trials.add(trial)
             if self._hard_stop:
                 return TrialScheduler.STOP
             else:
@@ -72,7 +76,7 @@ class MedianStoppingRule(FIFOScheduler):
 
     def debug_string(self):
         return "Using MedianStoppingRule: num_stopped={}.".format(
-            self._num_stopped)
+            len(self._stopped_trials))
 
     def _get_median_result(self, time):
         scores = []
