@@ -6,6 +6,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <string>
+
 #include "common.h"
 #include "common_protocol.h"
 #include "event_loop.h"
@@ -18,6 +20,7 @@
 #include "net.h"
 #include "state/actor_notification_table.h"
 #include "state/db.h"
+#include "state/db_client_table.h"
 #include "state/driver_table.h"
 #include "state/task_table.h"
 #include "state/object_table.h"
@@ -102,8 +105,9 @@ void kill_worker(LocalSchedulerState *state,
        * up its state before force killing. The client socket will be closed
        * and the worker struct will be freed after the timeout. */
       kill(worker->pid, SIGTERM);
-      event_loop_add_timer(state->loop, KILL_WORKER_TIMEOUT_MILLISECONDS,
-                           force_kill_worker, (void *) worker);
+      event_loop_add_timer(
+          state->loop, RayConfig::instance().kill_worker_timeout_milliseconds(),
+          force_kill_worker, (void *) worker);
       free_worker = false;
     }
     LOG_DEBUG("Killed worker with pid %d", worker->pid);
@@ -148,6 +152,11 @@ void LocalSchedulerState_free(LocalSchedulerState *state) {
    * local scheduler at most once. If a SIGTERM is caught afterwards, there is
    * the possibility of orphan worker processes. */
   signal(SIGTERM, SIG_DFL);
+  /* Send a null heartbeat that tells the global scheduler that we are dead to
+   * avoid waiting for the heartbeat timeout. */
+  if (state->db != NULL) {
+    local_scheduler_table_disconnect(state->db);
+  }
 
   /* Kill any child processes that didn't register as a worker yet. */
   for (auto const &worker_pid : state->child_pids) {
@@ -175,9 +184,6 @@ void LocalSchedulerState_free(LocalSchedulerState *state) {
    * responsible for deleting our entry from the db_client table, so do not
    * delete it here. */
   if (state->db != NULL) {
-    /* Send a null heartbeat that tells the global scheduler that we are dead
-     * to avoid waiting for the heartbeat timeout. */
-    local_scheduler_table_disconnect(state->db);
     DBHandle_free(state->db);
   }
 
@@ -338,42 +344,27 @@ LocalSchedulerState *LocalSchedulerState_init(
 
   /* Connect to Redis if a Redis address is provided. */
   if (redis_primary_addr != NULL) {
-    int num_args;
-    const char **db_connect_args = NULL;
-    /* Use UT_string to convert the resource value into a string. */
-    UT_string *num_cpus;
-    UT_string *num_gpus;
-    utstring_new(num_cpus);
-    utstring_new(num_gpus);
-    utstring_printf(num_cpus, "%f", static_resource_conf[0]);
-    utstring_printf(num_gpus, "%f", static_resource_conf[1]);
+    /* Use std::string to convert the resource value into a string. */
+    std::string num_cpus = std::to_string(static_resource_conf[0]);
+    std::string num_gpus = std::to_string(static_resource_conf[1]);
+
+    /* Construct db_connect_args */
+    std::vector<const char *> db_connect_args;
+    db_connect_args.push_back("local_scheduler_socket_name");
+    db_connect_args.push_back(local_scheduler_socket_name);
+    db_connect_args.push_back("num_cpus");
+    db_connect_args.push_back(num_cpus.c_str());
+    db_connect_args.push_back("num_gpus");
+    db_connect_args.push_back(num_gpus.c_str());
+
     if (plasma_manager_address != NULL) {
-      num_args = 8;
-      db_connect_args = (const char **) malloc(sizeof(char *) * num_args);
-      db_connect_args[0] = "local_scheduler_socket_name";
-      db_connect_args[1] = local_scheduler_socket_name;
-      db_connect_args[2] = "num_cpus";
-      db_connect_args[3] = utstring_body(num_cpus);
-      db_connect_args[4] = "num_gpus";
-      db_connect_args[5] = utstring_body(num_gpus);
-      db_connect_args[6] = "aux_address";
-      db_connect_args[7] = plasma_manager_address;
-    } else {
-      num_args = 6;
-      db_connect_args = (const char **) malloc(sizeof(char *) * num_args);
-      db_connect_args[0] = "local_scheduler_socket_name";
-      db_connect_args[1] = local_scheduler_socket_name;
-      db_connect_args[2] = "num_cpus";
-      db_connect_args[3] = utstring_body(num_cpus);
-      db_connect_args[4] = "num_gpus";
-      db_connect_args[5] = utstring_body(num_gpus);
+      db_connect_args.push_back("manager_address");
+      db_connect_args.push_back(plasma_manager_address);
     }
+
     state->db = db_connect(std::string(redis_primary_addr), redis_primary_port,
-                           "local_scheduler", node_ip_address, num_args,
-                           db_connect_args);
-    utstring_free(num_cpus);
-    utstring_free(num_gpus);
-    free(db_connect_args);
+                           "local_scheduler", node_ip_address,
+                           db_connect_args.size(), &db_connect_args[0]);
     db_attach(state->db, loop, false);
   } else {
     state->db = NULL;
@@ -634,16 +625,31 @@ void process_plasma_notification(event_loop *loop,
 void reconstruct_task_update_callback(Task *task,
                                       void *user_context,
                                       bool updated) {
+  LocalSchedulerState *state = (LocalSchedulerState *) user_context;
   if (!updated) {
-    /* The test-and-set of the task's scheduling state failed, so the task was
-     * either not finished yet, or it was already being reconstructed.
-     * Suppress the reconstruction request. */
+    /* The test-and-set failed. The task is either: (1) not finished yet, (2)
+     * lost, but not yet updated, or (3) already being reconstructed. */
+    DBClientID current_local_scheduler_id = Task_local_scheduler(task);
+    if (!DBClientID_is_nil(current_local_scheduler_id)) {
+      DBClient current_local_scheduler =
+          db_client_table_cache_get(state->db, current_local_scheduler_id);
+      if (!current_local_scheduler.is_alive) {
+        /* (2) The current local scheduler for the task is dead. The task is
+         * lost, but the task table hasn't received the update yet. Retry the
+         * test-and-set. */
+        task_table_test_and_update(state->db, Task_task_id(task),
+                                   current_local_scheduler_id, Task_state(task),
+                                   TASK_STATUS_RECONSTRUCTING, NULL,
+                                   reconstruct_task_update_callback, state);
+      }
+    }
+    /* The test-and-set failed, so it is not safe to resubmit the task for
+     * execution. Suppress the request. */
     return;
   }
 
   /* Otherwise, the test-and-set succeeded, so resubmit the task for execution
    * to ensure that reconstruction will happen. */
-  LocalSchedulerState *state = (LocalSchedulerState *) user_context;
   TaskSpec *spec = Task_task_spec(task);
   if (ActorID_equal(TaskSpec_actor_id(spec), NIL_ACTOR_ID)) {
     handle_task_submitted(state, state->algorithm_state, Task_task_spec(task),
@@ -656,8 +662,9 @@ void reconstruct_task_update_callback(Task *task,
 
   /* Recursively reconstruct the task's inputs, if necessary. */
   for (int64_t i = 0; i < TaskSpec_num_args(spec); ++i) {
-    if (TaskSpec_arg_by_ref(spec, i)) {
-      ObjectID arg_id = TaskSpec_arg_id(spec, i);
+    int count = TaskSpec_arg_id_count(spec, i);
+    for (int64_t j = 0; j < count; ++j) {
+      ObjectID arg_id = TaskSpec_arg_id(spec, i, j);
       reconstruct_object(state, arg_id);
     }
   }
@@ -666,20 +673,46 @@ void reconstruct_task_update_callback(Task *task,
 void reconstruct_put_task_update_callback(Task *task,
                                           void *user_context,
                                           bool updated) {
-  if (updated) {
+  LocalSchedulerState *state = (LocalSchedulerState *) user_context;
+  if (!updated) {
+    /* The test-and-set failed. The task is either: (1) not finished yet, (2)
+     * lost, but not yet updated, or (3) already being reconstructed. */
+    DBClientID current_local_scheduler_id = Task_local_scheduler(task);
+    if (!DBClientID_is_nil(current_local_scheduler_id)) {
+      DBClient current_local_scheduler =
+          db_client_table_cache_get(state->db, current_local_scheduler_id);
+      if (!current_local_scheduler.is_alive) {
+        /* (2) The current local scheduler for the task is dead. The task is
+         * lost, but the task table hasn't received the update yet. Retry the
+         * test-and-set. */
+        task_table_test_and_update(state->db, Task_task_id(task),
+                                   current_local_scheduler_id, Task_state(task),
+                                   TASK_STATUS_RECONSTRUCTING, NULL,
+                                   reconstruct_put_task_update_callback, state);
+      } else if (Task_state(task) == TASK_STATUS_RUNNING) {
+        /* (1) The task is still executing on a live node. The object created
+         * by `ray.put` was not able to be reconstructed, and the workload will
+         * likely hang. Push an error to the appropriate driver. */
+        TaskSpec *spec = Task_task_spec(task);
+        FunctionID function = TaskSpec_function(spec);
+        push_error(state->db, TaskSpec_driver_id(spec),
+                   PUT_RECONSTRUCTION_ERROR_INDEX, sizeof(function),
+                   function.id);
+      }
+    } else {
+      /* (1) The task is still executing and it is the driver task. We cannot
+       * restart the driver task, so the workload will hang. Push an error to
+       * the appropriate driver. */
+      TaskSpec *spec = Task_task_spec(task);
+      FunctionID function = TaskSpec_function(spec);
+      push_error(state->db, TaskSpec_driver_id(spec),
+                 PUT_RECONSTRUCTION_ERROR_INDEX, sizeof(function), function.id);
+    }
+  } else {
     /* The update to TASK_STATUS_RECONSTRUCTING succeeded, so continue with
      * reconstruction as usual. */
     reconstruct_task_update_callback(task, user_context, updated);
-    return;
   }
-
-  /* An object created by `ray.put` was not able to be reconstructed, and the
-   * workload will likely hang. Push an error to the appropriate driver. */
-  LocalSchedulerState *state = (LocalSchedulerState *) user_context;
-  TaskSpec *spec = Task_task_spec(task);
-  FunctionID function = TaskSpec_function(spec);
-  push_error(state->db, TaskSpec_driver_id(spec),
-             PUT_RECONSTRUCTION_ERROR_INDEX, sizeof(function), function.id);
 }
 
 void reconstruct_evicted_result_lookup_callback(ObjectID reconstruct_object_id,
@@ -704,7 +737,7 @@ void reconstruct_evicted_result_lookup_callback(ObjectID reconstruct_object_id,
   /* If there are no other instances of the task running, it's safe for us to
    * claim responsibility for reconstruction. */
   task_table_test_and_update(
-      state->db, task_id, (TASK_STATUS_DONE | TASK_STATUS_LOST),
+      state->db, task_id, NIL_ID, (TASK_STATUS_DONE | TASK_STATUS_LOST),
       TASK_STATUS_RECONSTRUCTING, NULL, done_callback, state);
 }
 
@@ -725,7 +758,7 @@ void reconstruct_failed_result_lookup_callback(ObjectID reconstruct_object_id,
   LocalSchedulerState *state = (LocalSchedulerState *) user_context;
   /* If the task failed to finish, it's safe for us to claim responsibility for
    * reconstruction. */
-  task_table_test_and_update(state->db, task_id, TASK_STATUS_LOST,
+  task_table_test_and_update(state->db, task_id, NIL_ID, TASK_STATUS_LOST,
                              TASK_STATUS_RECONSTRUCTING, NULL,
                              reconstruct_task_update_callback, state);
 }
@@ -733,9 +766,9 @@ void reconstruct_failed_result_lookup_callback(ObjectID reconstruct_object_id,
 void reconstruct_object_lookup_callback(
     ObjectID reconstruct_object_id,
     bool never_created,
-    const std::vector<std::string> &manager_vector,
+    const std::vector<DBClientID> &manager_ids,
     void *user_context) {
-  LOG_DEBUG("Manager count was %d", manager_count);
+  LOG_DEBUG("Manager count was %d", manager_ids.size());
   /* Only continue reconstruction if we find that the object doesn't exist on
    * any nodes. NOTE: This codepath is not responsible for checking if the
    * object table entry is up-to-date. */
@@ -747,12 +780,24 @@ void reconstruct_object_lookup_callback(
     result_table_lookup(state->db, reconstruct_object_id, NULL,
                         reconstruct_failed_result_lookup_callback,
                         (void *) state);
-  } else if (manager_vector.size() == 0) {
-    /* If the object was created and later evicted, we reconstruct the object
-     * if and only if there are no other instances of the task running. */
-    result_table_lookup(state->db, reconstruct_object_id, NULL,
-                        reconstruct_evicted_result_lookup_callback,
-                        (void *) state);
+  } else {
+    /* If the object has been created, filter out the dead plasma managers that
+     * have it. */
+    size_t num_live_managers = 0;
+    for (auto manager_id : manager_ids) {
+      DBClient manager = db_client_table_cache_get(state->db, manager_id);
+      if (manager.is_alive) {
+        num_live_managers++;
+      }
+    }
+    /* If the object was created, but all plasma managers that had the object
+     * either evicted it or failed, we reconstruct the object if and only if
+     * there are no other instances of the task running. */
+    if (num_live_managers == 0) {
+      result_table_lookup(state->db, reconstruct_object_id, NULL,
+                          reconstruct_evicted_result_lookup_callback,
+                          (void *) state);
+    }
   }
 }
 
@@ -1063,8 +1108,8 @@ void process_message(event_loop *loop,
 
   /* Print a warning if this method took too long. */
   int64_t end_time = current_time_ms();
-  int64_t max_time_for_handler = 1000;
-  if (end_time - start_time > max_time_for_handler) {
+  if (end_time - start_time >
+      RayConfig::instance().max_time_for_handler_milliseconds()) {
     LOG_WARN("process_message of type %" PRId64 " took %" PRId64
              " milliseconds.",
              type, end_time - start_time);
@@ -1221,7 +1266,8 @@ int heartbeat_handler(event_loop *loop, timer_id id, void *context) {
   int64_t current_time = current_time_ms();
   CHECK(current_time >= state->previous_heartbeat_time);
   if (current_time - state->previous_heartbeat_time >
-      NUM_HEARTBEATS_TIMEOUT * HEARTBEAT_TIMEOUT_MILLISECONDS) {
+      RayConfig::instance().num_heartbeats_timeout() *
+          RayConfig::instance().heartbeat_timeout_milliseconds()) {
     LOG_FATAL("The last heartbeat was sent %" PRId64 " milliseconds ago.",
               current_time - state->previous_heartbeat_time);
   }
@@ -1233,7 +1279,7 @@ int heartbeat_handler(event_loop *loop, timer_id id, void *context) {
   /* Publish the heartbeat to all subscribers of the local scheduler table. */
   local_scheduler_table_send_info(state->db, &info, NULL);
   /* Reset the timer. */
-  return HEARTBEAT_TIMEOUT_MILLISECONDS;
+  return RayConfig::instance().heartbeat_timeout_milliseconds();
 }
 
 void start_server(const char *node_ip_address,
@@ -1286,16 +1332,24 @@ void start_server(const char *node_ip_address,
    * scheduler to the local scheduler table. This message also serves as a
    * heartbeat. */
   if (g_state->db != NULL) {
-    event_loop_add_timer(loop, HEARTBEAT_TIMEOUT_MILLISECONDS,
+    event_loop_add_timer(loop,
+                         RayConfig::instance().heartbeat_timeout_milliseconds(),
                          heartbeat_handler, g_state);
   }
+  /* Listen for new and deleted db clients. */
+  if (g_state->db != NULL) {
+    db_client_table_cache_init(g_state->db);
+  }
   /* Create a timer for fetching queued tasks' missing object dependencies. */
-  event_loop_add_timer(loop, kLocalSchedulerFetchTimeoutMilliseconds,
-                       fetch_object_timeout_handler, g_state);
+  event_loop_add_timer(
+      loop, RayConfig::instance().local_scheduler_fetch_timeout_milliseconds(),
+      fetch_object_timeout_handler, g_state);
   /* Create a timer for initiating the reconstruction of tasks' missing object
    * dependencies. */
-  event_loop_add_timer(loop, kLocalSchedulerReconstructionTimeoutMilliseconds,
-                       reconstruct_object_timeout_handler, g_state);
+  event_loop_add_timer(
+      loop, RayConfig::instance()
+                .local_scheduler_reconstruction_timeout_milliseconds(),
+      reconstruct_object_timeout_handler, g_state);
   /* Run event loop. */
   event_loop_run(loop);
 }
@@ -1368,10 +1422,12 @@ int main(int argc, char *argv[]) {
     memset(&static_resource_conf[0], 0, sizeof(static_resource_conf));
     /* TODO(atumanov): Define a default vector and replace individual
      * constants. */
-    static_resource_conf[ResourceIndex_CPU] = kDefaultNumCPUs;
-    static_resource_conf[ResourceIndex_GPU] = kDefaultNumGPUs;
+    static_resource_conf[ResourceIndex_CPU] =
+        RayConfig::instance().default_num_CPUs();
+    static_resource_conf[ResourceIndex_GPU] =
+        RayConfig::instance().default_num_GPUs();
     static_resource_conf[ResourceIndex_CustomResource] =
-        kDefaultNumCustomResource;
+        RayConfig::instance().default_num_custom_resource();
   } else {
     /* TODO(atumanov): Switch this tokenizer to reading from ifstream. */
     /* Tokenize the string. */
@@ -1388,7 +1444,7 @@ int main(int argc, char *argv[]) {
       /* Interpret negative values for the custom resource as deferring to the
        * default system configuration. */
       static_resource_conf[ResourceIndex_CustomResource] =
-          kDefaultNumCustomResource;
+          RayConfig::instance().default_num_custom_resource();
     }
   }
   if (!scheduler_socket_name) {

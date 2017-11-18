@@ -9,14 +9,6 @@
 #define NUM_RETRIES RAY_NUM_RETRIES
 #endif
 
-/* Timeouts are in milliseconds. */
-#define MANAGER_TIMEOUT 1000
-
-#define NUM_HEARTBEATS_TIMEOUT 100
-
-/* The buffer size in bytes. Data will get transfered in multiples of this */
-#define BUFSIZE 4096
-
 typedef struct PlasmaManagerState PlasmaManagerState;
 typedef struct ClientConnection ClientConnection;
 
@@ -188,10 +180,9 @@ void call_request_transfer(ObjectID object_id,
                            void *context);
 
 /*
- * This runs periodically (every MANAGER_TIMEOUT milliseconds) and reissues
- * transfer requests for all outstanding fetch requests. This is only exposed so
- * that it can be called from the tests.
- *
+ * This runs periodically (every manager_timeout_milliseconds milliseconds) and
+ * reissues transfer requests for all outstanding fetch requests. This is only
+ * exposed so that it can be called from the tests.
  */
 int fetch_timeout_handler(event_loop *loop, timer_id id, void *context);
 
@@ -212,11 +203,11 @@ ClientConnection *get_manager_connection(PlasmaManagerState *state,
  * Reads an object chunk sent by the given client into a buffer. This is the
  * complement to write_object_chunk.
  *
- * @param conn The connection to the client who's sending the data.
+ * @param conn The connection to the client who's sending the data. The
+ *        connection's cursor will be reset if this is the last read for the
+ *        current object.
  * @param buf The buffer to write the data into.
- * @return An integer representing whether the client is done sending this
- *         object. 1 means that the client has sent all the data, 0 means there
- *         is more.
+ * @return The errno set, if the read wasn't successful.
  */
 int read_object_chunk(ClientConnection *conn, PlasmaRequestBuffer *buf);
 
@@ -224,11 +215,37 @@ int read_object_chunk(ClientConnection *conn, PlasmaRequestBuffer *buf);
  * Writes an object chunk from a buffer to the given client. This is the
  * complement to read_object_chunk.
  *
- * @param conn The connection to the client who's receiving the data.
+ * @param conn The connection to the client who's receiving the data. The
+ *        connection's cursor will be reset if this is the last write for the
+ *        current object.
  * @param buf The buffer to read data from.
  * @return The errno set, if the write wasn't successful.
  */
 int write_object_chunk(ClientConnection *conn, PlasmaRequestBuffer *buf);
+
+/**
+ * Start a new request on this connection.
+ *
+ * @param conn The connection on which the request is being sent.
+ * @return Void.
+ */
+void ClientConnection_start_request(ClientConnection *client_conn);
+
+/**
+ * Finish the current request on this connection.
+ *
+ * @param conn The connection on which the request is being sent.
+ * @return Void.
+ */
+void ClientConnection_finish_request(ClientConnection *client_conn);
+
+/**
+ * Check whether the current request on this connection is finished.
+ *
+ * @param conn The connection on which the request is being sent.
+ * @return Whether the request has finished.
+ */
+bool ClientConnection_request_finished(ClientConnection *client_conn);
 
 /**
  * Get the event loop of the given plasma manager state.
