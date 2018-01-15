@@ -5,7 +5,7 @@ from __future__ import print_function
 import ray
 from ray.rllib.agent import Agent
 from ray.rllib.bc.bc_evaluator import BCEvaluator, GPURemoteBCEvaluator, RemoteBCEvaluator
-from ray.rllib.optimizers import AsyncOptimizer
+from ray.rllib.optimizers import LocalSyncOptimizer
 from ray.tune.result import TrainingResult
 
 DEFAULT_CONFIG = {
@@ -60,7 +60,7 @@ class BCAgent(Agent):
             remote_cls.remote(
                 self.registry, self.env_creator, self.config, self.logdir)
             for _ in range(self.config["num_workers"])]
-        self.optimizer = AsyncOptimizer(
+        self.optimizer = LocalSyncOptimizer(
             self.config["optimizer"], self.local_evaluator,
             self.remote_evaluators)
 
