@@ -29,6 +29,7 @@ run_experiments({
         "run": "BC",
         "env": "carla_env",
         "resources": {"cpu": 1, "gpu": 1, "driver_gpu_limit": 0},
+        "checkpoint_freq": 10,
         "config": {
             "dataset_path": "~/Desktop/AgentHuman/SeqTrain",
             "dataset_type": "hdf5",
