@@ -66,7 +66,8 @@ class BCAgent(Agent):
 
     def _train(self):
         self.optimizer.step()
-        metric_lists = [re.get_metrics.remote() for re in self.remote_evaluators]
+        metric_lists = [self.local_evaluator.get_metrics()] + [
+            re.get_metrics.remote() for re in self.remote_evaluators]
         total_samples = 0
         total_loss = 0
         for metrics in metric_lists:
