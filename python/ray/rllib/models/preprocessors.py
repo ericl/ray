@@ -115,7 +115,7 @@ class TupleFlatteningPreprocessor(Preprocessor):
         self.shape = (size,)
 
     def transform(self, observation):
-        assert len(observation) == len(self.preprocessors), observation
+        assert len(observation) == len(self.preprocessors), len(observation)
         return np.concatenate([
             np.reshape(p.transform(o), [np.product(p.shape)])
             for (o, p) in zip(observation, self.preprocessors)])

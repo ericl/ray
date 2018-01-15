@@ -8,6 +8,7 @@ import os
 import random
 import pickle
 
+import cv2
 import h5py
 import numpy as np
 
@@ -38,11 +39,42 @@ class HDF5Dataset(object):
         while len(obs) < batch_size:
             with random_file() as f:
                 indexes = np.random.choice(len(f["targets"]), batch_size)
-                obs.append([f["rgb"][i] for i in indexes])
-                actions.append([f["targets"][i] for i in indexes])
+                for i in indexes:
+                    obs.append(self.make_obs(f["rgb"][i], f["targets"][i]))
+                    actions.append(self.make_action(f["targets"][i]))
         samples = {
             'observations': obs,
             'actions': actions,
         }
-        print("Returning", samples)
         return samples
+
+    # https://github.com/carla-simulator/imitation-learning
+    def make_obs(self, rgb, target):
+        data = rgb.reshape(200, 88, 3)  # original size
+        data = cv2.resize(
+            data, (80, 80),
+            interpolation=cv2.INTER_AREA)  # resize for network input
+        data = (data.astype(np.float32) - 128) / 128
+
+        control_signal = target[24]
+        forward_speed = target[10]
+        dist_to_goal = 0  # not provided?
+
+        if control_signal == 2:
+            command = [0, 0, 0, 0, 1]
+        elif control_signal == 3:
+            command = [0, 0, 0, 1, 0]
+        elif control_signal == 4:
+            command = [0, 0, 1, 0, 0]
+        elif control_signal == 5:
+            command = [0, 1, 0, 0, 0]
+        else:
+            command = [1, 0, 0, 0, 0]
+
+        return (data, command, [forward_speed, dist_to_goal])
+
+    def make_action(self, target):
+        steer = target[0]
+        gas = target[1]
+        brake = target[2]
+        return gas if gas >= 0 else -brake, steer

@@ -14,7 +14,11 @@ from ray.rllib.optimizers import Evaluator
 
 class BCEvaluator(Evaluator):
     def __init__(self, registry, env_creator, config, logdir):
-        env = ModelCatalog.get_preprocessor_as_wrapper(registry, env_creator(config["env_config"]), config["model"])
+        raw_env = env_creator(config["env_config"])
+        self.preprocessor = ModelCatalog.get_preprocessor(
+            registry, raw_env, config["model"])
+        env = ModelCatalog.get_preprocessor_as_wrapper(
+            registry, raw_env, config["model"])
         if config["dataset_type"] == "rllib":
             self.dataset = ExperienceDataset(config["dataset_path"])
         elif config["dataset_type"] == "hdf5":
@@ -28,7 +32,10 @@ class BCEvaluator(Evaluator):
         self.metrics_queue = queue.Queue()
 
     def sample(self):
-        return self.dataset.sample(self.config["batch_size"])
+        batch = self.dataset.sample(self.config["batch_size"])
+        batch["observations"] = [
+            self.preprocessor.transform(obs) for obs in batch["observations"]]
+        return batch
 
     def compute_gradients(self, samples):
         gradient, info = self.policy.compute_gradients(samples)
