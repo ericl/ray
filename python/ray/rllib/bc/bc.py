@@ -37,6 +37,10 @@ DEFAULT_CONFIG = {
     },
     # Arguments to pass to the env creator
     "env_config": {},
+    # Absolute path to the dataset
+    "dataset_path": None,
+    # Type of the dataset, e.g. "rllib", "hdf5"
+    "dataset_type": "rllib",
 }
 
 

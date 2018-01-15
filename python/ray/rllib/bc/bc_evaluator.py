@@ -6,7 +6,7 @@ import pickle
 import queue
 
 import ray
-from ray.rllib.bc.experience_dataset import ExperienceDataset
+from ray.rllib.bc.experience_dataset import ExperienceDataset, HDF5Dataset
 from ray.rllib.bc.policy import Policy
 from ray.rllib.models import ModelCatalog
 from ray.rllib.optimizers import Evaluator
@@ -15,7 +15,12 @@ from ray.rllib.optimizers import Evaluator
 class BCEvaluator(Evaluator):
     def __init__(self, registry, env_creator, config, logdir):
         env = ModelCatalog.get_preprocessor_as_wrapper(registry, env_creator(config["env_config"]), config["model"])
-        self.dataset = ExperienceDataset(config["dataset_path"])
+        if config["dataset_type"] == "rllib":
+            self.dataset = ExperienceDataset(config["dataset_path"])
+        elif config["dataset_type"] == "hdf5":
+            self.dataset = HDF5Dataset(config["dataset_path"])
+        else:
+            assert False, "Unknown dataset type {}".format(config["dataset_type"])
         # TODO(rliaw): should change this to be just env.observation_space
         self.policy = Policy(registry, env.observation_space.shape, env.action_space, config)
         self.config = config
