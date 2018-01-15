@@ -14,6 +14,7 @@ env_config.update({
     "verbose": False,
     "x_res": 80,
     "y_res": 80,
+    "framestack": 1,
     "discrete_actions": False,
     "squash_action_logits": False,
     "server_map": "/Game/Maps/Town02",
@@ -31,13 +32,12 @@ run_experiments({
         "config": {
             "dataset_path": "~/Desktop/AgentHuman/SeqTrain",
             "dataset_type": "hdf5",
-            "framestack": 1,
             "env_config": env_config,
             "model": {
                 "custom_model": "carla",
                 "custom_options": {
                     "command_mode": "concat",
-                    "image_shape": [80, 80, 6],
+                    "image_shape": [80, 80, 3],
                 },
                 "conv_filters": [
                     [16, [8, 8], 4],
