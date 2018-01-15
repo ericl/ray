@@ -39,7 +39,7 @@ class Policy(TFPolicy):
             info["summary"] = summ
         else:
             loss, grad = self.sess.run([self.loss, self.grads], feed_dict=feed_dict)
-        info["num_samples"] = len(samples)
+        info["num_samples"] = len(samples["observations"])
         info["loss"] = loss
         return grad, info
 

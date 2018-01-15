@@ -28,8 +28,8 @@ run_experiments({
     "carla-bc": {
         "run": "BC",
         "env": "carla_env",
-        "resources": {"cpu": 1, "gpu": 1},
-        "checkpoint_freq": 10,
+        "resources": {"cpu": 1, "gpu": 0},
+        "checkpoint_freq": 100,
         "config": {
             "dataset_path": "~/Desktop/AgentHuman/SeqTrain",
             "dataset_type": "hdf5",
@@ -47,7 +47,6 @@ run_experiments({
                 ],
             },
             "num_workers": 1,
-            "use_gpu_for_workers": False,
         },
     },
 })

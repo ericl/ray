@@ -51,6 +51,7 @@ class TFPolicy(Policy):
         self.sess = tf.Session(graph=self.g, config=tf.ConfigProto(
             intra_op_parallelism_threads=1, inter_op_parallelism_threads=2,
             gpu_options=tf.GPUOptions(allow_growth=True)))
+        self.saver = tf.train.Saver(max_to_keep=None)
         self.variables = ray.experimental.TensorFlowVariables(self.loss,
                                                               self.sess)
         self.sess.run(tf.global_variables_initializer())
@@ -75,3 +76,9 @@ class TFPolicy(Policy):
 
     def value(self, ob):
         raise NotImplementedError
+
+    def save(self, path, step):
+        return self.saver.save(self.sess, path, global_step=step)
+
+    def restore(self, path):
+        self.saver.restore(self.sess, path)

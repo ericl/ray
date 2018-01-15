@@ -2,6 +2,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import os
+
 import ray
 from ray.rllib.agent import Agent
 from ray.rllib.bc.bc_evaluator import BCEvaluator, GPURemoteBCEvaluator, RemoteBCEvaluator
@@ -85,3 +87,10 @@ class BCAgent(Agent):
     def compute_action(self, observation):
         action, info = self.local_evaluator.policy.compute(observation)
         return action
+
+    def _save(self):
+        return self.local_evaluator.policy.save(
+            os.path.join(self.logdir, "checkpoint"), self.iteration)
+
+    def _restore(self, checkpoint_path):
+        self.local_evaluator.policy.restore(checkpoint_path)
