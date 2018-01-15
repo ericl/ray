@@ -69,7 +69,7 @@ class BCAgent(Agent):
         metric_lists = [re.get_metrics.remote() for re in self.remote_evaluators]
         total_samples = 0
         total_loss = 0
-        for m in local_evaluator.get_metrics():
+        for m in self.local_evaluator.get_metrics():
             total_samples += m["num_samples"]
             total_loss += m["loss"]
         for metrics in metric_lists:
