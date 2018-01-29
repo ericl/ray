@@ -43,8 +43,11 @@ class ExperienceDataset(object):
                     self._dataset.append(unpack(json.loads(line)))
             print("Loaded dataset size", len(self._dataset))
 
-    def sample(self, batch_size):
-        indexes = np.random.choice(len(self._dataset), batch_size)
+    def sample(self, batch_size, idx_range=None):
+        if idx_range is None:
+            idx_range = (0., 1.)
+        idx_range = tuple(int(i * len(self._dataset)) for i in idx_range)
+        indexes = np.random.choice(idx_range[1] - idx_range[0], batch_size) + idx_range[0]
         samples = {
             'observations': [self._dataset[i]["obs"] for i in indexes],
             'actions': [self._dataset[i]["action"] for i in indexes],
