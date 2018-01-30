@@ -2,10 +2,14 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import numpy as np
+
 import tensorflow as tf
 import tensorflow.contrib.layers as layers
 
+from ray.rllib.bc.experience_dataset import ExperienceDataset
 from ray.rllib.models import ModelCatalog
+from ray.rllib.models.density_model import DensityModel
 from ray.rllib.optimizers.multi_gpu_impl import TOWER_SCOPE_NAME
 
 
@@ -108,6 +112,7 @@ class ModelAndLoss(object):
     def __init__(
             self, registry, num_actions, config,
             obs_t, act_t, rew_t, obs_tp1, done_mask, importance_weights):
+
         # q network evaluation
         with tf.variable_scope("q_func", reuse=True):
             self.q_t = _build_q_network(registry, obs_t, num_actions, config)
@@ -139,7 +144,6 @@ class ModelAndLoss(object):
         q_t_selected_target = (
             rew_t + config["gamma"] ** config["n_step"] * q_tp1_best_masked)
 
-
         # adaptation of J_E max margin expert loss from
         # https://arxiv.org/pdf/1704.03732.pdf
         uncertainty_loss = (tf.reduce_max(
@@ -164,6 +168,12 @@ class DQNGraph(object):
         self.env = env
         num_actions = env.action_space.n
         optimizer = tf.train.AdamOptimizer(learning_rate=config["lr"])
+        self.config = config
+
+        if self.config["density_model_alpha"]:
+            dataset = ExperienceDataset({self.config["density_dataset"]: 1.0})
+            self.density_model = DensityModel(6)
+            self.density_model.train(dataset, self.config["density_train_samples"])
 
         # Action inputs
         self.stochastic = tf.placeholder(tf.bool, (), name="stochastic")
@@ -179,6 +189,7 @@ class DQNGraph(object):
             q_func_vars = _scope_vars(scope.name)
 
         # Action outputs
+        self.q_values = q_values
         self.output_actions = _build_action_network(
             q_values,
             self.cur_observations,
@@ -252,13 +263,28 @@ class DQNGraph(object):
         return sess.run(self.update_target_expr)
 
     def act(self, sess, obs, eps, stochastic=True):
-        return sess.run(
-            self.output_actions,
+        q_values, action = sess.run(
+            [self.q_values, self.output_actions],
             feed_dict={
                 self.cur_observations: obs,
                 self.stochastic: stochastic,
                 self.eps: eps,
             })
+
+        if not self.config["density_model_alpha"]:
+            return action
+
+        q_softmax = [np.exp(q) for q in q_values[0]] / \
+            sum([np.exp(q) for q in q_values[0]])
+        density_logits = [self.density_model.logp(obs[0], a) for a in range(6)]
+        density_softmax = np.array([np.exp(d) for d in density_logits]) / \
+            sum([np.exp(d) for d in density_logits])
+        a = self.config["density_model_alpha"]
+        final_softmax = np.array([
+            (q * (1 - a) + d * a)
+            for (q, d) in zip(q_softmax, density_softmax)])
+        final_softmax[-1] += 1.0 - sum(final_softmax)  # fix up rounding err
+        return [np.random.choice(range(6), p=final_softmax)]
 
     def compute_gradients(
             self, sess, obs_t, act_t, rew_t, obs_tp1, done_mask,

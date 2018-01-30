@@ -70,8 +70,11 @@ DEFAULT_CONFIG = dict(
     # Load to replay buffer
     dataset_path=None,
     offline_mode=False,
-    weight_j_e=1.0,
+    weight_j_e=0.0,
     expert_frac=1.0,
+    density_model_alpha=0.0,
+    density_dataset="/home/eric/Desktop/pong_42_small.json",
+    density_train_samples=1000,
 
     # === Optimization ===
     # Learning rate for adam optimizer
