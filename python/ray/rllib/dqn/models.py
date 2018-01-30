@@ -178,7 +178,7 @@ class DQNGraph(object):
         self.config = config
 
         if self.config["density_model_alpha"]:
-            dataset = ExperienceDataset({self.config["density_dataset"]: 1.0})
+            dataset = ExperienceDataset(self.config["dataset_path"])
             self.density_model = DensityModel(6)
             self.density_model.train(dataset, self.config["density_train_samples"])
 

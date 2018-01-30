@@ -73,7 +73,6 @@ DEFAULT_CONFIG = dict(
     weight_j_e=0.0,
     expert_frac=1.0,
     density_model_alpha=0.1,
-    density_dataset="/home/eric/Desktop/pong_42_small.json",
     density_train_samples=100,
 
     # === Optimization ===
