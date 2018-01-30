@@ -142,11 +142,10 @@ class ModelAndLoss(object):
 
         # adaptation of J_E max margin expert loss from
         # https://arxiv.org/pdf/1704.03732.pdf
-        uncertainty_loss = tf.reduce_max(
+        uncertainty_loss = (tf.reduce_max(
             self.q_t * tf.one_hot(
-                    act_t, num_actions, on_value=0.0, off_value=1.0) -
-                tf.expand_dims(q_t_selected, 1),
-            1)
+                    act_t, num_actions, on_value=0.0, off_value=1.0), 1) -
+            q_t_selected)
 
         # compute the error (potentially clipped)
         self.td_error = q_t_selected - tf.stop_gradient(q_t_selected_target)
