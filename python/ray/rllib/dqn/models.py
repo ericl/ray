@@ -161,6 +161,7 @@ class ModelAndLoss(object):
         # compute the error (potentially clipped)
         self.td_error = q_t_selected - tf.stop_gradient(q_t_selected_target)
         errors = _huber_loss(self.td_error)
+        self.td_error = tf.Print(self.td_error, ["density", density_bonus])
 
         weight_j_e = config["weight_j_e"]
         weighted_error = (
