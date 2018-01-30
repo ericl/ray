@@ -111,7 +111,8 @@ class ModelAndLoss(object):
 
     def __init__(
             self, registry, num_actions, config,
-            obs_t, act_t, rew_t, obs_tp1, done_mask, importance_weights):
+            obs_t, act_t, rew_t, obs_tp1, done_mask, importance_weights,
+            density_logit):
 
         # q network evaluation
         with tf.variable_scope("q_func", reuse=True):
@@ -140,9 +141,15 @@ class ModelAndLoss(object):
             q_tp1_best = tf.reduce_max(self.q_tp1, 1)
         q_tp1_best_masked = (1.0 - done_mask) * q_tp1_best
 
+        if not config["density_model_alpha"]:
+            density_bonus = 0.0
+        else:
+            density_bonus = density_logit * config["density_model_alpha"]
+
         # compute RHS of bellman equation
         q_t_selected_target = (
-            rew_t + config["gamma"] ** config["n_step"] * q_tp1_best_masked)
+            rew_t + density_bonus +
+            config["gamma"] ** config["n_step"] * q_tp1_best_masked)
 
         # adaptation of J_E max margin expert loss from
         # https://arxiv.org/pdf/1704.03732.pdf
@@ -201,6 +208,7 @@ class DQNGraph(object):
         self.obs_t = tf.placeholder(
             tf.float32, shape=(None,) + env.observation_space.shape)
         self.act_t = tf.placeholder(tf.int32, [None], name="action")
+        self.density_logit = tf.placeholder(tf.float32, [None], name="density_logit")
         self.rew_t = tf.placeholder(tf.float32, [None], name="reward")
         self.obs_tp1 = tf.placeholder(
             tf.float32, shape=(None,) + env.observation_space.shape)
@@ -209,11 +217,13 @@ class DQNGraph(object):
             tf.float32, [None], name="weight")
 
         def build_loss(
-                obs_t, act_t, rew_t, obs_tp1, done_mask, importance_weights):
+                obs_t, act_t, rew_t, obs_tp1, done_mask, importance_weights,
+                density_logit):
             return ModelAndLoss(
                 registry,
                 num_actions, config,
-                obs_t, act_t, rew_t, obs_tp1, done_mask, importance_weights)
+                obs_t, act_t, rew_t, obs_tp1, done_mask, importance_weights,
+                density_logit)
 
         self.loss_inputs = [
             ("obs", self.obs_t),
@@ -227,7 +237,7 @@ class DQNGraph(object):
         with tf.variable_scope(TOWER_SCOPE_NAME):
             loss_obj = build_loss(
                 self.obs_t, self.act_t, self.rew_t, self.obs_tp1,
-                self.done_mask, self.importance_weights)
+                self.done_mask, self.importance_weights, self.density_logit)
 
         self.build_loss = build_loss
 
@@ -271,20 +281,7 @@ class DQNGraph(object):
                 self.eps: eps,
             })
 
-        if not self.config["density_model_alpha"]:
-            return action
-
-        q_softmax = [np.exp(q) for q in q_values[0]] / \
-            sum([np.exp(q) for q in q_values[0]])
-        density_logits = [self.density_model.logp(obs[0], a) for a in range(6)]
-        density_softmax = np.array([np.exp(d) for d in density_logits]) / \
-            sum([np.exp(d) for d in density_logits])
-        a = self.config["density_model_alpha"]
-        final_softmax = np.array([
-            (q * (1 - a) + d * a)
-            for (q, d) in zip(q_softmax, density_softmax)])
-        final_softmax[-1] += 1.0 - sum(final_softmax)  # fix up rounding err
-        return [np.random.choice(range(6), p=final_softmax)]
+        return action
 
     def compute_gradients(
             self, sess, obs_t, act_t, rew_t, obs_tp1, done_mask,
@@ -295,6 +292,11 @@ class DQNGraph(object):
                 self.obs_t: obs_t,
                 self.act_t: act_t,
                 self.rew_t: rew_t,
+                self.density_logit: [
+                        self.density_model.logp(o, a)
+                        for (o, a) in zip(obs_t, act_t)]
+                    if self.config["density_model_alpha"]
+                    else np.zeros_like(act_t),
                 self.obs_tp1: obs_tp1,
                 self.done_mask: done_mask,
                 self.importance_weights: importance_weights
