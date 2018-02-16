@@ -139,11 +139,27 @@ class ModelAndLoss(object):
         q_t_selected_target = (
             rew_t + config["gamma"] ** config["n_step"] * q_tp1_best_masked)
 
+        # adaptation of J_E max margin expert loss from
+        # https://arxiv.org/pdf/1704.03732.pdf
+        if config["weight_j_e"] > 0:
+            uncertainty_loss = (tf.reduce_max(
+                self.q_t + tf.one_hot(
+                        act_t, num_actions, on_value=0.0, off_value=1.0), 1) -
+                q_t_selected)
+        else:
+            uncertainty_loss = (tf.reduce_min(
+                self.q_t + tf.one_hot(
+                        act_t, num_actions, on_value=0.0, off_value=1.0), 1) -
+                q_t_selected)
+
         # compute the error (potentially clipped)
         self.td_error = q_t_selected - tf.stop_gradient(q_t_selected_target)
         errors = _huber_loss(self.td_error)
 
-        weighted_error = tf.reduce_mean(importance_weights * errors)
+        weight_j_e = config["weight_j_e"]
+        weighted_error = (
+            tf.reduce_mean(importance_weights * errors) +
+            weight_j_e * tf.reduce_mean(uncertainty_loss))
 
         self.loss = weighted_error
 

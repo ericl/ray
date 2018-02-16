@@ -85,6 +85,8 @@ DEFAULT_CONFIG = dict(
     # Arguments to pass to the rllib optimizer
     optimizer={},
 
+    weight_j_e=0.0,
+
     # === Tensorflow ===
     # Arguments to pass to tensorflow
     tf_session_args={
