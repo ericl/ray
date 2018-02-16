@@ -18,6 +18,8 @@ pong-deterministic-dqn:
         schedule_max_timesteps: 2000000
         exploration_final_eps: .01
         exploration_fraction: .1
+        weight_j_e:
+            grid_search: [-0.1, -0.01, -0.001, 0.0, 0.001, 0.01, 0.1]
         model:
           grayscale: True
           zero_mean: False
