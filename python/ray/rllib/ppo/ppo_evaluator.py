@@ -33,6 +33,7 @@ class PPOEvaluator(Evaluator):
     def __init__(self, registry, env_creator, config, logdir, is_remote):
         self.registry = registry
         self.is_remote = is_remote
+        self.env_creator = env_creator
         if is_remote:
             os.environ["CUDA_VISIBLE_DEVICES"] = ""
             devices = ["/cpu:0"]
@@ -171,6 +172,16 @@ class PPOEvaluator(Evaluator):
     def restore(self, objs):
         objs = pickle.loads(objs)
         self.sync_filters(objs["filters"])
+
+    def __ray_save__(self):
+        return [
+            None, self.env_creator, self.config, self.logdir,
+            self.is_remote, self.save()]
+
+    def __ray_restore__(self, checkpoint):
+        [registry, env_creator, config, logdir, is_remote, state] = checkpoint
+        self.__init__(registry, env_creator, config, logdir, is_remote)
+        self.restore(state)
 
     def get_weights(self):
         return self.variables.get_weights()

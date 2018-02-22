@@ -68,7 +68,7 @@ DEFAULT_CONFIG = {
     # Number of actors used to collect the rollouts
     "num_workers": 5,
     # Resource requirements for remote actors
-    "worker_resources": {"num_cpus": 1},
+    "worker_resources": {"num_cpus": 1, "checkpoint_interval": 1},
     # Dump TensorFlow timeline after this many SGD minibatches
     "full_trace_nth_sgd_batch": -1,
     # Whether to profile data loading
