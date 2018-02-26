@@ -15,7 +15,7 @@ pong-apex:
         target_network_update_freq: 50000
         sample_batch_size: 50
         max_weight_sync_delay: 400
-        train_batch_size: 512
+        train_batch_size: 32
         apex_optimizer: True
         timesteps_per_iteration: 25000
         num_replay_buffer_shards: 4
