@@ -11,7 +11,6 @@ import tensorflow as tf
 from ray.tune.registry import ENV_CREATOR
 from ray.tune.result import TrainingResult
 from ray.tune.trainable import Trainable
-from ray.rllib.dqn.common.atari_wrappers import make_atari
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -91,7 +90,7 @@ class Agent(Trainable):
             if self.registry and self.registry.contains(ENV_CREATOR, env):
                 self.env_creator = self.registry.get(ENV_CREATOR, env)
             else:
-                import gym  # soft dependency
+                from ray.rllib.dqn.common.atari_wrappers import make_atari
                 self.env_creator = lambda env_config: make_atari(env)
         else:
             self.env_creator = lambda env_config: None
