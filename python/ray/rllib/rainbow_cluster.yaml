@@ -1,6 +1,6 @@
 cluster_name: rainbow
-min_workers: 4
-max_workers: 4
+min_workers: 0
+max_workers: 0
 target_utilization_fraction: 0.8
 idle_timeout_minutes: 5
 provider:
@@ -22,7 +22,6 @@ file_mounts: {
     "/tmp/rainbow_sha": "/home/eric/Desktop/Rainbow/.git/refs/heads/master",
  }
 setup_commands:
-    - pkill -9 python || true
     - test -e ray || git clone https://github.com/ericl/ray.git
     - cd ray && git reset --hard; git fetch && git checkout `cat /tmp/apex_sha`
     - test -e Rainbow || git clone https://github.com/ericl/Rainbow.git
