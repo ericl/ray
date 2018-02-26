@@ -1,5 +1,5 @@
 pong-apex:
-    env: Pong-v0
+    env: PongNoFrameskip-v4
     run: DQN
     resources:
         cpu:
