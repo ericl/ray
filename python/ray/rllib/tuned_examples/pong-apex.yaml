@@ -19,5 +19,6 @@ pong-apex:
         apex_optimizer: True
         timesteps_per_iteration: 25000
         num_replay_buffer_shards: 4
+        force_evaluators_remote: True
         model:
           grayscale: True
