@@ -6,8 +6,7 @@ pong-apex:
             eval: spec.config.num_workers
         gpu: 1
     config:
-        num_workers:
-            grid_search: [32, 16, 8, 4]
+        num_workers: 32
         lr: .0001
         n_step: 3
         gamma: 0.99
@@ -19,8 +18,6 @@ pong-apex:
         train_batch_size: 512
         apex_optimizer: True
         timesteps_per_iteration: 25000
-        per_worker_exploration: True
-        worker_side_prioritization: True
         num_replay_buffer_shards: 4
         model:
           grayscale: True

@@ -12,8 +12,8 @@ from ray.rllib.utils.error import UnsupportedSpaceException
 from ray.rllib.dqn import models
 from ray.rllib.dqn.common.atari_wrappers import wrap_deepmind
 from ray.rllib.dqn.common.schedules import ConstantSchedule, LinearSchedule
-from ray.rllib.optimizers import SampleBatch, TFMultiGPUSupport
-from ray.rllib.optimizers.sample_batch import pack
+from ray.rllib.optimizers import SampleBatch, Evaluator
+from ray.rllib.utils.compression import pack
 
 
 def adjust_nstep(n_step, gamma, obs, actions, rewards, new_obs, dones):
@@ -44,8 +44,8 @@ def adjust_nstep(n_step, gamma, obs, actions, rewards, new_obs, dones):
         del arr[new_len:]
 
 
-class DQNEvaluator(TFMultiGPUSupport):
-    """The base DQN Evaluator that does not include the replay buffer.
+class DQNEvaluator(Evaluator):
+    """The DQN Evaluator.
 
     TODO(rliaw): Support observation/reward filters?"""
 
@@ -64,8 +64,8 @@ class DQNEvaluator(TFMultiGPUSupport):
         self.sess = tf.Session(config=tf_config)
         self.dqn_graph = models.DQNGraph(registry, env, config, logdir)
 
-        # Create the schedule for exploration starting from 1.
-        if config["per_worker_exploration"]:
+        # Use either a different `eps` per worker, or a linear schedule.
+        if config["apex_optimizer"]:
             assert config["num_workers"] > 1, "This requires multiple workers"
             self.exploration = ConstantSchedule(
                 0.4 ** (
@@ -126,7 +126,8 @@ class DQNEvaluator(TFMultiGPUSupport):
             "weights": np.ones_like(rewards)})
         assert batch.count == self.config["sample_batch_size"]
 
-        if self.config["worker_side_prioritization"]:
+        # Prioritize on the worker side
+        if self.config["apex_optimizer"]:
             td_errors = self.dqn_graph.compute_td_error(
                 self.sess, obs, batch["actions"], batch["rewards"],
                 new_obs, batch["dones"], batch["weights"])
@@ -137,8 +138,6 @@ class DQNEvaluator(TFMultiGPUSupport):
         return batch
 
     def compute_gradients(self, samples):
-        if samples is None:
-            return None, None
         td_error, grad = self.dqn_graph.compute_gradients(
             self.sess, samples["obs"], samples["actions"], samples["rewards"],
             samples["new_obs"], samples["dones"], samples["weights"])
@@ -162,12 +161,6 @@ class DQNEvaluator(TFMultiGPUSupport):
 
     def set_weights(self, weights):
         self.variables.set_weights(weights)
-
-    def tf_loss_inputs(self):
-        return self.dqn_graph.loss_inputs
-
-    def build_tf_loss(self, input_placeholders):
-        return self.dqn_graph.build_loss(*input_placeholders)
 
     def _step(self, global_timestep):
         """Takes a single step, and returns the result of the step."""

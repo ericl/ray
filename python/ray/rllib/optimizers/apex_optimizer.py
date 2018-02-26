@@ -14,31 +14,13 @@ import ray
 from ray.rllib.dqn.replay_buffer import ReplayBuffer, PrioritizedReplayBuffer
 from ray.rllib.optimizers.optimizer import Optimizer
 from ray.rllib.optimizers.sample_batch import SampleBatch
+from ray.rllib.utils.actors import TaskPool, create_colocated
 from ray.rllib.utils.timer import TimerStat
 from ray.rllib.utils.window_stat import WindowStats
 
 SAMPLE_QUEUE_DEPTH = 2
 REPLAY_QUEUE_DEPTH = 4
 LEARNER_QUEUE_MAX_SIZE = 16
-
-
-class TaskPool(object):
-    def __init__(self):
-        self._tasks = {}
-
-    def add(self, worker, obj_id):
-        self._tasks[obj_id] = worker
-
-    def completed(self):
-        pending = list(self._tasks)
-        if pending:
-            ready, _ = ray.wait(pending, num_returns=len(pending), timeout=10)
-            for obj_id in ready:
-                yield (self._tasks.pop(obj_id), obj_id)
-
-    @property
-    def count(self):
-        return len(self._tasks)
 
 
 @ray.remote
@@ -136,38 +118,6 @@ class GenericLearner(threading.Thread):
                 td_error = self.local_evaluator.compute_apply(replay)
             self.outqueue.put((ra, replay, td_error))
         self.learner_queue_size.push(self.inqueue.qsize())
-
-
-def split_colocated(actors):
-    localhost = os.uname()[1]
-    hosts = ray.get([a.get_host.remote() for a in actors])
-    local = []
-    non_local = []
-    for host, a in zip(hosts, actors):
-        if host == localhost:
-            local.append(a)
-        else:
-            non_local.append(a)
-    return local, non_local
-
-
-def try_create_colocated(cls, args, count):
-    actors = [cls.remote(*args) for _ in range(count)]
-    local, _ = split_colocated(actors)
-    print("Got {} colocated actors of {}".format(len(local), count))
-    return local
-
-
-def create_colocated(cls, args, count):
-    ok = []
-    i = 1
-    while len(ok) < count and i < 10:
-        attempt = try_create_colocated(cls, args, count * i)
-        ok.extend(attempt)
-        i += 1
-    if len(ok) < count:
-        raise Exception("Unable to create enough colocated actors, abort.")
-    return ok[:count]
 
 
 class ApexOptimizer(Optimizer):

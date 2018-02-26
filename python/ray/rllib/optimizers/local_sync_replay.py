@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import numpy as np
 
+import ray
 from ray.rllib.dqn.replay_buffer import ReplayBuffer, PrioritizedReplayBuffer
 from ray.rllib.optimizers.optimizer import Optimizer
 from ray.rllib.optimizers.sample_batch import SampleBatch
@@ -12,11 +13,10 @@ from ray.rllib.utils.timer import TimerStat
 
 
 class LocalSyncReplayOptimizer(Optimizer):
-    """Variation of the local sync optimizer that supports replay (for DQN).
-
-    Note that this assumes there are no remote evaluators."""
+    """Variant of the local sync optimizer that supports replay (for DQN)."""
 
     def _init(self):
+        self.update_weights_timer = TimerStat()
         self.sample_timer = TimerStat()
         self.replay_timer = TimerStat()
         self.grad_timer = TimerStat()
@@ -32,12 +32,22 @@ class LocalSyncReplayOptimizer(Optimizer):
         else:
             self.replay_buffer = ReplayBuffer(self.buffer_size)
 
-        assert not self.remote_evaluators
-        assert self.buffer_size > self.replay_starts
+        assert self.buffer_size >= self.replay_starts
 
     def step(self):
+        with self.update_weights_timer:
+            if self.remote_evaluators:
+                weights = ray.put(self.local_evaluator.get_weights())
+                for e in self.remote_evaluators:
+                    e.set_weights.remote(weights)
+
         with self.sample_timer:
-            batch = self.local_evaluator.sample()
+            if self.remote_evaluators:
+                batch = SampleBatch.concat_samples(
+                    ray.get(
+                        [e.sample.remote() for e in self.remote_evaluators]))
+            else:
+                batch = self.local_evaluator.sample()
             for row in batch.rows():
                 self.replay_buffer.add(
                     row["obs"], row["actions"], row["rewards"], row["new_obs"],
@@ -69,9 +79,11 @@ class LocalSyncReplayOptimizer(Optimizer):
 
         with self.grad_timer:
             td_error = self.local_evaluator.compute_apply(samples)
+            new_priorities = (
+                np.abs(td_error) + self.config["prioritized_replay_eps"])
             if self.config["prioritized_replay"]:
                 self.replay_buffer.update_priorities(
-                    samples["batch_indexes"], td_error)
+                    samples["batch_indexes"], new_priorities)
             self.grad_timer.push_units_processed(samples.count)
 
     def stats(self):
@@ -79,6 +91,7 @@ class LocalSyncReplayOptimizer(Optimizer):
             "sample_time_ms": round(1000 * self.sample_timer.mean, 3),
             "replay_time_ms": round(1000 * self.replay_timer.mean, 3),
             "grad_time_ms": round(1000 * self.grad_timer.mean, 3),
+            "update_time_ms": round(1000 * self.update_weights_timer.mean, 3),
             "opt_peak_throughput": round(self.grad_timer.mean_throughput, 3),
             "opt_samples": round(self.grad_timer.mean_units_processed, 3),
         }
