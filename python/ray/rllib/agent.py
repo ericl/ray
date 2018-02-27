@@ -90,8 +90,12 @@ class Agent(Trainable):
             if self.registry and self.registry.contains(ENV_CREATOR, env):
                 self.env_creator = self.registry.get(ENV_CREATOR, env)
             else:
-                from ray.rllib.dqn.common.atari_wrappers import make_atari
-                self.env_creator = lambda env_config: make_atari(env)
+                if "CartPole" in env:
+                    import gym
+                    self.env_creator = lambda env_config: gym.make(env)
+                else:
+                    from ray.rllib.dqn.common.atari_wrappers import make_atari
+                    self.env_creator = lambda env_config: make_atari(env)
         else:
             self.env_creator = lambda env_config: None
 
