@@ -51,7 +51,7 @@ class DQNEvaluator(Evaluator):
 
     def __init__(self, registry, env_creator, config, logdir, worker_index):
         env = env_creator(config["env_config"])
-        env = wrap_deepmind(env, frame_stack=True, scale=True)
+        env = wrap_deepmind(env, clip_rewards=False, frame_stack=True, scale=True)
         self.env = env
         self.config = config
 
