@@ -107,7 +107,7 @@ class DQNEvaluator(Evaluator):
             ob, act, rew, ob1, done = self._step(self.global_timestep)
             obs.append(ob)
             actions.append(act)
-            rewards.append(rew)
+            rewards.append(np.sign(rew))
             new_obs.append(ob1)
             dones.append(done)
 
