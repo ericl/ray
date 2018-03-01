@@ -115,16 +115,9 @@ docker run --rm --shm-size=10G --memory=10G $DOCKER_SHA \
 docker run --rm --shm-size=10G --memory=10G $DOCKER_SHA \
     python /ray/python/ray/rllib/train.py \
     --env CartPole-v0 \
-    --run DQN \
+    --run APEX \
     --stop '{"training_iteration": 2}' \
-    --config '{"num_workers": 2}'
-
-docker run --rm --shm-size=10G --memory=10G $DOCKER_SHA \
-    python /ray/python/ray/rllib/train.py \
-    --env CartPole-v0 \
-    --run DQN \
-    --stop '{"training_iteration": 2}' \
-    --config '{"num_workers": 2, "apex_optimizer": true}'
+    --config '{"num_workers": 2, "timesteps_per_iteration": 1000}'
 
 docker run --rm --shm-size=10G --memory=10G $DOCKER_SHA \
     python /ray/python/ray/rllib/train.py \
@@ -159,6 +152,13 @@ docker run --rm --shm-size=10G --memory=10G $DOCKER_SHA \
 #     --run A3C \
 #     --stop '{"training_iteration": 2}' \
 #     --config '{"num_workers": 2, "use_lstm": false, "use_pytorch": true, "model": {"grayscale": true, "zero_mean": false, "dim": 80, "channel_major": true}}'
+
+docker run --rm --shm-size=10G --memory=10G $DOCKER_SHA \
+    python /ray/python/ray/rllib/train.py \
+    --env CartPole-v0 \
+    --run DQN \
+    --stop '{"training_iteration": 2}' \
+    --config '{"num_workers": 2}'
 
 docker run --rm --shm-size=10G --memory=10G $DOCKER_SHA \
     python /ray/python/ray/rllib/train.py \

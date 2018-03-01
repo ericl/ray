@@ -65,7 +65,7 @@ class DQNEvaluator(Evaluator):
         self.dqn_graph = models.DQNGraph(registry, env, config, logdir)
 
         # Use either a different `eps` per worker, or a linear schedule.
-        if config["apex_optimizer"]:
+        if config["per_worker_exploration"]:
             assert config["num_workers"] > 1, "This requires multiple workers"
             self.exploration = ConstantSchedule(
                 0.4 ** (
@@ -124,10 +124,10 @@ class DQNEvaluator(Evaluator):
             "rewards": rewards,
             "new_obs": [pack(o) for o in new_obs], "dones": dones,
             "weights": np.ones_like(rewards)})
-        assert batch.count == self.config["sample_batch_size"]
+        assert (batch.count == self.config["sample_batch_size"])
 
         # Prioritize on the worker side
-        if self.config["apex_optimizer"]:
+        if self.config["worker_side_prioritization"]:
             td_errors = self.dqn_graph.compute_td_error(
                 self.sess, obs, batch["actions"], batch["rewards"],
                 new_obs, batch["dones"], batch["weights"])
@@ -136,17 +136,6 @@ class DQNEvaluator(Evaluator):
             batch.data["weights"] = new_priorities
 
         return batch
-
-    def compute_gradients(self, samples):
-        td_error, grad = self.dqn_graph.compute_gradients(
-            self.sess, samples["obs"], samples["actions"], samples["rewards"],
-            samples["new_obs"], samples["dones"], samples["weights"])
-        return grad, td_error
-
-    def apply_gradients(self, grads):
-        if type(grads) is tuple:
-            grads, _ = grads  # drop td_error
-        self.dqn_graph.apply_gradients(self.sess, grads)
 
     def compute_apply(self, samples):
         if samples is None:
