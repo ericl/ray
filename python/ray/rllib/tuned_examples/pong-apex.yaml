@@ -14,6 +14,6 @@ pong-apex:
         target_network_update_freq: 50000
         train_batch_size: 512
         prioritized_replay_beta:
-            grid_search: [0.2, 1.0]
+            grid_search: [0.6, 1.0]
         prioritized_replay_alpha:
-            grid_search: [0.2, 1.0]
+            grid_search: [0.4, 1.0]
