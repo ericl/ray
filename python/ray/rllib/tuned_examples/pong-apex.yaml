@@ -7,11 +7,11 @@ pong-apex:
             eval: spec.config.num_workers
         gpu: 1
     config:
-        num_workers: 128
+        num_workers: 32
         force_evaluators_remote: True  # requires cluster
         lr: .0001
         gamma: 0.99
         target_network_update_freq: 50000
-        train_batch_size: 32
-        model:
-          grayscale: True
+        train_batch_size: 512
+        prioritized_replay_beta:
+            grid_search: [0.1, 0.4, 0.8, 1.0]
