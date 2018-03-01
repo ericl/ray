@@ -1,6 +1,6 @@
 cluster_name: apex2
-min_workers: 2
-max_workers: 2
+min_workers: 8
+max_workers: 8
 target_utilization_fraction: 0.8
 idle_timeout_minutes: 5
 provider:
