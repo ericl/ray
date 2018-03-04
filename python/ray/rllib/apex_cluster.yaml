@@ -2,8 +2,8 @@ cluster_name: apex2
 docker:
     image: ""
     container_name: ""
-min_workers: 16
-max_workers: 16
+min_workers: 12
+max_workers: 12
 target_utilization_fraction: 0.8
 idle_timeout_minutes: 5
 provider:
@@ -21,7 +21,7 @@ worker_nodes:
     InstanceMarketOptions:
         MarketType: spot
 file_mounts: {
-    "/tmp/apex_sha": "/home/eric/Desktop/ray-private/.git/refs/heads/apex",
+    "/tmp/apex_sha": "/home/eric/Desktop/ray-private/.git/refs/heads/apex-2",
 }
 setup_commands:
     - pkill -9 python || true
