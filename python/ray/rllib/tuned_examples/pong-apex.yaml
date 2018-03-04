@@ -11,7 +11,7 @@ pong-apex:
         force_evaluators_remote: True  # requires cluster
         lr: .0001
         gamma: 0.99
-        target_network_update_freq: 50000
+        target_network_update_freq: 500000
         train_batch_size: 512
         prioritized_replay_beta:
             grid_search: [0.4, 1.0]
