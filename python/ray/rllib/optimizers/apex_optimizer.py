@@ -58,12 +58,12 @@ class ReplayActor(object):
             return None
 
         (obses_t, actions, rewards, obses_tp1,
-            dones, weights, batch_indexes) = self.replay_buffer.sample_random(
+            dones, batch_indexes) = self.replay_buffer.sample_random(
                 self.train_batch_size)
 
         batch = SampleBatch({
             "obs": obses_t, "actions": actions, "rewards": rewards,
-            "new_obs": obses_tp1, "dones": dones, "weights": weights,
+            "new_obs": obses_tp1, "dones": dones,
             "batch_indexes": batch_indexes})
         return batch
 

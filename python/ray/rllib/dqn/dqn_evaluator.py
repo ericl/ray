@@ -12,7 +12,7 @@ from ray.rllib.dqn import models
 from ray.rllib.dqn.common.wrappers import wrap_dqn
 from ray.rllib.dqn.common.schedules import ConstantSchedule, LinearSchedule
 from ray.rllib.optimizers import SampleBatch, Evaluator
-from ray.rllib.utils.compression import pack
+from ray.rllib.utils.compression import pack, unpack
 
 
 def adjust_nstep(n_step, gamma, obs, actions, rewards, new_obs, dones):
@@ -151,8 +151,8 @@ class DQNEvaluator(Evaluator):
         td_error = self.dqn_graph.compute_td_error(
             self.sess, [unpack(o) for o in samples["obs"]],
             samples["actions"], samples["rewards"],
-            [unpack(o) for on in samples["new_obs"]],
-            samples["dones"], samples["weights"])
+            [unpack(o) for o in samples["new_obs"]],
+            samples["dones"], np.ones_like(samples["actions"]))
         return {
             "batch_indexes": samples["batch_indexes"],
             "td_errors": td_error,

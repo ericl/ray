@@ -74,7 +74,8 @@ class ReplayBuffer(object):
         idxes = [random.randint(0, len(self._storage) - 1)
                  for _ in range(batch_size)]
         self._num_sampled += batch_size
-        return self._encode_sample(idxes, decompress=False)
+        encoded_sample = self._encode_sample(idxes, decompress=False)
+        return tuple(list(encoded_sample) + [idxes])
 
     def sample(self, batch_size):
         """Sample a batch of experiences.
