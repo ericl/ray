@@ -50,19 +50,31 @@ class ReplayBuffer(object):
             self._evicted_hit_stats.push(self._hit_count[self._next_idx])
             self._hit_count[self._next_idx] = 0
 
-    def _encode_sample(self, idxes):
+    def _encode_sample(self, idxes, decompress=True):
         obses_t, actions, rewards, obses_tp1, dones = [], [], [], [], []
         for i in idxes:
             data = self._storage[i]
             obs_t, action, reward, obs_tp1, done = data
-            obses_t.append(np.array(unpack(obs_t), copy=False))
+            if decompress:
+                obses_t.append(np.array(unpack(obs_t), copy=False))
+            else:
+                obses_t.append(np.array(obs_t, copy=False))
             actions.append(np.array(action, copy=False))
             rewards.append(reward)
-            obses_tp1.append(np.array(unpack(obs_tp1), copy=False))
+            if decompress:
+                obses_tp1.append(np.array(unpack(obs_tp1), copy=False))
+            else:
+                obses_tp1.append(np.array(obs_tp1, copy=False))
             dones.append(done)
             self._hit_count[i] += 1
         return (np.array(obses_t), np.array(actions), np.array(rewards),
                 np.array(obses_tp1), np.array(dones))
+
+    def sample_random(self, batch_size, decompress=False):
+        idxes = [random.randint(0, len(self._storage) - 1)
+                 for _ in range(batch_size)]
+        self._num_sampled += batch_size
+        return self._encode_sample(idxes, decompress=False)
 
     def sample(self, batch_size):
         """Sample a batch of experiences.

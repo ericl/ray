@@ -144,6 +144,21 @@ class DQNEvaluator(Evaluator):
             samples["new_obs"], samples["dones"], samples["weights"])
         return td_error
 
+    def compute_td_error(self, weights, samples, token):
+        if samples is None:
+            return {"batch_indexes": None, "td_errors": None, "token": token}
+        self.set_weights(weights)
+        td_error = self.dqn_graph.compute_td_error(
+            self.sess, [unpack(o) for o in samples["obs"]],
+            samples["actions"], samples["rewards"],
+            [unpack(o) for on in samples["new_obs"]],
+            samples["dones"], samples["weights"])
+        return {
+            "batch_indexes": samples["batch_indexes"],
+            "td_errors": td_error,
+            "token": token,
+        }
+
     def get_weights(self):
         return self.variables.get_weights()
 

@@ -53,6 +53,20 @@ class ReplayActor(object):
                     row["obs"], row["actions"], row["rewards"], row["new_obs"],
                     row["dones"], row["weights"])
 
+    def replay_random(self):
+        if len(self.replay_buffer) < self.replay_starts:
+            return None
+
+        (obses_t, actions, rewards, obses_tp1,
+            dones, weights, batch_indexes) = self.replay_buffer.sample_random(
+                self.train_batch_size)
+
+        batch = SampleBatch({
+            "obs": obses_t, "actions": actions, "rewards": rewards,
+            "new_obs": obses_tp1, "dones": dones, "weights": weights,
+            "batch_indexes": batch_indexes})
+        return batch
+
     def replay(self):
         with self.replay_timer:
             if len(self.replay_buffer) < self.replay_starts:
@@ -69,12 +83,13 @@ class ReplayActor(object):
                 "batch_indexes": batch_indexes})
             return batch
 
-    def update_priorities(self, batch, td_errors):
+    def update_priorities(self, batch_indexes, td_errors):
+        if batch_indexes is None or td_errors is None:
+            return
         with self.update_priorities_timer:
             new_priorities = (
                 np.abs(td_errors) + self.prioritized_replay_eps)
-            self.replay_buffer.update_priorities(
-                batch["batch_indexes"], new_priorities)
+            self.replay_buffer.update_priorities(batch_indexes, new_priorities)
 
     def stats(self):
         stat = {
@@ -121,8 +136,10 @@ class ApexOptimizer(Optimizer):
             prioritized_replay=True, prioritized_replay_alpha=0.6,
             prioritized_replay_beta=0.4, prioritized_replay_eps=1e-6,
             train_batch_size=512, sample_batch_size=50,
-            num_replay_buffer_shards=1, max_weight_sync_delay=400):
+            num_replay_buffer_shards=1, max_weight_sync_delay=400,
+            debug=False):
 
+        self.debug = debug
         self.replay_starts = learning_starts
         self.prioritized_replay_beta = prioritized_replay_beta
         self.prioritized_replay_eps = prioritized_replay_eps
@@ -144,10 +161,8 @@ class ApexOptimizer(Optimizer):
         # Stats
         self.timers = {k: TimerStat() for k in [
             "put_weights", "get_samples", "enqueue", "sample_processing",
-            "replay_processing", "update_priorities", "train", "sample"]}
-        self.meters = {k: WindowStat(k, 10) for k in [
-            "samples_per_loop", "replays_per_loop", "reprios_per_loop",
-            "reweights_per_loop"]}
+            "replay_processing", "update_priorities", "train", "sample",
+            "bg_prio", "bg_prio_processing"]}
         self.num_weight_syncs = 0
         self.learning_started = False
 
@@ -169,9 +184,14 @@ class ApexOptimizer(Optimizer):
             for _ in range(SAMPLE_QUEUE_DEPTH):
                 self.sample_tasks.add(ev, ev.sample.remote())
 
+        # Background prio (experimental)
+        self.background_prio_workers = []
+        self.background_prio_tasks = TaskPool()
+        self.num_background_prio_steps = 0
+
     def step(self):
         start = time.time()
-        sample_timesteps, train_timesteps = self._step()
+        sample_timesteps, train_timesteps, bg_steps = self._step()
         time_delta = time.time() - start
         self.timers["sample"].push(time_delta)
         self.timers["sample"].push_units_processed(sample_timesteps)
@@ -180,11 +200,14 @@ class ApexOptimizer(Optimizer):
         if self.learning_started:
             self.timers["train"].push(time_delta)
             self.timers["train"].push_units_processed(train_timesteps)
+        if self.learning_started:
+            self.timers["bg_prio"].push(time_delta)
+            self.timers["bg_prio"].push_units_processed(bg_steps)
         self.num_steps_sampled += sample_timesteps
         self.num_steps_trained += train_timesteps
 
     def _step(self):
-        sample_timesteps, train_timesteps = 0, 0
+        sample_timesteps, train_timesteps, num_bg_prio_steps = 0, 0, 0
         weights = None
 
         with self.timers["sample_processing"]:
@@ -212,8 +235,6 @@ class ApexOptimizer(Optimizer):
 
                 # Kick off another sample request
                 self.sample_tasks.add(ev, ev.sample.remote())
-            self.meters["samples_per_loop"].push(i)
-            self.meters["reweights_per_loop"].push(num_weight_syncs)
 
         with self.timers["replay_processing"]:
             i = 0
@@ -224,18 +245,45 @@ class ApexOptimizer(Optimizer):
                     samples = ray.get(replay)
                 with self.timers["enqueue"]:
                     self.learner.inqueue.put((ra, samples))
-            self.meters["replays_per_loop"].push(i)
 
         with self.timers["update_priorities"]:
             i = 0
             while not self.learner.outqueue.empty():
                 i += 1
                 ra, replay, td_error = self.learner.outqueue.get()
-                ra.update_priorities.remote(replay, td_error)
+                ra.update_priorities.remote(replay["batch_indexes"], td_error)
                 train_timesteps += self.train_batch_size
-            self.meters["reprios_per_loop"].push(i)
 
-        return sample_timesteps, train_timesteps
+        with self.timers["bg_prio_processing"]:
+            i = 0
+            for w, result in self.background_prio_tasks.completed():
+                i += 1
+                num_bg_prio_steps += self.config["train_batch_size"]
+                replay_idx = random.randint(0, len(self.replay_actors) - 1)
+                ra = self.replay_actors[replay_idx]
+                if weights is None:
+                    weights = ray.put(
+                        self.local_evaluator.get_weights())
+                self.background_prio_tasks.add(
+                    w,
+                    w.compute_td_error.remote(
+                        weights, ra.replay_random.remote(), replay_idx))
+                result = ray.get(result)
+                self.replay_actors[result["token"]].update_priorities.remote(
+                    result["batch_indexes"], result["td_errors"])
+
+        return sample_timesteps, train_timesteps, num_bg_prio_steps
+
+    def enable_background_prio(self, background_prio_workers):
+        self.background_prio_workers = background_prio_workers
+        weights = self.local_evaluator.get_weights()
+        for w in self.background_prio_workers:
+            replay_idx = random.randint(0, len(self.replay_actors) - 1)
+            ra = self.replay_actors[replay_idx]
+            self.background_prio_tasks.add(
+                w,
+                w.compute_td_error.remote(
+                    weights, ra.replay_random.remote(), replay_idx))
 
     def stats(self):
         replay_stats = ray.get(self.replay_actors[0].stats.remote())
@@ -248,18 +296,20 @@ class ApexOptimizer(Optimizer):
         timing["learner_dequeue_time_ms"] = round(
             1000 * self.learner.queue_timer.mean, 3)
         stats = {
-            "replay_shard_0": replay_stats,
-            "timing_breakdown": timing,
             "sample_throughput": round(
                 self.timers["sample"].mean_throughput, 3),
             "train_throughput": round(self.timers["train"].mean_throughput, 3),
+            "bg_prio_throughput":
+                round(self.timers["bg_prio"].mean_throughput, 3),
             "num_weight_syncs": self.num_weight_syncs,
+        }
+        debug_stats = {
+            "replay_shard_0": replay_stats,
+            "timing_breakdown": timing,
             "pending_sample_tasks": self.sample_tasks.count,
             "pending_replay_tasks": self.replay_tasks.count,
             "learner_queue": self.learner.learner_queue_size.stats(),
-            "samples": self.meters["samples_per_loop"].stats(),
-            "replays": self.meters["replays_per_loop"].stats(),
-            "reprios": self.meters["reprios_per_loop"].stats(),
-            "reweights": self.meters["reweights_per_loop"].stats(),
         }
+        if self.debug:
+            stats.update(debug_stats)
         return dict(Optimizer.stats(self), **stats)
