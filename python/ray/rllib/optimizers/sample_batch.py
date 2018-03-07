@@ -120,6 +120,11 @@ class SampleBatch(object):
         for key, val in self.data.items():
             self.data[key] = val[permutation]
 
+    def force_writable(self):
+        for val in self.data.values():
+            if hasattr(val, "flags"):
+                val.flags["WRITEABLE"] = True
+
     def __getitem__(self, key):
         return self.data[key]
 
