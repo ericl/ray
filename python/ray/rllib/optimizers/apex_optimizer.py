@@ -123,6 +123,7 @@ class GenericLearner(threading.Thread):
         with self.queue_timer:
             ra, replay = self.inqueue.get()
         if replay is not None:
+            replay.writable()
             with self.grad_timer:
                 td_error = self.local_evaluator.compute_apply(replay)
             self.outqueue.put((ra, replay, td_error))

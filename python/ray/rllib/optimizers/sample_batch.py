@@ -74,6 +74,10 @@ class SampleBatch(object):
                 row[k] = self[k][i]
             yield row
 
+    def writable(self):
+        for v in self.data.values():
+            v.flags["WRITEABLE"] = True
+
     def columns(self, keys):
         """Returns a list of just the specified columns.
 

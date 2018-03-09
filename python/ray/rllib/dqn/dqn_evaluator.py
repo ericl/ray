@@ -5,6 +5,7 @@ from __future__ import print_function
 from gym.spaces import Discrete
 import numpy as np
 import tensorflow as tf
+from tensorflow.core.protobuf import rewriter_config_pb2
 
 import ray
 from ray.rllib.utils.error import UnsupportedSpaceException
@@ -59,8 +60,11 @@ class DQNEvaluator(Evaluator):
                 "Action space {} is not supported for DQN.".format(
                     env.action_space))
 
-        tf_config = tf.ConfigProto(**config["tf_session_args"])
-        self.sess = tf.Session(config=tf_config)
+        optimizer_options = tf.OptimizerOptions(opt_level=tf.OptimizerOptions.L0)
+        tfconfig = tf.ConfigProto(operation_timeout_in_ms=15000, graph_options=tf.GraphOptions(optimizer_options=optimizer_options))
+        tfconfig.graph_options.rewrite_options.constant_folding = rewriter_config_pb2.RewriterConfig.OFF
+        tfconfig.graph_options.place_pruned_graph = True
+        self.sess = tf.Session(config=tfconfig)
         self.dqn_graph = models.DQNGraph(registry, env, config, logdir)
 
         # Use either a different `eps` per worker, or a linear schedule.
