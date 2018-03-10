@@ -28,7 +28,7 @@ class ReplayActor(object):
     def __init__(
             self, num_shards, learning_starts, buffer_size, train_batch_size,
             prioritized_replay_alpha, prioritized_replay_beta,
-            prioritized_replay_eps):
+            prioritized_replay_eps, clip_rewards):
         self.replay_starts = learning_starts // num_shards
         self.buffer_size = buffer_size // num_shards
         self.train_batch_size = train_batch_size
@@ -36,7 +36,8 @@ class ReplayActor(object):
         self.prioritized_replay_eps = prioritized_replay_eps
 
         self.replay_buffer = PrioritizedReplayBuffer(
-            self.buffer_size, alpha=prioritized_replay_alpha)
+            self.buffer_size, alpha=prioritized_replay_alpha,
+            clip_rewards=clip_rewards)
 
         # Metrics
         self.add_batch_timer = TimerStat()
@@ -138,7 +139,7 @@ class ApexOptimizer(Optimizer):
             prioritized_replay_beta=0.4, prioritized_replay_eps=1e-6,
             train_batch_size=512, sample_batch_size=50,
             num_replay_buffer_shards=1, max_weight_sync_delay=400,
-            debug=False):
+            debug=False, clip_rewards=True):
 
         self.debug = debug
         self.replay_starts = learning_starts
@@ -155,7 +156,7 @@ class ApexOptimizer(Optimizer):
             ReplayActor,
             [num_replay_buffer_shards, learning_starts, buffer_size,
              train_batch_size, prioritized_replay_alpha,
-             prioritized_replay_beta, prioritized_replay_eps],
+             prioritized_replay_beta, prioritized_replay_eps, clip_rewards],
             num_replay_buffer_shards)
         assert len(self.remote_evaluators) > 0
 
