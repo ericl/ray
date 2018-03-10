@@ -5,7 +5,7 @@ from __future__ import print_function
 import ray
 from ray.rllib.dqn.dqn import DQNAgent, DEFAULT_CONFIG as DQN_CONFIG
 from ray.rllib.dqn.dqn_evaluator import DQNEvaluator
-from ray.rllib.utils.actors import keep_non_colocated
+from ray.rllib.utils.actors import drop_colocated
 
 APEX_DEFAULT_CONFIG = dict(DQN_CONFIG, **dict(
     optimizer_class="ApexOptimizer",
@@ -50,7 +50,7 @@ class ApexAgent(DQNAgent):
                 self.registry, self.env_creator, self.config, self.logdir, 0)
             for _ in range(self.config["num_background_prio_workers"])]
         if self.config["force_evaluators_remote"]:
-            self.background_prio_workers = keep_non_colocated(
+            self.background_prio_workers = drop_colocated(
                 self.background_prio_workers)
         if self.background_prio_workers:
             self.optimizer.enable_background_prio(self.background_prio_workers)
