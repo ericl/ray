@@ -139,7 +139,7 @@ class ApexOptimizer(Optimizer):
             prioritized_replay_beta=0.4, prioritized_replay_eps=1e-6,
             train_batch_size=512, sample_batch_size=50,
             num_replay_buffer_shards=1, max_weight_sync_delay=400,
-            debug=False, clip_rewards=True):
+            clip_rewards=True, debug=False):
 
         self.debug = debug
         self.replay_starts = learning_starts
