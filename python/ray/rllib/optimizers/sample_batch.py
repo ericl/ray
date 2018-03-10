@@ -75,8 +75,7 @@ class SampleBatch(object):
             yield row
 
     def writable(self):
-        for k, v in self.data.items():
-            self.data[k] = np.copy(v)
+        pass
 
     def columns(self, keys):
         """Returns a list of just the specified columns.
