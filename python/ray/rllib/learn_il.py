@@ -10,6 +10,7 @@ import gym
 import tensorflow as tf
 
 import ray
+from ray.experimental.tfutils import TensorFlowVariables
 from ray.rllib.models.action_dist import Categorical
 from ray.rllib.models.fcnet import FullyConnectedNetwork
 from ray.rllib.cartpole import MakeCartpoleHarder
@@ -71,7 +72,7 @@ run_experiments({
             "N": 500,
             "model": {
                 "fcnet_activation": "relu",
-                "fcnet_hiddens": [256, 256, 8],
+                "fcnet_hiddens": [64, 64, 8],
             },
         },
     }
