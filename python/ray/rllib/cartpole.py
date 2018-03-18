@@ -19,7 +19,7 @@ def logit(x):
   return np.log(x) - np.log(1 - x)
 
 
-class MyPreprocessorClass(Preprocessor):
+class MakeCartpoleHarder(Preprocessor):
     def _init(self):
         self.shape = self._obs_space.shape
         np.random.seed(self._options["custom_options"]["seed"])
@@ -53,34 +53,35 @@ class MyPreprocessorClass(Preprocessor):
         return orig
 
 
-ModelCatalog.register_custom_preprocessor("my_prep", MyPreprocessorClass)
+if __name__ == '__main__':
+    ModelCatalog.register_custom_preprocessor("my_prep", MakeCartpoleHarder)
 
-ray.init()
-run_experiments({
-    "cartpole3": {
-        "run": "PPO",
-        "env": "CartPole-v0",
-        "repeat": 1,
-        "resources": {
-            "cpu": 3,
-        },
-        "stop": {
-            "episode_reward_mean": 200,
+    ray.init()
+    run_experiments({
+        "cartpole3": {
+            "run": "PPO",
+            "env": "CartPole-v0",
+            "repeat": 1,
+            "resources": {
+                "cpu": 3,
+            },
+            "stop": {
+                "episode_reward_mean": 200,
 #            "time_total_s": 300,
-        },
-        "config": {
-            "num_sgd_iter": 10,
-            "num_workers": 2,
-            "model": {
-                "custom_preprocessor": "my_prep",
-                "custom_options": {
-                    "seed": 0,
-                    "noise_size": 10,
-                    "noise_size": 500,  #grid_search([0, 10, 50, 100, 500, 1000]),
-                    "matrix_size": lambda spec: spec.config.model.custom_options.noise_size,
-                    "invert": False,
+            },
+            "config": {
+                "num_sgd_iter": 10,
+                "num_workers": 2,
+                "model": {
+                    "custom_preprocessor": "my_prep",
+                    "custom_options": {
+                        "seed": 0,
+                        "noise_size": 10,
+                        "noise_size": 500,  #grid_search([0, 10, 50, 100, 500, 1000]),
+                        "matrix_size": lambda spec: spec.config.model.custom_options.noise_size,
+                        "invert": False,
+                    },
                 },
             },
-        },
-    }
-})
+        }
+    })
