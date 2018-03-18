@@ -76,9 +76,8 @@ if __name__ == '__main__':
                     "custom_preprocessor": "my_prep",
                     "custom_options": {
                         "seed": 0,
-                        "noise_size": 10,
                         "noise_size": 500,  #grid_search([0, 10, 50, 100, 500, 1000]),
-                        "matrix_size": lambda spec: spec.config.model.custom_options.noise_size,
+                        "matrix_size": 500,
                         "invert": False,
                     },
                 },
