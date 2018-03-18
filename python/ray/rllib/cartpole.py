@@ -3,6 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import numpy as np
+import gym
 
 import ray
 from ray.tune import run_experiments, grid_search
@@ -10,24 +11,53 @@ from ray.rllib.models import ModelCatalog, Model
 from ray.rllib.models.preprocessors import Preprocessor
 from ray.rllib.ppo import PPOAgent
 
+
+def sigmoid(x):
+  return 1 / (1 + np.exp(-x))
+
+def logit(x):
+  return np.log(x) - np.log(1 - x)
+
+
 class MyPreprocessorClass(Preprocessor):
     def _init(self):
         self.shape = self._obs_space.shape
         np.random.seed(self._options["custom_options"]["seed"])
-        self.out_size = self._options["custom_options"]["out_size"]
         self.noise_size = self._options["custom_options"]["noise_size"]
-        self.A = np.random.rand(self.out_size, 4 + self.noise_size)
-        self.shape = (self.out_size,)
+        self.matrix_size = self._options["custom_options"]["matrix_size"]
+        self.invert = self._options["custom_options"]["invert"]
+        self.A = np.random.rand(
+            4 + self.matrix_size, 4 + self.noise_size) - 0.5
+        if self.invert:
+            self.shape = (4,)
+            self.A_inv = np.linalg.inv(self.A)
+        else:
+            self.shape = (4 + self.matrix_size,)
 
     def transform(self, observation):
         noise = np.random.rand(self.noise_size)
-        return np.matmul(self.A, np.concatenate([observation, noise]))
+        y = np.concatenate([observation, noise])
+        tmp = np.matmul(self.A, y)
+        out = sigmoid(tmp)
+        if self.invert:
+            return self.invert_transform(out)
+        else:
+            return out
+
+    def invert_transform(self, observation):
+        """Invert the transform for testing"""
+
+        tmp = logit(observation)
+        y = np.matmul(self.A_inv, tmp)
+        orig = y[:4]
+        return orig
+
 
 ModelCatalog.register_custom_preprocessor("my_prep", MyPreprocessorClass)
 
 ray.init()
 run_experiments({
-    "cartpole": {
+    "cartpole3": {
         "run": "PPO",
         "env": "CartPole-v0",
         "repeat": 1,
@@ -36,7 +66,7 @@ run_experiments({
         },
         "stop": {
             "episode_reward_mean": 200,
-            "time_total_s": 300,
+#            "time_total_s": 300,
         },
         "config": {
             "num_sgd_iter": 10,
@@ -45,8 +75,10 @@ run_experiments({
                 "custom_preprocessor": "my_prep",
                 "custom_options": {
                     "seed": 0,
-                    "noise_size": grid_search([10, 50]),
-                    "out_size": grid_search([4, 10, 100, 1000]),
+                    "noise_size": 10,
+                    "noise_size": 500,  #grid_search([0, 10, 50, 100, 500, 1000]),
+                    "matrix_size": lambda spec: spec.config.model.custom_options.noise_size,
+                    "invert": False,
                 },
             },
         },
