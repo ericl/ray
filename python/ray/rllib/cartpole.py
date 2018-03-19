@@ -88,7 +88,7 @@ if __name__ == '__main__':
 
     ray.init()
     run_experiments({
-        "cartpole3": {
+        "cartpole-decoder": {
             "run": "PPO",
             "env": "CartPole-v0",
             "repeat": 1,
@@ -97,6 +97,7 @@ if __name__ == '__main__':
             },
             "stop": {
                 "episode_reward_mean": 200,
+                "timesteps_total": 200000,
 #            "time_total_s": 300,
             },
             "config": {
@@ -109,8 +110,7 @@ if __name__ == '__main__':
                         "noise_size": 500,  #grid_search([0, 10, 50, 100, 500, 1000]),
                         "matrix_size": 500,
                         "invert": False,
-                        "decode_model":
-                            "/home/eric/ray_results/il/il_0_2018-03-18_17-31-38fceweilr/weights_33",
+                        "decode_model": "/home/eric/Desktop/autoencoder_104",
                     },
                 },
             },
