@@ -5,6 +5,7 @@ from __future__ import print_function
 import os
 import json
 
+import pickle
 import numpy as np
 import gym
 import tensorflow as tf
@@ -44,6 +45,9 @@ def train(config, reporter):
 
     sess = tf.Session()
     sess.run(tf.global_variables_initializer())
+
+    vars = TensorFlowVariables(loss, sess)
+
     data = [json.loads(x) for x in open(PATH).readlines()]
     print("preprocessing data")
     for t in data:
@@ -61,6 +65,11 @@ def train(config, reporter):
             losses.append(cur_loss)
         acc = np.mean([np.exp(-l) for l in losses])
         reporter(timesteps_total=i, mean_accuracy=acc)
+        if i % 1 == 0:
+            fname = "weights_{}".format(i)
+            with open(fname, "wb") as f:
+                f.write(pickle.dumps(vars.get_weights()))
+                print("Saved weights to " + fname)
 
 
 ray.init()
@@ -72,7 +81,7 @@ run_experiments({
             "N": 500,
             "model": {
                 "fcnet_activation": "relu",
-                "fcnet_hiddens": [64, 64, 8],
+                "fcnet_hiddens": [256, 8],
             },
         },
     }
