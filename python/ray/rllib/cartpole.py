@@ -68,9 +68,11 @@ class MakeCartpoleHarder(Preprocessor):
         if self.invert:
             return self.invert_transform(out)
         elif self.decode_model:
-            return self.sess.run(self.decoder.last_layer, feed_dict={
+            dec = self.sess.run(self.decoder.last_layer, feed_dict={
                 self.obs_ph: [out]
             })[0]
+            print(dec)
+            return dec
         else:
             return out
 
