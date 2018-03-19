@@ -19,7 +19,7 @@ from ray.rllib.cartpole import MakeCartpoleHarder
 from ray.rllib.models.misc import normc_initializer
 from ray.tune import run_experiments, register_trainable, grid_search
 
-PATH = os.path.expanduser("~/Desktop/cartpole-expert.json")
+PATH = os.path.expanduser("~/Desktop/cartpole-random.json")
 
 
 def train(config, reporter):
@@ -142,7 +142,7 @@ def train(config, reporter):
 ray.init()
 register_trainable("il", train)
 run_experiments({
-    "autoencoder": {
+    "ivd": {
         "run": "il",
         "config": {
             "N": 500,
@@ -150,7 +150,7 @@ run_experiments({
                 "fcnet_activation": "relu",
                 "fcnet_hiddens": [256, 8],
             },
-            "il_loss": False,
+            "il_loss": True,
             "autoencoder_loss": False,
             "inv_dynamics_loss": True,
         },

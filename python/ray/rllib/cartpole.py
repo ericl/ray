@@ -110,7 +110,7 @@ if __name__ == '__main__':
                         "noise_size": 500,  #grid_search([0, 10, 50, 100, 500, 1000]),
                         "matrix_size": 500,
                         "invert": False,
-                        "decode_model": "/home/eric/Desktop/il_trained_560",
+                        "decode_model": "/home/eric/Desktop/hybrid_148",
                     },
                 },
             },
