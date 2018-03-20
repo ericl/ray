@@ -19,7 +19,7 @@ from ray.rllib.cartpole import MakeCartpoleHarder
 from ray.rllib.models.misc import normc_initializer
 from ray.tune import run_experiments, register_trainable, grid_search
 
-PATH = os.path.expanduser("~/Desktop/cartpole-random.json")
+PATH = os.path.expanduser("~/Desktop/cartpole-expert.json")
 
 
 def train(config, reporter):
@@ -40,6 +40,7 @@ def train(config, reporter):
         il_loss = -tf.reduce_mean(action_dist.logp(expert_actions))
     else:
         il_loss = tf.constant(0.0)
+    act = action_dist.sample()
     print("IL loss", il_loss)
 
     # Set up autoencoder loss
@@ -125,13 +126,28 @@ def train(config, reporter):
         auto_loss = np.mean(auto_losses)
         ivd_acc = np.mean([np.exp(-l) for l in inv_dyn_losses])
         ivd_loss = np.mean(inv_dyn_losses)
+
+        # Evaluate IL performance
+        rewards = []
+        for _ in range(100):
+            obs = env.reset()
+            reward = 0
+            done = False
+            while not done:
+                action = sess.run(act, feed_dict={observations: [preprocessor.transform(obs)]})[0]
+                obs, rew, done, _ = env.step(action)
+                reward += rew
+            rewards.append(reward)
+
         reporter(
             timesteps_total=i, mean_accuracy=acc, mean_loss=auto_loss + ivd_loss, info={
                 "il_loss": np.mean(il_losses),
                 "auto_loss": auto_loss,
                 "inv_dyn_loss": ivd_loss,
                 "inv_dyn_acc": ivd_acc,
+                "il_mean_reward": np.mean(rewards),
             })
+
         if i % 1 == 0:
             fname = "weights_{}".format(i)
             with open(fname, "wb") as f:
@@ -142,7 +158,7 @@ def train(config, reporter):
 ray.init()
 register_trainable("il", train)
 run_experiments({
-    "ivd": {
+    "iltrain": {
         "run": "il",
         "config": {
             "N": 500,
@@ -152,7 +168,7 @@ run_experiments({
             },
             "il_loss": True,
             "autoencoder_loss": False,
-            "inv_dynamics_loss": True,
+            "inv_dynamics_loss": False,
         },
     }
 })
