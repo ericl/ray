@@ -102,6 +102,11 @@ def train(config, reporter):
     for t in data:
         t["encoded_obs"] = preprocessor.transform(t["obs"])
         t["encoded_next_obs"] = preprocessor.transform(t["new_obs"])
+    split_point = int(len(data) * 0.9)
+    test_batch = data[split_point:]
+    data = data[:split_point]
+    print("train batch size", len(data))
+    print("test batch size", len(test_batch))
 
     print("start training")
     for i in range(1000):
@@ -122,6 +127,15 @@ def train(config, reporter):
             il_losses.append(cur_il_loss)
             auto_losses.append(cur_auto_loss)
             inv_dyn_losses.append(cur_inv_dyn_loss)
+
+        test_inv_dyn_loss, test_il_loss, test_auto_loss = sess.run(
+            [inv_dyn_loss, il_loss, autoencoder_loss],
+            feed_dict={
+                observations: [t["encoded_obs"] for t in test_batch],
+                expert_actions: [t["action"] for t in test_batch],
+                orig_obs: [t["obs"] for t in test_batch],
+                next_obs: [t["encoded_next_obs"] for t in test_batch],
+            })
         acc = np.mean([np.exp(-l) for l in il_losses])
         auto_loss = np.mean(auto_losses)
         ivd_acc = np.mean([np.exp(-l) for l in inv_dyn_losses])
@@ -140,12 +154,18 @@ def train(config, reporter):
             rewards.append(reward)
 
         reporter(
-            timesteps_total=i, mean_accuracy=acc, mean_loss=auto_loss + ivd_loss, info={
-                "il_loss": np.mean(il_losses),
-                "auto_loss": auto_loss,
-                "inv_dyn_loss": ivd_loss,
-                "inv_dyn_acc": ivd_acc,
-                "il_mean_reward": np.mean(rewards),
+            timesteps_total=i, mean_loss=np.mean(il_losses) + auto_loss + ivd_loss, info={
+                "train_il_acc": acc,
+                "train_il_loss": np.mean(il_losses),
+                "train_auto_loss": auto_loss,
+                "train_inv_dyn_loss": ivd_loss,
+                "train_inv_dyn_acc": ivd_acc,
+                "test_il_mean_reward": np.mean(rewards),
+                "test_il_acc": np.exp(-test_il_loss),
+                "test_il_loss": test_il_loss,
+                "test_auto_loss": test_auto_loss,
+                "test_inv_dyn_loss": test_inv_dyn_loss,
+                "test_inv_dyn_acc": np.exp(-test_inv_dyn_loss),
             })
 
         if i % 1 == 0:
