@@ -2,9 +2,13 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import math
 import numpy as np
 import pickle
 import gym
+import random
+import scipy.stats
+import time
 import tensorflow as tf
 
 import ray
@@ -35,6 +39,59 @@ def load_model(weights_file, obs_ph, sess):
     with open(weights_file, "rb") as f:
         vars.set_weights(pickle.loads(f.read()))
     return network
+
+
+def normpdf(x, mean, sd):
+    var = float(sd)**2
+    pi = 3.1415926
+    denom = (2*pi*var)**.5
+    num = math.exp(-(float(x)-float(mean))**2/(2*var))
+    return num/denom
+
+
+class CartpoleEncoder(Preprocessor):
+    def _init(self):
+        self.shape = self._obs_space.shape
+        np.random.seed(self._options["custom_options"]["seed"])
+
+        out_size = self._options["custom_options"]["out_size"]
+        assert out_size % 4 == 0
+        self.elem_size = out_size // 4
+
+        self.decode_model = self._options["custom_options"].get("decode_model")
+        if self.decode_model:
+            self.sess = tf.Session()
+            self.obs_ph = tf.placeholder(
+                tf.float32, [None, out_size])
+            self.decoder = load_model(self.decode_model, self.obs_ph, self.sess)
+            self.shape = (8,)
+        else:
+            self.shape = (out_size,)
+
+    def transform(self, obs):
+        W = [1.0, 3.0, 0.30, 3.0]  # widths
+        out = []
+        means = []
+        for i, width in enumerate(W):
+            half = self.elem_size / 2
+            mean = half * obs[i] / width + half
+            means.append(mean)
+            std = 1
+#            assert mean >= 0 and mean <= self.elem_size, (mean, i, obs[i])
+            elem = [
+                normpdf(j, mean, std) + math.sin(j + mean) #+ random.random()
+                for j in range(self.elem_size)
+            ]
+            out.extend(elem)
+        if self.decode_model:
+            out = self.sess.run(self.decoder.last_layer, feed_dict={
+                self.obs_ph: [out]
+            })[0]
+#        print(obs)
+#        print(means)
+#        print()
+#        print(out)
+        return out
 
 
 class MakeCartpoleHarder(Preprocessor):
@@ -86,7 +143,8 @@ class MakeCartpoleHarder(Preprocessor):
 
 
 if __name__ == '__main__':
-    ModelCatalog.register_custom_preprocessor("my_prep", MakeCartpoleHarder)
+#    ModelCatalog.register_custom_preprocessor("my_prep", MakeCartpoleHarder)
+    ModelCatalog.register_custom_preprocessor("encoder", CartpoleEncoder)
 
     ray.init()
     run_experiments({
@@ -99,20 +157,21 @@ if __name__ == '__main__':
             },
             "stop": {
                 "episode_reward_mean": 200,
-                "timesteps_total": 200000,
+                "timesteps_total": 500000,
 #            "time_total_s": 300,
             },
             "config": {
                 "num_sgd_iter": 10,
-                "num_workers": 2,
+                "num_workers": 1,
                 "model": {
-                    "custom_preprocessor": "my_prep",
+                    "custom_preprocessor": "encoder",
                     "custom_options": {
                         "seed": 0,
-                        "noise_size": 500,  #grid_search([0, 10, 50, 100, 500, 1000]),
-                        "matrix_size": 500,
-                        "invert": False,
-                        "decode_model": "/home/eric/Desktop/hybrid_148",
+                        "out_size": grid_search([400]),
+#                        "noise_size": 500,  #grid_search([0, 10, 50, 100, 500, 1000]),
+#                        "matrix_size": 500,
+#                        "invert": False,
+#                        "decode_model": "/home/eric/Desktop/hybrid_148",
                     },
                 },
             },
