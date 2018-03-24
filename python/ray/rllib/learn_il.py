@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import os
 import json
+import random
 
 import pickle
 import numpy as np
@@ -15,11 +16,11 @@ import ray
 from ray.experimental.tfutils import TensorFlowVariables
 from ray.rllib.models.action_dist import Categorical
 from ray.rllib.models.fcnet import FullyConnectedNetwork
-from ray.rllib.cartpole import MakeCartpoleHarder
+from ray.rllib.cartpole import MakeCartpoleHarder, CartpoleEncoder
 from ray.rllib.models.misc import normc_initializer
 from ray.tune import run_experiments, register_trainable, grid_search
 
-PATH = os.path.expanduser("~/Desktop/cartpole-expert.json")
+PATH = os.path.expanduser("~/Desktop/cartpole-mixed-large.json")
 
 
 def train(config, reporter):
@@ -83,14 +84,20 @@ def train(config, reporter):
     train_op = optimizer.minimize(summed_loss)
 
     env = gym.make("CartPole-v0")
-    preprocessor = MakeCartpoleHarder(env.observation_space, {
+    preprocessor = CartpoleEncoder(env.observation_space, {
         "custom_options": {
             "seed": 0,
-            "noise_size": N,
-            "matrix_size": N,
-            "invert": False,
+            "out_size": 200,
         },
     })
+#    preprocessor = MakeCartpoleHarder(env.observation_space, {
+#        "custom_options": {
+#            "seed": 0,
+#            "noise_size": N,
+#            "matrix_size": N,
+#            "invert": False,
+#        },
+#    })
 
     sess = tf.Session()
     sess.run(tf.global_variables_initializer())
@@ -102,6 +109,8 @@ def train(config, reporter):
     for t in data:
         t["encoded_obs"] = preprocessor.transform(t["obs"])
         t["encoded_next_obs"] = preprocessor.transform(t["new_obs"])
+    random.seed(0)
+    random.shuffle(data)
     split_point = int(len(data) * 0.9)
     test_batch = data[split_point:]
     data = data[:split_point]
@@ -181,14 +190,14 @@ run_experiments({
     "iltrain": {
         "run": "il",
         "config": {
-            "N": 500,
+            "N": 200 - 4,
             "model": {
                 "fcnet_activation": "relu",
                 "fcnet_hiddens": [256, 8],
             },
-            "il_loss": True,
+            "il_loss": False,
             "autoencoder_loss": False,
-            "inv_dynamics_loss": False,
+            "inv_dynamics_loss": True,
         },
     }
 })

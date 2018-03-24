@@ -148,7 +148,7 @@ if __name__ == '__main__':
 
     ray.init()
     run_experiments({
-        "cartpole-decoder": {
+        "ivd-large-decoder-model": {
             "run": "PPO",
             "env": "CartPole-v0",
             "repeat": 1,
@@ -167,11 +167,15 @@ if __name__ == '__main__':
                     "custom_preprocessor": "encoder",
                     "custom_options": {
                         "seed": 0,
-                        "out_size": grid_search([400]),
+                        "out_size": grid_search([200]),
 #                        "noise_size": 500,  #grid_search([0, 10, 50, 100, 500, 1000]),
 #                        "matrix_size": 500,
 #                        "invert": False,
-#                        "decode_model": "/home/eric/Desktop/hybrid_148",
+#                         "decode_model": "/home/eric/ray_results/iltrain/il_0_2018-03-23_21-00-01kbtfotn3/weights_51",  # oracle autoencoder
+#                         "decode_model": "/home/eric/ray_results/iltrain/il_0_2018-03-24_15-02-186tp9e4r7/weights_20",  # ivd large dataset
+#                         "decode_model": "/home/eric/ray_results/iltrain/il_0_2018-03-23_21-08-392dnx7np8/weights_20",  # ivd + il
+                        "decode_model": "/home/eric/ray_results/iltrain/il_0_2018-03-23_20-54-08gju9v3k_/weights_16",  # ivd
+#                        "decode_model": "/home/eric/ray_results/iltrain/il_0_2018-03-23_20-36-57j4yi7nev/weights_39",  # il
                     },
                 },
             },
