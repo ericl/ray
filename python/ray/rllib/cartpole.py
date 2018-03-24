@@ -117,7 +117,7 @@ if __name__ == '__main__':
             "run": "PPO",
             "env": "BulletCartPole-v0",
             "repeat": 1,
-            "resources": {
+            "trial_resources": {
                 "cpu": 1,
                 "extra_cpu": lambda spec: spec.config.num_workers,
             },
