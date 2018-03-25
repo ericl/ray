@@ -16,11 +16,11 @@ import ray
 from ray.experimental.tfutils import TensorFlowVariables
 from ray.rllib.models.action_dist import Categorical
 from ray.rllib.models.fcnet import FullyConnectedNetwork
-from ray.rllib.cartpole import MakeCartpoleHarder, CartpoleEncoder
+from ray.rllib.cartpole import CartpoleEncoder
 from ray.rllib.models.misc import normc_initializer
 from ray.tune import run_experiments, register_trainable, grid_search
 
-PATH = os.path.expanduser("~/Desktop/cartpole-mixed-large.json")
+PATH = os.path.expanduser("~/Desktop/cartpole-expert.json")
 
 
 def train(config, reporter):
@@ -46,14 +46,14 @@ def train(config, reporter):
 
     # Set up autoencoder loss
     orig_obs = tf.placeholder(tf.float32, [None, 4])
+    autoencoder_in = network.last_layer
+    if not autoencoder_loss_enabled:
+        autoencoder_in = tf.stop_gradient(autoencoder_in)
     recons_obs = slim.fully_connected(
         network.last_layer, 4,
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="fc_autoencoder_out")
-    if autoencoder_loss_enabled:
-        autoencoder_loss = tf.reduce_mean(tf.square(orig_obs - recons_obs))
-    else:
-        autoencoder_loss = tf.constant(0.0)
+    autoencoder_loss = tf.reduce_mean(tf.square(orig_obs - recons_obs))
     print("Autoencoder loss", autoencoder_loss)
 
     # Set up inverse dynamics loss
@@ -90,7 +90,6 @@ def train(config, reporter):
             "out_size": 200,
         },
     })
-#    preprocessor = MakeCartpoleHarder(env.observation_space, {
 #        "custom_options": {
 #            "seed": 0,
 #            "noise_size": N,
@@ -114,6 +113,7 @@ def train(config, reporter):
     split_point = int(len(data) * 0.9)
     test_batch = data[split_point:]
     data = data[:split_point]
+    means = [np.mean([abs(d["obs"][j]) for d in test_batch]) for j in range(4)]
     print("train batch size", len(data))
     print("test batch size", len(test_batch))
 
@@ -122,6 +122,7 @@ def train(config, reporter):
         il_losses = []
         auto_losses = []
         inv_dyn_losses = []
+        errors = [[], [], [], []]
         for _ in range(len(data) // BATCH_SIZE):
             batch = np.random.choice(data, BATCH_SIZE)
             x, cur_inv_dyn_loss, cur_il_loss, cur_auto_loss, _ = sess.run(
@@ -132,7 +133,11 @@ def train(config, reporter):
                     orig_obs: [t["obs"] for t in batch],
                     next_obs: [t["encoded_next_obs"] for t in batch],
                 })
-#            print(x[0], batch[0]["obs"])
+            for i in range(len(batch)):
+                obs = batch[i]["obs"]
+                pred_obs = x[i]
+                for j in range(4):
+                    errors[j].append(abs(obs[j] - pred_obs[j]))
             il_losses.append(cur_il_loss)
             auto_losses.append(cur_auto_loss)
             inv_dyn_losses.append(cur_inv_dyn_loss)
@@ -164,6 +169,12 @@ def train(config, reporter):
 
         reporter(
             timesteps_total=i, mean_loss=np.mean(il_losses) + auto_loss + ivd_loss, info={
+                "decoder_reconstruction_error": {
+                    "cart_pos": errors[0] / means[0],
+                    "pole_angle": errors[1] / means[1],
+                    "cart_velocity": errors[2] / means[2],
+                    "angle_velocity": errors[3] / means[3],
+                },
                 "train_il_acc": acc,
                 "train_il_loss": np.mean(il_losses),
                 "train_auto_loss": auto_loss,
