@@ -141,6 +141,8 @@ def train(config, reporter):
             il_losses.append(cur_il_loss)
             auto_losses.append(cur_auto_loss)
             inv_dyn_losses.append(cur_inv_dyn_loss)
+        for j in range(4):
+            errors[j] = np.mean(errors[j])
 
         test_inv_dyn_loss, test_il_loss, test_auto_loss = sess.run(
             [inv_dyn_loss, il_loss, autoencoder_loss],
