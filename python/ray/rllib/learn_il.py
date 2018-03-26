@@ -26,6 +26,7 @@ from ray.tune import run_experiments, register_trainable, grid_search
 
 
 def train(config, reporter):
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     k = 2
     data = config["data"]
     mode = config["mode"]
