@@ -3,6 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import argparse
+import os
 from collections import deque
 import math
 import numpy as np
@@ -27,6 +28,7 @@ from ray.rllib.render_cartpole import render_frame
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--image", action="store_true")
+parser.add_argument("--decode-model", default=None)
 
 
 def load_model(weights_file, obs_ph, sess):
@@ -89,6 +91,28 @@ class ImageCartPole(gym.Wrapper):
         return np.concatenate(self.frames, axis=2)
 
 
+class Space(object):
+    def __init__(self, shape):
+        self.shape = shape
+
+
+class Decoder(Preprocessor):
+    def _init(self):
+        self.decode_model = self._options["custom_options"].get("decode_model")
+        self.sess = tf.Session()
+        self.obs_ph = tf.placeholder(
+            tf.float32, [None] + list(self._obs_space.shape))
+        print("Decoder input: " + str(self.obs_ph))
+        self.decoder = load_model(self.decode_model, self.obs_ph, self.sess)
+        self.shape = (8,)
+
+    def transform(self, obs):
+        out = self.sess.run(self.decoder.last_layer, feed_dict={
+            self.obs_ph: [obs]
+        })[0]
+        return out
+
+
 class CartpoleEncoder(Preprocessor):
     def _init(self):
         self.shape = self._obs_space.shape
@@ -100,11 +124,8 @@ class CartpoleEncoder(Preprocessor):
 
         self.decode_model = self._options["custom_options"].get("decode_model")
         if self.decode_model:
-            self.sess = tf.Session()
-            self.obs_ph = tf.placeholder(
-                tf.float32, [None, out_size])
-            self.decoder = load_model(self.decode_model, self.obs_ph, self.sess)
-            self.shape = (8,)
+            self.decoder = Decoder(Space((out_size,)), self._options)
+            self.shape = self.decoder.shape
         else:
             self.shape = (out_size,)
 
@@ -123,15 +144,14 @@ class CartpoleEncoder(Preprocessor):
             ]
             out.extend(elem)
         if self.decode_model:
-            out = self.sess.run(self.decoder.last_layer, feed_dict={
-                self.obs_ph: [out]
-            })[0]
+            out = self.decoder.transform(out)
         return out
 
 
 if __name__ == '__main__':
     ModelCatalog.register_custom_preprocessor("encode_pseudoimg", CartpoleEncoder)
     ModelCatalog.register_custom_preprocessor("flatten", Flatten)
+    ModelCatalog.register_custom_preprocessor("decoder", Decoder)
     register_env(
         "ImageCartPole-v0",
         lambda config: ImageCartPole(gym.make("CartPole-v0"), 2))
@@ -145,7 +165,17 @@ if __name__ == '__main__':
     ray.init()
     args = parser.parse_args()
 
+    decode_model = os.path.expanduser(args.decode_model)
     if args.image:
+        if decode_model:
+            model_opts = {
+                "custom_preprocessor": "decoder",
+                "custom_options": {
+                    "decode_model": decode_model,
+                },
+            }
+        else:
+            model_opts = {}
         run_experiments({
             "image-cartpole": {
                 "run": "PPO",
@@ -160,19 +190,14 @@ if __name__ == '__main__':
                     "episode_reward_mean": 200,
                 },
                 "config": {
-                    "devices": ["/gpu:1"],
+                    "devices": ["/gpu:0"],
                     "num_sgd_iter": 10,
                     "num_workers": 1,
+                    "model": model_opts,
                 },
             }
         })
     else:
-        decode_model = None
-#        decode_model = "/home/eric/ray_results/iltrain/il_0_2018-03-23_21-00-01kbtfotn3/weights_51",  # oracle autoencoder
-#        decode_model = "/home/eric/ray_results/iltrain/il_0_2018-03-24_15-02-186tp9e4r7/weights_20",  # ivd large dataset
-#        decode_model = "/home/eric/ray_results/iltrain/il_0_2018-03-23_21-08-392dnx7np8/weights_20",  # ivd + il
-#        decode_model = "/home/eric/ray_results/iltrain/il_0_2018-03-23_20-54-08gju9v3k_/weights_16",  # ivd
-#        decode_model = "/home/eric/ray_results/iltrain/il_0_2018-03-23_20-36-57j4yi7nev/weights_39",  # il
         run_experiments({
             "test-cartpole": {
                 "run": "PPO",
