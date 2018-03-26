@@ -173,8 +173,8 @@ def train(config, reporter):
             timesteps_total=i, mean_loss=np.mean(il_losses) + auto_loss + ivd_loss, info={
                 "decoder_reconstruction_error": {
                     "cart_pos": errors[0] / means[0],
-                    "pole_angle": errors[1] / means[1],
-                    "cart_velocity": errors[2] / means[2],
+                    "cart_velocity": errors[1] / means[1],
+                    "pole_angle": errors[2] / means[2],
                     "angle_velocity": errors[3] / means[3],
                 },
                 "train_il_acc": acc,
