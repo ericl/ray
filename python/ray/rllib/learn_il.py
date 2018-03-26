@@ -26,7 +26,6 @@ from ray.tune import run_experiments, register_trainable, grid_search
 
 
 def train(config, reporter):
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     k = 2
     data = config["data"]
     mode = config["mode"]
@@ -116,6 +115,8 @@ def train(config, reporter):
             "allow_growth": True,
         },
     })
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    print("CUDA: " + os.environ.get("CUDA_VISIBLE_DEVICES"))
     sess = tf.Session(config=tf_config)
     sess.run(tf.global_variables_initializer())
 
@@ -226,7 +227,7 @@ def train(config, reporter):
             })
 
         if ix % 1 == 0:
-            fname = "weights_{}".format(i)
+            fname = "weights_{}".format(ix)
             with open(fname, "wb") as f:
                 f.write(pickle.dumps(vars.get_weights()))
                 print("Saved weights to " + fname)
