@@ -3,6 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import os
+from collections import deque
 import json
 import random
 
@@ -17,12 +18,15 @@ from ray.experimental.tfutils import TensorFlowVariables
 from ray.rllib.models.action_dist import Categorical
 from ray.rllib.models.fcnet import FullyConnectedNetwork
 from ray.rllib.models.visionnet import VisionNetwork
-from ray.rllib.cartpole import CartpoleEncoder, parser
+from ray.rllib.cartpole import ImageCartPole, CartpoleEncoder, parser
 from ray.rllib.models.misc import normc_initializer
+from ray.rllib.models.preprocessors import NoPreprocessor
+from ray.rllib.render_cartpole import render_frame
 from ray.tune import run_experiments, register_trainable, grid_search
 
 
 def train(config, reporter):
+    k = 2
     data = config["data"]
     image = config.get("image", False)
     out_size = config.get("out_size", 200)
@@ -33,7 +37,7 @@ def train(config, reporter):
 
     # Set up decoder network
     if image:
-        observations = tf.placeholder(tf.float32, [None, 42, 42, 2])
+        observations = tf.placeholder(tf.float32, [None, 42, 42, k])
         network = VisionNetwork(observations, 2, config.get("model", {}))
     else:
         observations = tf.placeholder(tf.float32, [None, out_size])
@@ -64,7 +68,7 @@ def train(config, reporter):
     # Set up inverse dynamics loss
     tf.get_variable_scope()._reuse = tf.AUTO_REUSE
     if image:
-        next_obs = tf.placeholder(tf.float32, [None, 42, 42, 2])
+        next_obs = tf.placeholder(tf.float32, [None, 42, 42, k])
         network2 = VisionNetwork(next_obs, 2, config.get("model", {}))
     else:
         next_obs = tf.placeholder(tf.float32, [None, out_size])
@@ -93,12 +97,16 @@ def train(config, reporter):
     train_op = optimizer.minimize(summed_loss)
 
     env = gym.make("CartPole-v0")
-    preprocessor = CartpoleEncoder(env.observation_space, {
-        "custom_options": {
-            "seed": 0,
-            "out_size": 200,
-        },
-    })
+    if args.image:
+        env = ImageCartPole(env, k)
+        preprocessor = NoPreprocessor(env.observation_space, {})
+    else:
+        preprocessor = CartpoleEncoder(env.observation_space, {
+            "custom_options": {
+                "seed": 0,
+                "out_size": 200,
+            },
+        })
 
     sess = tf.Session()
     sess.run(tf.global_variables_initializer())
@@ -107,9 +115,26 @@ def train(config, reporter):
 
     data = [json.loads(x) for x in open(data).readlines()]
     print("preprocessing data")
-    for t in data:
-        t["encoded_obs"] = preprocessor.transform(t["obs"])
-        t["encoded_next_obs"] = preprocessor.transform(t["new_obs"])
+    if args.image:
+        frames = deque([], maxlen=2)
+        data_out = []
+        for t in data:
+            ok = len(frames) >= k
+            if len(frames) == 0:
+                frames.append(render_frame(t["obs"]))
+            if ok:
+                t["encoded_obs"] = np.concatenate(frames, axis=2)
+            frames.append(render_frame(t["new_obs"]))
+            if ok:
+                t["encoded_next_obs"] = np.concatenate(frames, axis=2)
+                data_out.append(t)
+            if t["done"]:
+                frames.clear()
+        data = data_out
+    else:
+        for t in data:
+            t["encoded_obs"] = preprocessor.transform(t["obs"])
+            t["encoded_next_obs"] = preprocessor.transform(t["new_obs"])
     random.seed(0)
     random.shuffle(data)
     split_point = int(len(data) * 0.9)
@@ -208,7 +233,7 @@ if __name__ == '__main__':
             "iltrain_image": {
                 "run": "il",
                 "config": {
-                    "data": os.path.expanduser("~/Desktop/cartpole-small.json"),
+                    "data": os.path.expanduser("~/Desktop/cartpole-expert.json"),
                     "image": True,
                     "model": {
                         "conv_filters": [

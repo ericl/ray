@@ -21,7 +21,7 @@ from ray.tune import run_experiments, grid_search, register_env
 from ray.rllib.models import ModelCatalog, Model
 from ray.rllib.models.preprocessors import Preprocessor
 from ray.rllib.ppo import PPOAgent
-from ray.rllib import bullet_cartpole
+#from ray.rllib import bullet_cartpole
 from ray.rllib.render_cartpole import render_frame
 
 
@@ -135,12 +135,12 @@ if __name__ == '__main__':
     register_env(
         "ImageCartPole-v0",
         lambda config: ImageCartPole(gym.make("CartPole-v0"), 2))
-    register_env(
-        "BulletCartPole-v0",
-        lambda config: bullet_cartpole.BulletCartpole(
-            bullet_cartpole.add_opts(
-                argparse.ArgumentParser()).parse_args([]),
-            discrete_actions=True))
+#    register_env(
+#        "BulletCartPole-v0",
+#        lambda config: bullet_cartpole.BulletCartpole(
+#            bullet_cartpole.add_opts(
+#                argparse.ArgumentParser()).parse_args([]),
+#            discrete_actions=True))
 
     ray.init()
     args = parser.parse_args()
