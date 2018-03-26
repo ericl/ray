@@ -111,7 +111,12 @@ def train(config, reporter):
             },
         })
 
-    sess = tf.Session()
+    tf_config = tf.ConfigProto(**{
+        "gpu_options": {
+            "allow_growth": True,
+        },
+    })
+    sess = tf.Session(config=tf_config)
     sess.run(tf.global_variables_initializer())
 
     vars = TensorFlowVariables(summed_loss, sess)
