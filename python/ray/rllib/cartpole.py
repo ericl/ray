@@ -183,7 +183,7 @@ if __name__ == '__main__':
     ModelCatalog.register_custom_preprocessor("img_decoder", ImageDecoder)
     register_env(
         "ImageCartPole-v0",
-        lambda config: ImageCartPole(gym.make("CartPole-v0"), 2))
+        lambda config: ImageCartPole(gym.make("CartPole-v0"), 4))
 #    register_env(
 #        "BulletCartPole-v0",
 #        lambda config: bullet_cartpole.BulletCartpole(
