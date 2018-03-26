@@ -1,6 +1,7 @@
 import json
 import numpy as np
 import random
+import os
 from skimage.draw import line_aa, polygon
 from scipy.misc import imsave
 
@@ -31,22 +32,23 @@ def render_frame(obs):
             rr, cc, val = line_aa(
                 top_x, top_y, xpos, 34)
             canvas[cc, rr] = val * 255
+            error = None
             break
         except Exception as e:
             error = e
     if error:
-        raise e
+        raise error
 
-    return canvas
+    return np.expand_dims(canvas, 2)
 
 
 if __name__ == '__main__':
     lines = []
-    for line in open("cartpole-random.json").readlines():
+    for line in open(os.path.expanduser("~/Desktop/cartpole-random.json")).readlines():
         lines.append(json.loads(line))
         if len(lines) > 1000:
             break
 
     for k, line in enumerate(lines):
-        canvas = render_frame(line["obs"])
-        imsave("render/{}.png".format(k), canvas)
+        canvas = render_frame(line["obs"]).squeeze()
+        imsave(os.path.expanduser("~/Desktop/render/{}.png").format(k), canvas)

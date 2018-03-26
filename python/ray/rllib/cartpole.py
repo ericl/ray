@@ -3,10 +3,12 @@ from __future__ import division
 from __future__ import print_function
 
 import argparse
+from collections import deque
 import math
 import numpy as np
 import pickle
 import gym
+from gym import spaces
 import random
 import scipy.stats
 import time
@@ -20,6 +22,11 @@ from ray.rllib.models import ModelCatalog, Model
 from ray.rllib.models.preprocessors import Preprocessor
 from ray.rllib.ppo import PPOAgent
 from ray.rllib import bullet_cartpole
+from ray.rllib.render_cartpole import render_frame
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--image", action="store_true")
 
 
 def load_model(weights_file, obs_ph, sess):
@@ -55,6 +62,33 @@ class Flatten(Preprocessor):
         return obs.flatten()
 
 
+class ImageCartPole(gym.Wrapper):
+    def __init__(self, env, k):
+        """Stack k last frames."""
+        gym.Wrapper.__init__(self, env)
+        self.k = k
+        self.frames = deque([], maxlen=k)
+        shp = (42, 42, 1)
+        self.observation_space = spaces.Box(
+            low=0, high=255, shape=(shp[0], shp[1], shp[2] * k))
+
+    def reset(self):
+        ob = render_frame(self.env.reset())
+        for _ in range(self.k):
+            self.frames.append(ob)
+        return self._get_ob()
+
+    def step(self, action):
+        ob, reward, done, info = self.env.step(action)
+        ob = render_frame(ob)
+        self.frames.append(ob)
+        return self._get_ob(), reward, done, info
+
+    def _get_ob(self):
+        assert len(self.frames) == self.k
+        return np.concatenate(self.frames, axis=2)
+
+
 class CartpoleEncoder(Preprocessor):
     def _init(self):
         self.shape = self._obs_space.shape
@@ -83,7 +117,6 @@ class CartpoleEncoder(Preprocessor):
             mean = half * obs[i] / width + half
             means.append(mean)
             std = 1
-#            assert mean >= 0 and mean <= self.elem_size, (mean, i, obs[i])
             elem = [
                 normpdf(j, mean, std) + math.sin(j + mean) #+ random.random()
                 for j in range(self.elem_size)
@@ -93,17 +126,15 @@ class CartpoleEncoder(Preprocessor):
             out = self.sess.run(self.decoder.last_layer, feed_dict={
                 self.obs_ph: [out]
             })[0]
-#        print(obs)
-#        print(means)
-#        print()
-#        print(out)
         return out
 
 
 if __name__ == '__main__':
-#    ModelCatalog.register_custom_preprocessor("my_prep", MakeCartpoleHarder)
-    ModelCatalog.register_custom_preprocessor("encoder", CartpoleEncoder)
+    ModelCatalog.register_custom_preprocessor("encode_pseudoimg", CartpoleEncoder)
     ModelCatalog.register_custom_preprocessor("flatten", Flatten)
+    register_env(
+        "ImageCartPole-v0",
+        lambda config: ImageCartPole(gym.make("CartPole-v0"), 2))
     register_env(
         "BulletCartPole-v0",
         lambda config: bullet_cartpole.BulletCartpole(
@@ -112,34 +143,64 @@ if __name__ == '__main__':
             discrete_actions=True))
 
     ray.init()
-    run_experiments({
-        "test-bullet-cartpole": {
-            "run": "PPO",
-            "env": "BulletCartPole-v0",
-            "repeat": 1,
-            "trial_resources": {
-                "cpu": 1,
-                "extra_cpu": lambda spec: spec.config.num_workers,
-            },
-            "stop": {
-                "episode_reward_mean": 200,
-                "timesteps_total": 500000,
-            },
-            "config": {
-                "num_sgd_iter": 10,
-                "num_workers": 1,
-                "model": {
-                    "custom_preprocessor": "flatten",
-                    "custom_options": {
-                        "seed": 0,
-                        "out_size": grid_search([200]),
-#                         "decode_model": "/home/eric/ray_results/iltrain/il_0_2018-03-23_21-00-01kbtfotn3/weights_51",  # oracle autoencoder
-#                         "decode_model": "/home/eric/ray_results/iltrain/il_0_2018-03-24_15-02-186tp9e4r7/weights_20",  # ivd large dataset
-#                         "decode_model": "/home/eric/ray_results/iltrain/il_0_2018-03-23_21-08-392dnx7np8/weights_20",  # ivd + il
-#                        "decode_model": "/home/eric/ray_results/iltrain/il_0_2018-03-23_20-54-08gju9v3k_/weights_16",  # ivd
-#                        "decode_model": "/home/eric/ray_results/iltrain/il_0_2018-03-23_20-36-57j4yi7nev/weights_39",  # il
+    args = parser.parse_args()
+
+    if args.image:
+        run_experiments({
+            "image-cartpole": {
+                "run": "PPO",
+                "env": "ImageCartPole-v0",
+                "repeat": 1,
+                "trial_resources": {
+                    "cpu": 1,
+                    "extra_cpu": lambda spec: spec.config.num_workers,
+                },
+                "stop": {
+                    "episode_reward_mean": 200,
+                },
+                "config": {
+                    "num_sgd_iter": 10,
+                    "num_workers": 1,
+                    "model": {
+                      "conv_filters": [
+                          [16, [4, 4], 2],
+                          [32, [4, 4], 2],
+                          [512, [11, 11], 1],
+                      ],
                     },
                 },
-            },
-        }
-    })
+            }
+        })
+    else:
+        decode_model = None
+#        decode_model = "/home/eric/ray_results/iltrain/il_0_2018-03-23_21-00-01kbtfotn3/weights_51",  # oracle autoencoder
+#        decode_model = "/home/eric/ray_results/iltrain/il_0_2018-03-24_15-02-186tp9e4r7/weights_20",  # ivd large dataset
+#        decode_model = "/home/eric/ray_results/iltrain/il_0_2018-03-23_21-08-392dnx7np8/weights_20",  # ivd + il
+#        decode_model = "/home/eric/ray_results/iltrain/il_0_2018-03-23_20-54-08gju9v3k_/weights_16",  # ivd
+#        decode_model = "/home/eric/ray_results/iltrain/il_0_2018-03-23_20-36-57j4yi7nev/weights_39",  # il
+        run_experiments({
+            "test-cartpole": {
+                "run": "PPO",
+                "env": "CartPole-v0",
+                "repeat": 1,
+                "trial_resources": {
+                    "cpu": 1,
+                    "extra_cpu": lambda spec: spec.config.num_workers,
+                },
+                "stop": {
+                    "episode_reward_mean": 200,
+                },
+                "config": {
+                    "num_sgd_iter": 10,
+                    "num_workers": 1,
+                    "model": {
+                        "custom_preprocessor": "encode_pseudoimg",
+                        "custom_options": {
+                            "seed": 0,
+                            "out_size": grid_search([200]),
+                            "decode_model": decode_model,
+                        },
+                    },
+                },
+            }
+        })
