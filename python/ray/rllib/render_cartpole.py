@@ -6,6 +6,10 @@ from skimage.draw import line_aa, polygon
 from scipy.misc import imsave
 
 
+k = 0
+if not os.path.exists("/tmp/cartpole"):
+    os.makedirs("/tmp/cartpole")
+
 def render_frame(obs):
     cart_pos = obs[0]
     cart_velocity = obs[1]
@@ -38,6 +42,11 @@ def render_frame(obs):
             error = e
     if error:
         raise error
+
+    global k
+    k += 1
+    k %= 1000
+    imsave("/tmp/cartpole/{}.png".format(k), canvas)
 
     return np.expand_dims(canvas, 2)
 
