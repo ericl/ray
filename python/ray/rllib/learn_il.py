@@ -50,7 +50,7 @@ def train(config, reporter):
     if not autoencoder_loss_enabled:
         autoencoder_in = tf.stop_gradient(autoencoder_in)
     recons_obs = slim.fully_connected(
-        network.last_layer, 4,
+        autoencoder_in, 4,
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="fc_autoencoder_out")
     autoencoder_loss = tf.reduce_mean(tf.square(orig_obs - recons_obs))
