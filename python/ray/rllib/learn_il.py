@@ -76,15 +76,27 @@ def train(config, reporter):
         next_obs = tf.placeholder(tf.float32, [None, out_size])
         network2 = FullyConnectedNetwork(next_obs, 2, config.get("model", {}))
     fused = tf.concat([network.last_layer, network2.last_layer], axis=1)
-    fused2 = slim.fully_connected(
-        fused, 64,
-        weights_initializer=normc_initializer(1.0),
-        activation_fn=tf.nn.relu,
-        scope="inv_dyn_pred1")
+    if image:
+        fused1 = slim.fully_connected(
+            fused, 256,
+            weights_initializer=normc_initializer(1.0),
+            activation_fn=tf.nn.relu,
+            scope="inv_dyn_pred1")
+        fused2 = slim.fully_connected(
+            fused1, 256,
+            weights_initializer=normc_initializer(1.0),
+            activation_fn=tf.nn.relu,
+            scope="inv_dyn_pred2")
+    else:
+        fused2 = slim.fully_connected(
+            fused, 64,
+            weights_initializer=normc_initializer(1.0),
+            activation_fn=tf.nn.relu,
+            scope="inv_dyn_pred1")
     predicted_action = slim.fully_connected(
         fused, 2,
         weights_initializer=normc_initializer(0.01),
-        activation_fn=None, scope="inv_dyn_pred2")
+        activation_fn=None, scope="inv_dyn_pred_out")
     inv_dyn_action_dist = Categorical(predicted_action)
     if inv_dyn_loss_enabled:
         inv_dyn_loss = -tf.reduce_mean(
@@ -226,7 +238,7 @@ def train(config, reporter):
                 "test_inv_dyn_acc": np.exp(-test_inv_dyn_loss),
             })
 
-        if ix % 1 == 0:
+        if ix % 10 == 0:
             fname = "weights_{}".format(ix)
             with open(fname, "wb") as f:
                 f.write(pickle.dumps(vars.get_weights()))
