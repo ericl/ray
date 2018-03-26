@@ -18,6 +18,7 @@ import tensorflow as tf
 import ray
 from ray.experimental.tfutils import TensorFlowVariables
 from ray.rllib.models.fcnet import FullyConnectedNetwork
+from ray.rllib.models.visionnet import VisionNetwork
 from ray.tune import run_experiments, grid_search, register_env
 from ray.rllib.models import ModelCatalog, Model
 from ray.rllib.models.preprocessors import Preprocessor
@@ -29,6 +30,16 @@ from ray.rllib.render_cartpole import render_frame
 parser = argparse.ArgumentParser()
 parser.add_argument("--image", action="store_true")
 parser.add_argument("--decode-model", default=None)
+
+
+def load_image_model(weights_file, obs_ph, sess):
+    model_config = {}
+    network = VisionNetwork(obs_ph, 2, model_config)
+    vars = TensorFlowVariables(network.outputs, sess)
+    sess.run(tf.global_variables_initializer())
+    with open(weights_file, "rb") as f:
+        vars.set_weights(pickle.loads(f.read()))
+    return network
 
 
 def load_model(weights_file, obs_ph, sess):
@@ -96,6 +107,23 @@ class Space(object):
         self.shape = shape
 
 
+class ImageDecoder(Preprocessor):
+    def _init(self):
+        self.decode_model = self._options["custom_options"].get("decode_model")
+        self.sess = tf.Session()
+        self.obs_ph = tf.placeholder(
+            tf.float32, [None] + list(self._obs_space.shape))
+        print("Image decoder input: " + str(self.obs_ph))
+        self.decoder = load_image_model(self.decode_model, self.obs_ph, self.sess)
+        self.shape = (8,)
+
+    def transform(self, obs):
+        out = self.sess.run(self.decoder.last_layer, feed_dict={
+            self.obs_ph: [obs]
+        })[0]
+        return out
+
+
 class Decoder(Preprocessor):
     def _init(self):
         self.decode_model = self._options["custom_options"].get("decode_model")
@@ -152,6 +180,7 @@ if __name__ == '__main__':
     ModelCatalog.register_custom_preprocessor("encode_pseudoimg", CartpoleEncoder)
     ModelCatalog.register_custom_preprocessor("flatten", Flatten)
     ModelCatalog.register_custom_preprocessor("decoder", Decoder)
+    ModelCatalog.register_custom_preprocessor("img_decoder", ImageDecoder)
     register_env(
         "ImageCartPole-v0",
         lambda config: ImageCartPole(gym.make("CartPole-v0"), 2))
@@ -169,7 +198,7 @@ if __name__ == '__main__':
     if args.image:
         if decode_model:
             model_opts = {
-                "custom_preprocessor": "decoder",
+                "custom_preprocessor": "img_decoder",
                 "custom_options": {
                     "decode_model": decode_model,
                 },
