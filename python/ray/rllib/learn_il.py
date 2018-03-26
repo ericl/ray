@@ -28,12 +28,14 @@ from ray.tune import run_experiments, register_trainable, grid_search
 def train(config, reporter):
     k = 2
     data = config["data"]
+    mode = config["mode"]
     image = config.get("image", False)
     out_size = config.get("out_size", 200)
     batch_size = config.get("batch_size", 128)
-    il_loss_enabled = config.get("il_loss", True)
-    autoencoder_loss_enabled = config.get("autoencoder_loss", False)
-    inv_dyn_loss_enabled = config.get("inv_dynamics_loss", False)
+    il_loss_enabled = mode == "il"
+    autoencoder_loss_enabled = mode == "oracle"
+    inv_dyn_loss_enabled = mode == "ivd"
+    assert il_loss_enabled or autoencoder_loss_enabled or inv_dyn_loss_enabled
 
     # Set up decoder network
     if image:
@@ -235,6 +237,7 @@ if __name__ == '__main__':
                 "config": {
                     "data": os.path.expanduser("~/Desktop/cartpole-expert.json"),
                     "image": True,
+                    "mode": grid_search(["il", "ivd", "oracle"]),
                     "model": {
                         "conv_filters": [
                             [16, [4, 4], 2],
@@ -242,9 +245,6 @@ if __name__ == '__main__':
                             [512, [11, 11], 1],
                         ],
                     },
-                    "il_loss": False,
-                    "autoencoder_loss": False,
-                    "inv_dynamics_loss": True,
                 },
             }
         })
@@ -254,13 +254,11 @@ if __name__ == '__main__':
                 "run": "il",
                 "config": {
                     "data": os.path.expanduser("~/Desktop/cartpole-expert.json"),
+                    "mode": grid_search(["il", "ivd", "oracle"]),
                     "model": {
                         "fcnet_activation": "relu",
                         "fcnet_hiddens": [256, 8],
                     },
-                    "il_loss": False,
-                    "autoencoder_loss": False,
-                    "inv_dynamics_loss": True,
                 },
             }
         })
