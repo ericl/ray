@@ -24,7 +24,7 @@ def render_frame(obs):
     canvas[:, w-1] = 100
     xpos = cart_pos / 2.5 * w/2 + w/2
     c = 5  # cart width
-    xpos = np.clip(xpos, 5, w-5)
+    xpos = np.clip(xpos, 7, w-7)
     left_aa_value = int((1 - xpos % 1) * 255)
     right_aa_value = int(xpos % 1 * 255)
 #    print(xpos, xpos % 1, left_aa_value, right_aa_value)
