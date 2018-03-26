@@ -68,7 +68,7 @@ class ImageCartPole(gym.Wrapper):
         gym.Wrapper.__init__(self, env)
         self.k = k
         self.frames = deque([], maxlen=k)
-        shp = (42, 42, 1)
+        shp = (80, 80, 1)
         self.observation_space = spaces.Box(
             low=0, high=255, shape=(shp[0], shp[1], shp[2] * k))
 
@@ -163,13 +163,6 @@ if __name__ == '__main__':
                     "devices": ["/gpu:1"],
                     "num_sgd_iter": 10,
                     "num_workers": 1,
-                    "model": {
-                      "conv_filters": [
-                          [16, [4, 4], 2],
-                          [32, [4, 4], 2],
-                          [512, [11, 11], 1],
-                      ],
-                    },
                 },
             }
         })

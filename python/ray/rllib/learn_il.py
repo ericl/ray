@@ -39,7 +39,7 @@ def train(config, reporter):
 
     # Set up decoder network
     if image:
-        observations = tf.placeholder(tf.float32, [None, 42, 42, k])
+        observations = tf.placeholder(tf.float32, [None, 80, 80, k])
         network = VisionNetwork(observations, 2, config.get("model", {}))
     else:
         observations = tf.placeholder(tf.float32, [None, out_size])
@@ -70,7 +70,7 @@ def train(config, reporter):
     # Set up inverse dynamics loss
     tf.get_variable_scope()._reuse = tf.AUTO_REUSE
     if image:
-        next_obs = tf.placeholder(tf.float32, [None, 42, 42, k])
+        next_obs = tf.placeholder(tf.float32, [None, 80, 80, k])
         network2 = VisionNetwork(next_obs, 2, config.get("model", {}))
     else:
         next_obs = tf.placeholder(tf.float32, [None, out_size])
@@ -257,13 +257,6 @@ if __name__ == '__main__':
                     "data": os.path.expanduser("~/Desktop/cartpole-expert.json"),
                     "image": True,
                     "mode": grid_search(["il", "ivd", "oracle"]),
-                    "model": {
-                        "conv_filters": [
-                            [16, [4, 4], 2],
-                            [32, [4, 4], 2],
-                            [512, [11, 11], 1],
-                        ],
-                    },
                 },
             }
         })

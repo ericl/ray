@@ -15,26 +15,44 @@ def render_frame(obs):
     cart_velocity = obs[1]
     pole_angle = obs[2]
     angle_velocity = obs[3]
-    canvas = np.zeros((42, 42), dtype=np.uint8)
+    w = 80  # screen width
+    canvas = np.zeros((w, w), dtype=np.uint8)
 
     canvas[0, :] = 100
     canvas[:, 0] = 100
-    canvas[41, :] = 100
-    canvas[:, 41] = 100
-    xpos = int(cart_pos * 21 + 21)
-    xpos = np.clip(xpos, 0 + 5, 41 - 5)
+    canvas[w-1, :] = 100
+    canvas[:, w-1] = 100
+    xpos = cart_pos / 2.4 * w/2 + w/2
+    c = 5  # cart width
+    assert xpos >= 0 and xpos < w, xpos
+    left_aa_value = int((1 - xpos % 1) * 255)
+    right_aa_value = int(xpos % 1 * 255)
+#    print(xpos, xpos % 1, left_aa_value, right_aa_value)
+    xpos = int(np.ceil(xpos))
+
+    # draw antialiased border
+    c2 = 6  # wider by a little for antialiasing
     rr, cc = polygon(
-        (xpos - 5, xpos + 5, xpos + 5, xpos - 5),
-        (35, 35, 40, 40))
+        (xpos - c2, xpos, xpos, xpos - c2),
+        (w-10, w-10, w-5, w-5))
+    canvas[cc, rr] = left_aa_value
+    rr, cc = polygon(
+        (xpos, xpos + c2, xpos + c2, xpos),
+        (w-10, w-10, w-5, w-5))
+    canvas[cc, rr] = right_aa_value
+
+    rr, cc = polygon(
+        (xpos - c, xpos + c, xpos + c, xpos - c),
+        (w-10, w-10, w-5, w-5))
     canvas[cc, rr] = 255
 
     error = None
-    for pole_length in [30, 20, 10, 5, 0]:
+    for pole_length in [60, 30, 20, 10, 5, 0]:
         try:
             top_x = xpos + int(pole_length * np.sin(pole_angle))
-            top_y = 34 - int(pole_length * np.cos(pole_angle))
+            top_y = w-10 - int(pole_length * np.cos(pole_angle))
             rr, cc, val = line_aa(
-                top_x, top_y, xpos, 34)
+                top_x, top_y, xpos, w-10)
             canvas[cc, rr] = val * 255
             error = None
             break
@@ -53,11 +71,15 @@ def render_frame(obs):
 
 if __name__ == '__main__':
     lines = []
-    for line in open(os.path.expanduser("~/Desktop/cartpole-random.json")).readlines():
+    for line in open(os.path.expanduser("~/Desktop/cartpole-expert.json")).readlines():
         lines.append(json.loads(line))
         if len(lines) > 1000:
             break
 
+    prev = None
     for k, line in enumerate(lines):
         canvas = render_frame(line["obs"]).squeeze()
+        if prev == canvas.tolist():
+            print("WARNING, similar obs", k)
+        prev = canvas.tolist()
         imsave(os.path.expanduser("~/Desktop/render/{}.png").format(k), canvas)
