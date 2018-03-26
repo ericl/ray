@@ -22,27 +22,26 @@ def render_frame(obs):
     canvas[:, 0] = 100
     canvas[w-1, :] = 100
     canvas[:, w-1] = 100
-    xpos = cart_pos / 2.5 * w/2 + w/2
+    xpos = cart_pos / 2.4 * w/2 + w/2
     c = 5  # cart width
-    xpos = np.clip(xpos, 7, w-7)
     left_aa_value = int((1 - xpos % 1) * 255)
     right_aa_value = int(xpos % 1 * 255)
 #    print(xpos, xpos % 1, left_aa_value, right_aa_value)
-    xpos = int(np.ceil(xpos))
+    xpos = int(np.clip(np.ceil(xpos), 0, w-1))
 
     # draw antialiased border
     c2 = 6  # wider by a little for antialiasing
     rr, cc = polygon(
-        (xpos - c2, xpos, xpos, xpos - c2),
+        (max(0, xpos - c2), xpos, xpos, max(0, xpos - c2)),
         (w-10, w-10, w-5, w-5))
     canvas[cc, rr] = left_aa_value
     rr, cc = polygon(
-        (xpos, xpos + c2, xpos + c2, xpos),
+        (xpos, min(w-1, xpos + c2), min(w-1, xpos + c2), xpos),
         (w-10, w-10, w-5, w-5))
     canvas[cc, rr] = right_aa_value
 
     rr, cc = polygon(
-        (xpos - c, xpos + c, xpos + c, xpos - c),
+        (max(0, xpos - c), min(w-1, xpos + c), min(w-1, xpos + c), max(0, xpos - c)),
         (w-10, w-10, w-5, w-5))
     canvas[cc, rr] = 255
 
