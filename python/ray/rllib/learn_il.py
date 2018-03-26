@@ -16,23 +16,28 @@ import ray
 from ray.experimental.tfutils import TensorFlowVariables
 from ray.rllib.models.action_dist import Categorical
 from ray.rllib.models.fcnet import FullyConnectedNetwork
-from ray.rllib.cartpole import CartpoleEncoder
+from ray.rllib.models.visionnet import VisionNetwork
+from ray.rllib.cartpole import CartpoleEncoder, parser
 from ray.rllib.models.misc import normc_initializer
 from ray.tune import run_experiments, register_trainable, grid_search
 
-PATH = os.path.expanduser("~/Desktop/cartpole-expert.json")
-
 
 def train(config, reporter):
-    N = config.get("N", 500)
-    BATCH_SIZE = config.get("batch_size", 128)
+    data = config["data"]
+    image = config.get("image", False)
+    out_size = config.get("out_size", 200)
+    batch_size = config.get("batch_size", 128)
     il_loss_enabled = config.get("il_loss", True)
     autoencoder_loss_enabled = config.get("autoencoder_loss", False)
     inv_dyn_loss_enabled = config.get("inv_dynamics_loss", False)
 
     # Set up decoder network
-    observations = tf.placeholder(tf.float32, [None, N + 4])
-    network = FullyConnectedNetwork(observations, 2, config.get("model", {}))
+    if image:
+        observations = tf.placeholder(tf.float32, [None, 42, 42, 2])
+        network = VisionNetwork(observations, 2, config.get("model", {}))
+    else:
+        observations = tf.placeholder(tf.float32, [None, out_size])
+        network = FullyConnectedNetwork(observations, 2, config.get("model", {}))
 
     # Set up IL loss
     expert_actions = tf.placeholder(tf.int32, [None])
@@ -58,8 +63,12 @@ def train(config, reporter):
 
     # Set up inverse dynamics loss
     tf.get_variable_scope()._reuse = tf.AUTO_REUSE
-    next_obs = tf.placeholder(tf.float32, [None, N + 4])
-    network2 = FullyConnectedNetwork(next_obs, 2, config.get("model", {}))
+    if image:
+        next_obs = tf.placeholder(tf.float32, [None, 42, 42, 2])
+        network2 = VisionNetwork(next_obs, 2, config.get("model", {}))
+    else:
+        next_obs = tf.placeholder(tf.float32, [None, out_size])
+        network2 = FullyConnectedNetwork(next_obs, 2, config.get("model", {}))
     fused = tf.concat([network.last_layer, network2.last_layer], axis=1)
     fused2 = slim.fully_connected(
         fused, 64,
@@ -90,20 +99,13 @@ def train(config, reporter):
             "out_size": 200,
         },
     })
-#        "custom_options": {
-#            "seed": 0,
-#            "noise_size": N,
-#            "matrix_size": N,
-#            "invert": False,
-#        },
-#    })
 
     sess = tf.Session()
     sess.run(tf.global_variables_initializer())
 
     vars = TensorFlowVariables(summed_loss, sess)
 
-    data = [json.loads(x) for x in open(PATH).readlines()]
+    data = [json.loads(x) for x in open(data).readlines()]
     print("preprocessing data")
     for t in data:
         t["encoded_obs"] = preprocessor.transform(t["obs"])
@@ -123,8 +125,8 @@ def train(config, reporter):
         auto_losses = []
         inv_dyn_losses = []
         errors = [[], [], [], []]
-        for _ in range(len(data) // BATCH_SIZE):
-            batch = np.random.choice(data, BATCH_SIZE)
+        for _ in range(len(data) // batch_size):
+            batch = np.random.choice(data, batch_size)
             x, cur_inv_dyn_loss, cur_il_loss, cur_auto_loss, _ = sess.run(
                 [recons_obs, inv_dyn_loss, il_loss, autoencoder_loss, train_op],
                 feed_dict={
@@ -197,20 +199,43 @@ def train(config, reporter):
                 print("Saved weights to " + fname)
 
 
-ray.init()
-register_trainable("il", train)
-run_experiments({
-    "iltrain": {
-        "run": "il",
-        "config": {
-            "N": 200 - 4,
-            "model": {
-                "fcnet_activation": "relu",
-                "fcnet_hiddens": [256, 8],
-            },
-            "il_loss": False,
-            "autoencoder_loss": False,
-            "inv_dynamics_loss": True,
-        },
-    }
-})
+if __name__ == '__main__':
+    args = parser.parse_args()
+    ray.init()
+    register_trainable("il", train)
+    if args.image:
+        run_experiments({
+            "iltrain_image": {
+                "run": "il",
+                "config": {
+                    "data": os.path.expanduser("~/Desktop/cartpole-small.json"),
+                    "image": True,
+                    "model": {
+                        "conv_filters": [
+                            [16, [4, 4], 2],
+                            [32, [4, 4], 2],
+                            [512, [11, 11], 1],
+                        ],
+                    },
+                    "il_loss": False,
+                    "autoencoder_loss": False,
+                    "inv_dynamics_loss": True,
+                },
+            }
+        })
+    else:
+        run_experiments({
+            "iltrain": {
+                "run": "il",
+                "config": {
+                    "data": os.path.expanduser("~/Desktop/cartpole-expert.json"),
+                    "model": {
+                        "fcnet_activation": "relu",
+                        "fcnet_hiddens": [256, 8],
+                    },
+                    "il_loss": False,
+                    "autoencoder_loss": False,
+                    "inv_dynamics_loss": True,
+                },
+            }
+        })

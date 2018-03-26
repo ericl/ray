@@ -153,12 +153,14 @@ if __name__ == '__main__':
                 "repeat": 1,
                 "trial_resources": {
                     "cpu": 1,
+                    "gpu": 1,
                     "extra_cpu": lambda spec: spec.config.num_workers,
                 },
                 "stop": {
                     "episode_reward_mean": 200,
                 },
                 "config": {
+                    "devices": ["/gpu:1"],
                     "num_sgd_iter": 10,
                     "num_workers": 1,
                     "model": {

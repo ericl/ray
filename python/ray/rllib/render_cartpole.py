@@ -18,9 +18,9 @@ def render_frame(obs):
     canvas[41, :] = 100
     canvas[:, 41] = 100
     xpos = int(cart_pos * 21 + 21)
+    xpos = np.clip(xpos, 0 + 5, 41 - 5)
     rr, cc = polygon(
-        (max(xpos - 5, 0), min(xpos + 5, 41),
-         min(xpos + 5, 41), max(xpos - 5, 0)),
+        (xpos - 5, xpos + 5, xpos + 5, xpos - 5),
         (35, 35, 40, 40))
     canvas[cc, rr] = 255
 
