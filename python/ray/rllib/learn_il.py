@@ -145,7 +145,7 @@ def train(config, reporter):
     print("test batch size", len(test_batch))
 
     print("start training")
-    for i in range(1000):
+    for ix in range(1000):
         il_losses = []
         auto_losses = []
         inv_dyn_losses = []
@@ -197,7 +197,7 @@ def train(config, reporter):
             rewards.append(reward)
 
         reporter(
-            timesteps_total=i, mean_loss=np.mean(il_losses) + auto_loss + ivd_loss, info={
+            timesteps_total=ix, mean_loss=np.mean(il_losses) + auto_loss + ivd_loss, info={
                 "decoder_reconstruction_error": {
                     "cart_pos": errors[0] / means[0],
                     "cart_velocity": errors[1] / means[1],
@@ -217,7 +217,7 @@ def train(config, reporter):
                 "test_inv_dyn_acc": np.exp(-test_inv_dyn_loss),
             })
 
-        if i % 1 == 0:
+        if ix % 1 == 0:
             fname = "weights_{}".format(i)
             with open(fname, "wb") as f:
                 f.write(pickle.dumps(vars.get_weights()))
