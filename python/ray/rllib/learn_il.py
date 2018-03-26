@@ -26,7 +26,7 @@ from ray.tune import run_experiments, register_trainable, grid_search
 
 
 def train(config, reporter):
-    k = 2
+    k = 4
     data = config["data"]
     mode = config["mode"]
     image = config.get("image", False)
@@ -125,7 +125,7 @@ def train(config, reporter):
     data = [json.loads(x) for x in open(data).readlines()]
     print("preprocessing data")
     if args.image:
-        frames = deque([], maxlen=2)
+        frames = deque([], maxlen=k)
         data_out = []
         for t in data:
             ok = len(frames) >= k
