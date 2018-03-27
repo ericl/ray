@@ -58,6 +58,9 @@ def render_frame(obs, env_config):
             rr, cc, val = line_aa(
                 top_x, top_y, xpos, w-10)
             canvas[cc, rr] = val * 255
+            rr, cc, val = line_aa(
+                top_x+1, top_y, xpos+1, w-10)
+            canvas[cc, rr] = val * 255
             error = None
             break
         except Exception as e:
