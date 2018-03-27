@@ -30,6 +30,7 @@ from ray.rllib.render_cartpole import render_frame
 parser = argparse.ArgumentParser()
 parser.add_argument("--image", action="store_true")
 parser.add_argument("--decode-model", default=None)
+parser.add_argument("--experiment", default="cartpole-decode")
 parser.add_argument("--dataset", default=None)
 
 
@@ -207,7 +208,7 @@ if __name__ == '__main__':
         else:
             model_opts = {}
         run_experiments({
-            "image-cartpole": {
+            args.experiment: {
                 "run": "PPO",
                 "env": "ImageCartPole-v0",
                 "repeat": 1,
@@ -229,7 +230,7 @@ if __name__ == '__main__':
         })
     else:
         run_experiments({
-            "test-cartpole": {
+            args.experiment: {
                 "run": "PPO",
                 "env": "CartPole-v0",
                 "repeat": 1,
