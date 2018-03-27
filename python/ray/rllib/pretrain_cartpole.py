@@ -167,11 +167,11 @@ def train(config, reporter):
     random.seed(0)
     random.shuffle(data)
     split_point = max(len(data) - 5000, int(len(data) * 0.9))
-    test_batch = data[split_point:]
+    test_data = data[split_point:]
     data = data[:split_point]
-    means = [np.mean([abs(d["obs"][j]) for d in test_batch]) for j in range(4)]
+    means = [np.mean([abs(d["obs"][j]) for d in test_data]) for j in range(4)]
     print("train batch size", len(data))
-    print("test batch size", len(test_batch))
+    print("test batch size", len(test_data))
 
     print("start training")
     for ix in range(1000):
@@ -181,38 +181,49 @@ def train(config, reporter):
         errors = [[], [], [], []]
         for _ in range(len(data) // batch_size):
             batch = np.random.choice(data, batch_size)
-            x, cur_inv_dyn_loss, cur_il_loss, cur_auto_loss, _ = sess.run(
-                [recons_obs, inv_dyn_loss, il_loss, autoencoder_loss, train_op],
+            cur_inv_dyn_loss, cur_il_loss, cur_auto_loss, _ = sess.run(
+                [inv_dyn_loss, il_loss, autoencoder_loss, train_op],
                 feed_dict={
                     observations: [t["encoded_obs"] for t in batch],
                     expert_actions: [t["action"] for t in batch],
                     orig_obs: [t["obs"] for t in batch],
                     next_obs: [t["encoded_next_obs"] for t in batch],
                 })
-            for i in range(len(batch)):
-                obs = batch[i]["obs"]
-                pred_obs = x[i]
-                for j in range(4):
-                    errors[j].append(abs(obs[j] - pred_obs[j]))
             il_losses.append(cur_il_loss)
             auto_losses.append(cur_auto_loss)
             inv_dyn_losses.append(cur_inv_dyn_loss)
-        for j in range(4):
-            errors[j] = np.mean(errors[j])
 
         print("testing")
-        test_inv_dyn_loss, test_il_loss, test_auto_loss = sess.run(
-            [inv_dyn_loss, il_loss, autoencoder_loss],
-            feed_dict={
-                observations: [t["encoded_obs"] for t in test_batch],
-                expert_actions: [t["action"] for t in test_batch],
-                orig_obs: [t["obs"] for t in test_batch],
-                next_obs: [t["encoded_next_obs"] for t in test_batch],
-            })
+        test_inv_dyn_losses = []
+        test_il_losses = []
+        test_auto_losses = []
+        for _ in range(len(test_data) // batch_size):
+            test_batch = np.random.choice(test_data, batch_size)
+            x, test_inv_dyn_loss, test_il_loss, test_auto_loss = sess.run(
+                [recons_obs, inv_dyn_loss, il_loss, autoencoder_loss],
+                feed_dict={
+                    observations: [t["encoded_obs"] for t in test_batch],
+                    expert_actions: [t["action"] for t in test_batch],
+                    orig_obs: [t["obs"] for t in test_batch],
+                    next_obs: [t["encoded_next_obs"] for t in test_batch],
+                })
+            test_inv_dyn_losses.append(test_inv_dyn_loss)
+            test_il_losses.append(test_il_loss)
+            test_auto_losses.append(test_auto_loss)
+            for i in range(len(test_batch)):
+                obs = test_batch[i]["obs"]
+                pred_obs = x[i]
+                for j in range(4):
+                    errors[j].append(abs(obs[j] - pred_obs[j]))
+        for j in range(4):
+            errors[j] = np.mean(errors[j])
         acc = np.mean([np.exp(-l) for l in il_losses])
         auto_loss = np.mean(auto_losses)
         ivd_acc = np.mean([np.exp(-l) for l in inv_dyn_losses])
         ivd_loss = np.mean(inv_dyn_losses)
+        test_inv_dyn_loss = np.mean(test_inv_dyn_losses)
+        test_il_loss = np.mean(test_il_losses)
+        test_auto_loss = np.mean(test_auto_losses)
 
         # Evaluate IL performance
         rewards = []
