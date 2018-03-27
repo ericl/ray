@@ -163,7 +163,7 @@ def train(config, reporter):
             t["encoded_next_obs"] = preprocessor.transform(t["new_obs"])
     random.seed(0)
     random.shuffle(data)
-    split_point = int(len(data) * 0.9)
+    split_point = max(len(data) - 5000, int(len(data) * 0.9))
     test_batch = data[split_point:]
     data = data[:split_point]
     means = [np.mean([abs(d["obs"][j]) for d in test_batch]) for j in range(4)]
@@ -197,6 +197,7 @@ def train(config, reporter):
         for j in range(4):
             errors[j] = np.mean(errors[j])
 
+        print("testing")
         test_inv_dyn_loss, test_il_loss, test_auto_loss = sess.run(
             [inv_dyn_loss, il_loss, autoencoder_loss],
             feed_dict={
@@ -243,7 +244,7 @@ def train(config, reporter):
                 "test_inv_dyn_acc": np.exp(-test_inv_dyn_loss),
             })
 
-        if ix % 10 == 0:
+        if ix % 1 == 0:
             fname = "weights_{}".format(ix)
             with open(fname, "wb") as f:
                 f.write(pickle.dumps(vars.get_weights()))
