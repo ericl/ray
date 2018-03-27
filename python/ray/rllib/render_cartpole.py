@@ -63,7 +63,7 @@ def render_frame(obs):
     global k
     k += 1
     k %= 1000
-    imsave("/tmp/cartpole/{}.png".format(k), canvas)
+#    imsave("/tmp/cartpole/{}.png".format(k), canvas)
 
     return np.expand_dims(canvas, 2)
 

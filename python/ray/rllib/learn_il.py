@@ -156,6 +156,8 @@ def train(config, reporter):
                 data_out.append(t)
             if t["done"]:
                 frames.clear()
+            if len(data_out) % 1000 == 0:
+                print("Loaded frames", len(data_out))
         data = data_out
     else:
         for t in data:
