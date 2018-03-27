@@ -76,9 +76,9 @@ if __name__ == '__main__':
             break
 
     prev = None
-    for k, line in enumerate(lines):
+    for i, line in enumerate(lines):
         canvas = render_frame(line["obs"]).squeeze()
         if prev == canvas.tolist():
-            print("WARNING, similar obs", k)
+            print("WARNING, similar obs", i)
         prev = canvas.tolist()
         imsave(os.path.expanduser("~/Desktop/render/{}.png").format(k), canvas)

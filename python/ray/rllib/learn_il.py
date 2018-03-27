@@ -255,10 +255,10 @@ if __name__ == '__main__':
     register_trainable("il", train)
     if args.image:
         run_experiments({
-            "iltrain_image": {
+            "iltrain_image2": {
                 "run": "il",
                 "config": {
-                    "data": os.path.expanduser("~/Desktop/cartpole-expert.json"),
+                    "data": os.path.expanduser("~/Desktop/cartpole-expert-large.json"),
                     "image": True,
                     "mode": grid_search(["il", "ivd", "oracle"]),
                 },
@@ -269,7 +269,7 @@ if __name__ == '__main__':
             "iltrain": {
                 "run": "il",
                 "config": {
-                    "data": os.path.expanduser("~/Desktop/cartpole-expert.json"),
+                    "data": os.path.expanduser("~/Desktop/cartpole-expert-large.json"),
                     "mode": grid_search(["il", "ivd", "oracle"]),
                     "model": {
                         "fcnet_activation": "relu",
