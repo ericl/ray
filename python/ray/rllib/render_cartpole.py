@@ -34,6 +34,11 @@ def render_frame(obs, env_config):
 #    print(xpos, xpos % 1, left_aa_value, right_aa_value)
     xpos = int(np.clip(np.ceil(xpos), 0, w-1))
 
+    rr, cc = polygon(
+        (0, w, w, 0),
+        (w-12, w-12, w, w))
+    canvas[cc, rr] = 0
+
     # draw antialiased border
     c2 = 6  # wider by a little for antialiasing
     rr, cc = polygon(
