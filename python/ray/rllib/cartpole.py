@@ -30,6 +30,7 @@ from ray.rllib.render_cartpole import render_frame
 parser = argparse.ArgumentParser()
 parser.add_argument("--image", action="store_true")
 parser.add_argument("--decode-model", default=None)
+parser.add_argument("--background", default="zeros")
 parser.add_argument("--experiment", default="cartpole-decode")
 parser.add_argument("--dataset", default=None)
 
@@ -78,9 +79,10 @@ class Flatten(Preprocessor):
 
 
 class ImageCartPole(gym.Wrapper):
-    def __init__(self, env, k):
+    def __init__(self, env, k, env_config):
         """Stack k last frames."""
         gym.Wrapper.__init__(self, env)
+        self.env_config = env_config
         self.k = k
         self.frames = deque([], maxlen=k)
         shp = (80, 80, 1)
@@ -88,14 +90,14 @@ class ImageCartPole(gym.Wrapper):
             low=0, high=255, shape=(shp[0], shp[1], shp[2] * k))
 
     def reset(self):
-        ob = render_frame(self.env.reset())
+        ob = render_frame(self.env.reset(), self.env_config)
         for _ in range(self.k):
             self.frames.append(ob)
         return self._get_ob()
 
     def step(self, action):
         ob, reward, done, info = self.env.step(action)
-        ob = render_frame(ob)
+        ob = render_frame(ob, self.env_config)
         self.frames.append(ob)
         return self._get_ob(), reward, done, info
 
@@ -185,7 +187,7 @@ if __name__ == '__main__':
     ModelCatalog.register_custom_preprocessor("img_decoder", ImageDecoder)
     register_env(
         "ImageCartPole-v0",
-        lambda config: ImageCartPole(gym.make("CartPole-v0"), 4))
+        lambda env_config: ImageCartPole(gym.make("CartPole-v0"), 4, env_config))
 #    register_env(
 #        "BulletCartPole-v0",
 #        lambda config: bullet_cartpole.BulletCartpole(
@@ -221,6 +223,9 @@ if __name__ == '__main__':
                     "episode_reward_mean": 200,
                 },
                 "config": {
+                    "env_config": {
+                        "background": args.background,
+                    },
                     "devices": ["/gpu:0"],
                     "num_sgd_iter": 10,
                     "num_workers": 7,

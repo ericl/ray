@@ -10,13 +10,18 @@ k = 0
 if not os.path.exists("/tmp/cartpole"):
     os.makedirs("/tmp/cartpole")
 
-def render_frame(obs):
+def render_frame(obs, env_config):
     cart_pos = obs[0]
     cart_velocity = obs[1]
     pole_angle = obs[2]
     angle_velocity = obs[3]
     w = 80  # screen width
-    canvas = np.zeros((w, w), dtype=np.uint8)
+    if env_config["background"] == "noise":
+        canvas = np.random.randint(255, size=(w, w), dtype=np.uint8)
+    elif env_config["background"] == "zeros":
+        canvas = np.zeros((w, w), dtype=np.uint8)
+    else:
+        assert False, env_config
 
     canvas[0, :] = 100
     canvas[:, 0] = 100

@@ -47,6 +47,7 @@ def train(config, reporter):
     h_size = 8
     data = config["data"]
     mode = config["mode"]
+    env_config = config["env_config"]
     image = config.get("image", False)
     out_size = config.get("out_size", 200)
     batch_size = config.get("batch_size", 128)
@@ -116,7 +117,7 @@ def train(config, reporter):
 
     env = gym.make("CartPole-v0")
     if args.image:
-        env = ImageCartPole(env, k)
+        env = ImageCartPole(env, k, env_config)
         preprocessor = NoPreprocessor(env.observation_space, {})
     else:
         preprocessor = CartpoleEncoder(env.observation_space, {
@@ -262,6 +263,9 @@ if __name__ == '__main__':
             "iltrain_image2": {
                 "run": "il",
                 "config": {
+                    "env_config": {
+                        "background": args.background,
+                    },
                     "data": os.path.expanduser(args.dataset),
                     "image": True,
                     "mode": grid_search(["il", "ivd", "oracle"]),
