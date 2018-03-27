@@ -17,7 +17,7 @@ def render_frame(obs, env_config):
     angle_velocity = obs[3]
     w = 80  # screen width
     if env_config["background"] == "noise":
-        canvas = np.random.randint(255, size=(w, w), dtype=np.uint8)
+        canvas = np.random.randint(200, size=(w, w), dtype=np.uint8)
     elif env_config["background"] == "zeros":
         canvas = np.zeros((w, w), dtype=np.uint8)
     else:
@@ -58,9 +58,6 @@ def render_frame(obs, env_config):
             rr, cc, val = line_aa(
                 top_x, top_y, xpos, w-10)
             canvas[cc, rr] = val * 255
-            rr, cc, val = line_aa(
-                top_x+1, top_y, xpos+1, w-10)
-            canvas[cc, rr] = val * 255
             error = None
             break
         except Exception as e:
@@ -78,7 +75,7 @@ def render_frame(obs, env_config):
 
 if __name__ == '__main__':
     lines = []
-    for line in open(os.path.expanduser("~/Desktop/cartpole-expert.json")).readlines():
+    for line in open(os.path.expanduser("~/Desktop/cartpole-random.json")).readlines():
         lines.append(json.loads(line))
         if len(lines) > 1000:
             break
