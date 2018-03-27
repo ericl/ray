@@ -41,8 +41,8 @@ def render_frame(obs, env_config):
     elif env_config["background"] in ["fixed", "fixed_noisy"]:
         angle_multiple = 3
         xpos = w/2
-        xs = int(np.clip(0, cart_pos / 2.4 * 160 + 160, 4*200 - 80 - 1))
-        xw = int(np.clip(0, cart_pos / 2.4 * 760 + 760, 16*200 - 80 - 1))
+        xs = int(np.clip(cart_pos / 2.4 * 160 + 160, 0, 2*200 - 80 - 1))
+        xw = int(np.clip(cart_pos / 2.4 * 760 + 760, 0, 8*200 - 80 - 1))
         canvas = np.copy(BACKGROUND[:, xs:xs+80]).astype(np.float64)
         wide = np.copy(BACKGROUND_4XWIDE[:, xw:xw+80]).astype(np.float64)
         canvas[0:10,:] = wide[0:10,:]
@@ -112,6 +112,11 @@ if __name__ == '__main__':
         lines.append(json.loads(line))
         if len(lines) > 1000:
             break
+
+    for bg in ["zeros", "fixed", "fixed_noisy", "noise"]:
+        print("testing", bg)
+        for _ in range(10):
+            render_frame([random.random() * 3] * 4, {"background": bg})
 
     prev = None
     ct = 0
