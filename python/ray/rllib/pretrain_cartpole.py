@@ -148,10 +148,10 @@ def train(config, reporter):
         for t in data:
             ok = len(frames) >= k
             if len(frames) == 0:
-                frames.append(render_frame(t["obs"]))
+                frames.append(render_frame(t["obs"], config["env_config"]))
             if ok:
                 t["encoded_obs"] = np.concatenate(frames, axis=2)
-            frames.append(render_frame(t["new_obs"]))
+            frames.append(render_frame(t["new_obs"], config["env_config"]))
             if ok:
                 t["encoded_next_obs"] = np.concatenate(frames, axis=2)
                 data_out.append(t)
@@ -257,11 +257,11 @@ def train(config, reporter):
 if __name__ == '__main__':
     args = parser.parse_args()
     ray.init()
-    register_trainable("il", train)
+    register_trainable("pretrain", train)
     if args.image:
         run_experiments({
-            "iltrain_image2": {
-                "run": "il",
+            "pretrain_{}".format(args.experiment): {
+                "run": "pretrain",
                 "config": {
                     "env_config": {
                         "background": args.background,
@@ -274,8 +274,8 @@ if __name__ == '__main__':
         })
     else:
         run_experiments({
-            "iltrain": {
-                "run": "il",
+            "pretrain_{}".format(args.experiment): {
+                "run": "pretrain",
                 "config": {
                     "data": os.path.expanduser(args.dataset),
                     "mode": grid_search(["il", "ivd", "oracle"]),

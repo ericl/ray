@@ -82,7 +82,7 @@ if __name__ == '__main__':
 
     prev = None
     for i, line in enumerate(lines):
-        canvas = render_frame(line["obs"]).squeeze()
+        canvas = render_frame(line["obs"], {"background": "noise"}).squeeze()
         if prev == canvas.tolist():
             print("WARNING, similar obs", i)
         prev = canvas.tolist()
