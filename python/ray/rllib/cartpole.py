@@ -196,7 +196,7 @@ if __name__ == '__main__':
     ray.init()
     args = parser.parse_args()
 
-    decode_model = os.path.expanduser(args.decode_model)
+    decode_model = args.decode_model and os.path.expanduser(args.decode_model)
     if args.image:
         if decode_model:
             model_opts = {
@@ -223,7 +223,7 @@ if __name__ == '__main__':
                 "config": {
                     "devices": ["/gpu:0"],
                     "num_sgd_iter": 10,
-                    "num_workers": 1,
+                    "num_workers": 7,
                     "model": model_opts,
                 },
             }
