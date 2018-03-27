@@ -25,8 +25,26 @@ from ray.rllib.render_cartpole import render_frame
 from ray.tune import run_experiments, register_trainable, grid_search
 
 
+def make_net(inputs, h_size, image, config):
+    if image:
+        network = VisionNetwork(inputs, h_size, config.get("model", {}))
+        feature_layer = network.outputs
+        action_layer = slim.fully_connected(
+            feature_layer, 2,
+            weights_initializer=normc_initializer(0.01),
+            activation_fn=None, scope="action_layer_out")
+    else:
+        network = FullyConnectedNetwork(inputs, 2, config.get("model", {}))
+        feature_layer = network.last_layer
+        action_layer = network.outputs
+    assert feature_layer.shape[1:] == (h_size,), feature_layer
+    assert action_layer.shape[1:] == (2,), action_layer
+    return feature_layer, action_layer
+
+
 def train(config, reporter):
     k = 4
+    h_size = 8
     data = config["data"]
     mode = config["mode"]
     image = config.get("image", False)
@@ -40,14 +58,13 @@ def train(config, reporter):
     # Set up decoder network
     if image:
         observations = tf.placeholder(tf.float32, [None, 80, 80, k])
-        network = VisionNetwork(observations, 2, config.get("model", {}))
     else:
         observations = tf.placeholder(tf.float32, [None, out_size])
-        network = FullyConnectedNetwork(observations, 2, config.get("model", {}))
+    feature_layer, action_layer = make_net(observations, h_size, image, config)
 
     # Set up IL loss
     expert_actions = tf.placeholder(tf.int32, [None])
-    action_dist = Categorical(network.outputs)
+    action_dist = Categorical(action_layer)
     if il_loss_enabled:
         il_loss = -tf.reduce_mean(action_dist.logp(expert_actions))
     else:
@@ -57,7 +74,7 @@ def train(config, reporter):
 
     # Set up autoencoder loss
     orig_obs = tf.placeholder(tf.float32, [None, 4])
-    autoencoder_in = network.last_layer
+    autoencoder_in = feature_layer
     if not autoencoder_loss_enabled:
         autoencoder_in = tf.stop_gradient(autoencoder_in)
     recons_obs = slim.fully_connected(
@@ -71,28 +88,15 @@ def train(config, reporter):
     tf.get_variable_scope()._reuse = tf.AUTO_REUSE
     if image:
         next_obs = tf.placeholder(tf.float32, [None, 80, 80, k])
-        network2 = VisionNetwork(next_obs, 2, config.get("model", {}))
     else:
         next_obs = tf.placeholder(tf.float32, [None, out_size])
-        network2 = FullyConnectedNetwork(next_obs, 2, config.get("model", {}))
-    fused = tf.concat([network.last_layer, network2.last_layer], axis=1)
-    if image:
-        fused1 = slim.fully_connected(
-            fused, 256,
-            weights_initializer=normc_initializer(1.0),
-            activation_fn=tf.nn.relu,
-            scope="inv_dyn_pred1")
-        fused2 = slim.fully_connected(
-            fused1, 256,
-            weights_initializer=normc_initializer(1.0),
-            activation_fn=tf.nn.relu,
-            scope="inv_dyn_pred2")
-    else:
-        fused2 = slim.fully_connected(
-            fused, 64,
-            weights_initializer=normc_initializer(1.0),
-            activation_fn=tf.nn.relu,
-            scope="inv_dyn_pred1")
+    feature_layer2, _ = make_net(next_obs, h_size, image, config)
+    fused = tf.concat([feature_layer, feature_layer2], axis=1)
+    fused2 = slim.fully_connected(
+        fused, 64,
+        weights_initializer=normc_initializer(1.0),
+        activation_fn=tf.nn.relu,
+        scope="inv_dyn_pred1")
     predicted_action = slim.fully_connected(
         fused, 2,
         weights_initializer=normc_initializer(0.01),
