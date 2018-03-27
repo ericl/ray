@@ -129,6 +129,7 @@ def train(config, reporter):
     tf_config = tf.ConfigProto(**{
         "gpu_options": {
             "allow_growth": True,
+            "per_process_gpu_memory_fraction": 0.3,
         },
     })
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -258,7 +259,7 @@ if __name__ == '__main__':
             "iltrain_image2": {
                 "run": "il",
                 "config": {
-                    "data": os.path.expanduser("~/Desktop/cartpole-expert-large.json"),
+                    "data": os.path.expanduser(args.dataset),
                     "image": True,
                     "mode": grid_search(["il", "ivd", "oracle"]),
                 },
@@ -269,7 +270,7 @@ if __name__ == '__main__':
             "iltrain": {
                 "run": "il",
                 "config": {
-                    "data": os.path.expanduser("~/Desktop/cartpole-expert-large.json"),
+                    "data": os.path.expanduser(args.dataset),
                     "mode": grid_search(["il", "ivd", "oracle"]),
                     "model": {
                         "fcnet_activation": "relu",

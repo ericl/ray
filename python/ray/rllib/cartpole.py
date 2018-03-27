@@ -30,11 +30,12 @@ from ray.rllib.render_cartpole import render_frame
 parser = argparse.ArgumentParser()
 parser.add_argument("--image", action="store_true")
 parser.add_argument("--decode-model", default=None)
+parser.add_argument("--dataset", default=None)
 
 
 def load_image_model(weights_file, obs_ph, sess):
     model_config = {}
-    network = VisionNetwork(obs_ph, 2, model_config)
+    network = VisionNetwork(obs_ph, 8, model_config)
     vars = TensorFlowVariables(network.outputs, sess)
     sess.run(tf.global_variables_initializer())
     with open(weights_file, "rb") as f:
@@ -118,7 +119,7 @@ class ImageDecoder(Preprocessor):
         self.shape = (8,)
 
     def transform(self, obs):
-        out = self.sess.run(self.decoder.last_layer, feed_dict={
+        out = self.sess.run(self.decoder.outputs, feed_dict={
             self.obs_ph: [obs]
         })[0]
         return out
