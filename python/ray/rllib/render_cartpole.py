@@ -48,7 +48,7 @@ def render_frame(obs, env_config):
         canvas[0:10,:] = wide[0:10,:]
         if env_config["background"] == "fixed_noisy":
             canvas = np.maximum(canvas, np.random.randint(200, size=(w, w)))
-        canvas = canvas.astype(np.int64)
+        canvas = canvas.astype(np.uint8)
     else:
         assert False, env_config
 
