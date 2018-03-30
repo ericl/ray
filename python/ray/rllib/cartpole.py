@@ -30,7 +30,7 @@ from ray.rllib.render_cartpole import render_frame
 parser = argparse.ArgumentParser()
 parser.add_argument("--image", action="store_true")
 parser.add_argument("--decode-model", default=None)
-parser.add_argument("--background", default="zeros")
+parser.add_argument("--background", default="noise")
 parser.add_argument("--experiment", default="cartpole-decode")
 parser.add_argument("--dataset", default=None)
 
