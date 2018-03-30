@@ -55,7 +55,8 @@ def train(config, reporter):
     autoencoder_loss_enabled = mode == "oracle"
     ivd_loss_enabled = mode in ["ivd", "ivd_fwd"]
     forward_loss_enabled = mode in ["fwd", "ivd_fwd"]
-    assert il_loss_enabled or autoencoder_loss_enabled or ivd_loss_enabled or forward_loss_enabled
+    assert il_loss_enabled or autoencoder_loss_enabled or \
+        ivd_loss_enabled or forward_loss_enabled
 
     # Set up decoder network
     if image:
@@ -112,8 +113,10 @@ def train(config, reporter):
     print("Inv Dynamics loss", ivd_loss)
 
     # Set up forward loss
+    feature_and_action = tf.concat(
+        [feature_layer, tf.one_hot(expert_actions, 2)], axis=1)
     fwd1 = slim.fully_connected(
-        feature_layer, 64,
+        feature_and_action, 64,
         weights_initializer=normc_initializer(1.0),
         activation_fn=tf.nn.relu,
         scope="fwd1")
@@ -122,18 +125,21 @@ def train(config, reporter):
         weights_initializer=normc_initializer(1.0),
         activation_fn=tf.nn.relu,
         scope="fwd2")
-    fwd_out = slim.fully_connected(
+    fwd_delta = slim.fully_connected(
         fwd2, h_size,
         weights_initializer=normc_initializer(0.01),
-        activation_fn=None, scope="fwd_out")
+        activation_fn=None, scope="fwd_delta")
     if forward_loss_enabled:
-        fwd_loss = tf.reduce_mean(tf.squared_difference(tf.stop_gradient(feature_layer2), fwd_out)) * 0.001
+        fwd_out = tf.add(tf.stop_gradient(feature_layer), fwd_delta)
+        fwd_loss = tf.reduce_mean(
+            tf.squared_difference(tf.stop_gradient(feature_layer2), fwd_out)
+        )
     else:
         fwd_loss = tf.constant(0.0)
 
     # Set up optimizer
     optimizer = tf.train.AdamOptimizer()
-    summed_loss = autoencoder_loss + il_loss + ivd_loss + fwd_loss
+    summed_loss = autoencoder_loss + il_loss + ivd_loss + fwd_loss * config["fwd_weight"]
     train_op = optimizer.minimize(summed_loss)
 
     env = gym.make("CartPole-v0")
@@ -282,7 +288,8 @@ if __name__ == '__main__':
                     },
                     "data": os.path.expanduser(args.dataset),
                     "image": True,
-                    "mode": grid_search(["ivd", "ivd_fwd"]),
+                    "mode": "ivd_fwd",
+                    "fwd_weight": grid_search([0.001, .0001, .00001, .000001])
                 },
             }
         })
