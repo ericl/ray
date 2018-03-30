@@ -53,8 +53,9 @@ def train(config, reporter):
     batch_size = config.get("batch_size", 128)
     il_loss_enabled = mode == "il"
     autoencoder_loss_enabled = mode == "oracle"
-    inv_dyn_loss_enabled = mode == "ivd"
-    assert il_loss_enabled or autoencoder_loss_enabled or inv_dyn_loss_enabled
+    ivd_loss_enabled = mode in ["ivd", "ivd_fwd"]
+    forward_loss_enabled = mode in ["fwd", "ivd_fwd"]
+    assert il_loss_enabled or autoencoder_loss_enabled or ivd_loss_enabled or forward_loss_enabled
 
     # Set up decoder network
     if image:
@@ -82,7 +83,7 @@ def train(config, reporter):
         autoencoder_in, 4,
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="fc_autoencoder_out")
-    autoencoder_loss = tf.reduce_mean(tf.square(orig_obs - recons_obs))
+    autoencoder_loss = tf.reduce_mean(tf.squared_difference(orig_obs, recons_obs))
     print("Autoencoder loss", autoencoder_loss)
 
     # Set up inverse dynamics loss
@@ -97,22 +98,42 @@ def train(config, reporter):
         fused, 64,
         weights_initializer=normc_initializer(1.0),
         activation_fn=tf.nn.relu,
-        scope="inv_dyn_pred1")
+        scope="ivd_pred1")
     predicted_action = slim.fully_connected(
         fused, 2,
         weights_initializer=normc_initializer(0.01),
-        activation_fn=None, scope="inv_dyn_pred_out")
-    inv_dyn_action_dist = Categorical(predicted_action)
-    if inv_dyn_loss_enabled:
-        inv_dyn_loss = -tf.reduce_mean(
-            inv_dyn_action_dist.logp(expert_actions))
+        activation_fn=None, scope="ivd_pred_out")
+    ivd_action_dist = Categorical(predicted_action)
+    if ivd_loss_enabled:
+        ivd_loss = -tf.reduce_mean(
+            ivd_action_dist.logp(expert_actions))
     else:
-        inv_dyn_loss = tf.constant(0.0)
-    print("Inv Dynamics loss", inv_dyn_loss)
+        ivd_loss = tf.constant(0.0)
+    print("Inv Dynamics loss", ivd_loss)
+
+    # Set up forward loss
+    fwd1 = slim.fully_connected(
+        feature_layer, 64,
+        weights_initializer=normc_initializer(1.0),
+        activation_fn=tf.nn.relu,
+        scope="fwd1")
+    fwd2 = slim.fully_connected(
+        fwd1, 64,
+        weights_initializer=normc_initializer(1.0),
+        activation_fn=tf.nn.relu,
+        scope="fwd2")
+    fwd_out = slim.fully_connected(
+        fwd2, h_size,
+        weights_initializer=normc_initializer(0.01),
+        activation_fn=None, scope="fwd_out")
+    if forward_loss_enabled:
+        fwd_loss = tf.reduce_mean(tf.squared_difference(feature_layer2, fwd_out))
+    else:
+        fwd_loss = tf.constant(0.0)
 
     # Set up optimizer
     optimizer = tf.train.AdamOptimizer()
-    summed_loss = autoencoder_loss + il_loss + inv_dyn_loss
+    summed_loss = autoencoder_loss + il_loss + ivd_loss + fwd_loss
     train_op = optimizer.minimize(summed_loss)
 
     env = gym.make("CartPole-v0")
@@ -169,7 +190,6 @@ def train(config, reporter):
     split_point = max(len(data) - 5000, int(len(data) * 0.9))
     test_data = data[split_point:]
     data = data[:split_point]
-    means = [np.mean([abs(d["obs"][j]) for d in test_data]) for j in range(4)]
     print("train batch size", len(data))
     print("test batch size", len(test_data))
 
@@ -177,12 +197,12 @@ def train(config, reporter):
     for ix in range(1000):
         il_losses = []
         auto_losses = []
-        inv_dyn_losses = []
-        errors = [[], [], [], []]
+        ivd_losses = []
+        fwd_losses = []
         for _ in range(len(data) // batch_size):
             batch = np.random.choice(data, batch_size)
-            cur_inv_dyn_loss, cur_il_loss, cur_auto_loss, _ = sess.run(
-                [inv_dyn_loss, il_loss, autoencoder_loss, train_op],
+            cur_fwd_loss, cur_ivd_loss, cur_il_loss, cur_auto_loss, _ = sess.run(
+                [fwd_loss, ivd_loss, il_loss, autoencoder_loss, train_op],
                 feed_dict={
                     observations: [t["encoded_obs"] for t in batch],
                     expert_actions: [t["action"] for t in batch],
@@ -191,39 +211,28 @@ def train(config, reporter):
                 })
             il_losses.append(cur_il_loss)
             auto_losses.append(cur_auto_loss)
-            inv_dyn_losses.append(cur_inv_dyn_loss)
+            ivd_losses.append(cur_ivd_loss)
+            fwd_losses.append(cur_fwd_loss)
 
         print("testing")
-        test_inv_dyn_losses = []
+        test_ivd_losses = []
         test_il_losses = []
         test_auto_losses = []
+        test_fwd_losses = []
         for _ in range(len(test_data) // batch_size):
             test_batch = np.random.choice(test_data, batch_size)
-            x, test_inv_dyn_loss, test_il_loss, test_auto_loss = sess.run(
-                [recons_obs, inv_dyn_loss, il_loss, autoencoder_loss],
+            test_fwd_loss, test_ivd_loss, test_il_loss, test_auto_loss = sess.run(
+                [fwd_loss, ivd_loss, il_loss, autoencoder_loss],
                 feed_dict={
                     observations: [t["encoded_obs"] for t in test_batch],
                     expert_actions: [t["action"] for t in test_batch],
                     orig_obs: [t["obs"] for t in test_batch],
                     next_obs: [t["encoded_next_obs"] for t in test_batch],
                 })
-            test_inv_dyn_losses.append(test_inv_dyn_loss)
+            test_ivd_losses.append(test_ivd_loss)
             test_il_losses.append(test_il_loss)
             test_auto_losses.append(test_auto_loss)
-            for i in range(len(test_batch)):
-                obs = test_batch[i]["obs"]
-                pred_obs = x[i]
-                for j in range(4):
-                    errors[j].append(abs(obs[j] - pred_obs[j]))
-        for j in range(4):
-            errors[j] = np.mean(errors[j])
-        acc = np.mean([np.exp(-l) for l in il_losses])
-        auto_loss = np.mean(auto_losses)
-        ivd_acc = np.mean([np.exp(-l) for l in inv_dyn_losses])
-        ivd_loss = np.mean(inv_dyn_losses)
-        test_inv_dyn_loss = np.mean(test_inv_dyn_losses)
-        test_il_loss = np.mean(test_il_losses)
-        test_auto_loss = np.mean(test_auto_losses)
+            test_fwd_losses.append(test_fwd_loss)
 
         # Evaluate IL performance
         rewards = []
@@ -238,24 +247,18 @@ def train(config, reporter):
             rewards.append(reward)
 
         reporter(
-            timesteps_total=ix, mean_loss=np.mean(il_losses) + auto_loss + ivd_loss, info={
-                "decoder_reconstruction_error": {
-                    "cart_pos": errors[0] / means[0],
-                    "cart_velocity": errors[1] / means[1],
-                    "pole_angle": errors[2] / means[2],
-                    "angle_velocity": errors[3] / means[3],
-                },
-                "train_il_acc": acc,
-                "train_il_loss": np.mean(il_losses),
-                "train_auto_loss": auto_loss,
-                "train_inv_dyn_loss": ivd_loss,
-                "train_inv_dyn_acc": ivd_acc,
+            timesteps_total=ix,
+            mean_loss=np.mean(il_losses) + np.mean(auto_losses) + np.mean(ivd_losses) + np.mean(fwd_losses),
+            info={
+                "train_il_acc": np.mean([np.exp(-l) for l in il_losses]),
+                "train_auto_loss": np.mean(auto_losses),
+                "train_fwd_loss": np.mean(fwd_losses),
+                "train_ivd_acc": np.mean([np.exp(-l) for l in ivd_losses]),
                 "test_il_mean_reward": np.mean(rewards),
-                "test_il_acc": np.exp(-test_il_loss),
-                "test_il_loss": test_il_loss,
-                "test_auto_loss": test_auto_loss,
-                "test_inv_dyn_loss": test_inv_dyn_loss,
-                "test_inv_dyn_acc": np.exp(-test_inv_dyn_loss),
+                "test_il_acc": np.mean([np.exp(-l) for l in test_il_losses]),
+                "test_auto_loss": np.mean(test_auto_losses),
+                "test_fwd_loss": np.mean(test_fwd_losses),
+                "test_ivd_acc": np.mean([np.exp(-l) for l in test_ivd_losses]),
             })
 
         if ix % 1 == 0:
@@ -279,7 +282,7 @@ if __name__ == '__main__':
                     },
                     "data": os.path.expanduser(args.dataset),
                     "image": True,
-                    "mode": grid_search(["il", "ivd", "oracle"]),
+                    "mode": grid_search(["fwd", "ivd", "ivd_fwd"]),
                 },
             }
         })
@@ -289,7 +292,7 @@ if __name__ == '__main__':
                 "run": "pretrain",
                 "config": {
                     "data": os.path.expanduser(args.dataset),
-                    "mode": grid_search(["il", "ivd", "oracle"]),
+                    "mode": grid_search(["ivd", "fwd", "ivd_fwd", "il", "oracle"]),
                     "model": {
                         "fcnet_activation": "relu",
                         "fcnet_hiddens": [256, 8],
