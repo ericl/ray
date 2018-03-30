@@ -127,7 +127,7 @@ def train(config, reporter):
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="fwd_out")
     if forward_loss_enabled:
-        fwd_loss = tf.reduce_mean(tf.squared_difference(feature_layer2, fwd_out))
+        fwd_loss = tf.reduce_mean(tf.squared_difference(feature_layer2, fwd_out)) * 0.01
     else:
         fwd_loss = tf.constant(0.0)
 
@@ -282,7 +282,7 @@ if __name__ == '__main__':
                     },
                     "data": os.path.expanduser(args.dataset),
                     "image": True,
-                    "mode": grid_search(["fwd", "ivd", "ivd_fwd"]),
+                    "mode": grid_search(["ivd", "ivd_fwd"]),
                 },
             }
         })
