@@ -127,7 +127,7 @@ def train(config, reporter):
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="fwd_out")
     if forward_loss_enabled:
-        fwd_loss = tf.reduce_mean(tf.squared_difference(tf.stop_gradient(feature_layer2), fwd_out)) * 0.01
+        fwd_loss = tf.reduce_mean(tf.squared_difference(tf.stop_gradient(feature_layer2), fwd_out)) * 0.001
     else:
         fwd_loss = tf.constant(0.0)
 
