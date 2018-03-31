@@ -44,7 +44,7 @@ def make_net(inputs, h_size, image, config):
 
 def train(config, reporter):
     k = 4
-    h_size = 8
+    h_size = config["h_size"]
     data = config["data"]
     mode = config["mode"]
     env_config = config["env_config"]
@@ -287,9 +287,10 @@ if __name__ == '__main__':
                         "background": args.background,
                     },
                     "data": os.path.expanduser(args.dataset),
+                    "h_size": grid_search([2, 4, 8, 32]),
                     "image": True,
-                    "mode": "ivd_fwd",
-                    "fwd_weight": grid_search([0.001, .0001, .00001, .000001])
+                    "mode": "ivd",
+                    "fwd_weight": 0,
                 },
             }
         })

@@ -33,11 +33,12 @@ parser.add_argument("--decode-model", default=None)
 parser.add_argument("--background", default="noise")
 parser.add_argument("--experiment", default="cartpole-decode")
 parser.add_argument("--dataset", default=None)
+parser.add_argument("--h-size", default=8, type=int)
 
 
-def load_image_model(weights_file, obs_ph, sess):
+def load_image_model(weights_file, obs_ph, sess, h_size):
     model_config = {}
-    network = VisionNetwork(obs_ph, 8, model_config)
+    network = VisionNetwork(obs_ph, h_size, model_config)
     vars = TensorFlowVariables(network.outputs, sess)
     sess.run(tf.global_variables_initializer())
     with open(weights_file, "rb") as f:
@@ -117,9 +118,10 @@ class ImageDecoder(Preprocessor):
         self.sess = tf.Session()
         self.obs_ph = tf.placeholder(
             tf.float32, [None] + list(self._obs_space.shape))
+        self.h_size = self._options["custom_options"]["h_size"]
         print("Image decoder input: " + str(self.obs_ph))
-        self.decoder = load_image_model(self.decode_model, self.obs_ph, self.sess)
-        self.shape = (8,)
+        self.decoder = load_image_model(self.decode_model, self.obs_ph, self.sess, self.h_size)
+        self.shape = (self.h_size,)
 
     def transform(self, obs):
         out = self.sess.run(self.decoder.outputs, feed_dict={
@@ -205,6 +207,7 @@ if __name__ == '__main__':
                 "custom_preprocessor": "img_decoder",
                 "custom_options": {
                     "decode_model": decode_model,
+                    "h_size": args.h_size,
                 },
             }
         else:
