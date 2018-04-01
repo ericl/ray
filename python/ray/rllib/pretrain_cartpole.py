@@ -287,9 +287,9 @@ if __name__ == '__main__':
                         "background": args.background,
                     },
                     "data": os.path.expanduser(args.dataset),
-                    "h_size": grid_search([2, 4, 8, 32]),
+                    "h_size": 8,
                     "image": True,
-                    "mode": "ivd",
+                    "mode": grid_search(["il", "oracle", "ivd"]),
                     "fwd_weight": 0,
                 },
             }
