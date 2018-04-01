@@ -25,6 +25,18 @@ from ray.rllib.render_cartpole import render_frame
 from ray.tune import run_experiments, register_trainable, grid_search
 
 
+def _minimize_and_clip(optimizer, objective, clip_val=10):
+    """Minimized `objective` using `optimizer` w.r.t. variables in
+    `var_list` while ensure the norm of the gradients for each
+    variable is clipped to `clip_val`
+    """
+    gradients = optimizer.compute_gradients(objective)
+    for i, (grad, var) in enumerate(gradients):
+        if grad is not None:
+            gradients[i] = (tf.clip_by_norm(grad, clip_val), var)
+    return gradients
+
+
 def make_net(inputs, h_size, image, config):
     if image:
         network = VisionNetwork(inputs, h_size, config.get("model", {}))
@@ -140,7 +152,8 @@ def train(config, reporter):
     # Set up optimizer
     optimizer = tf.train.AdamOptimizer()
     summed_loss = autoencoder_loss + il_loss + ivd_loss + fwd_loss * config["fwd_weight"]
-    train_op = optimizer.minimize(summed_loss)
+    grads = _minimize_and_clip(optimizer, summed_loss)
+    train_op = optimizer.apply_gradients(grads)
 
     env = gym.make("CartPole-v0")
     if args.image:
@@ -287,10 +300,10 @@ if __name__ == '__main__':
                         "background": args.background,
                     },
                     "data": os.path.expanduser(args.dataset),
-                    "h_size": 8,
+                    "h_size": 32,
                     "image": True,
-                    "mode": grid_search(["il", "oracle", "ivd"]),
-                    "fwd_weight": 0,
+                    "mode": grid_search(["ivd_fwd"]),
+                    "fwd_weight": grid_search([.01, .001, .0001, .00001]),
                 },
             }
         })
