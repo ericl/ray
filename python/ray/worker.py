@@ -881,7 +881,8 @@ class Worker(object):
         while key not in self.imported_actor_classes:
             time.sleep(0.001)
 
-        self.fetch_and_register_actor(key, task.required_resources(), self)
+        with self.lock:
+            self.fetch_and_register_actor(key, task.required_resources(), self)
 
     def _wait_for_and_process_task(self, task):
         """Wait for a task to be ready and process the task.
@@ -1364,9 +1365,8 @@ def _init(address_info=None,
         # In this case, we launch a scheduler, a new object store, and some
         # workers, and we connect to them. We do not launch any processes that
         # are already registered in address_info.
-        # Use the address 127.0.0.1 in local mode.
-        node_ip_address = ("127.0.0.1" if node_ip_address is None
-                           else node_ip_address)
+        if node_ip_address is None:
+            node_ip_address = ray.services.get_node_ip_address()
         # Use 1 local scheduler if num_local_schedulers is not provided. If
         # existing local schedulers are provided, use that count as
         # num_local_schedulers.
