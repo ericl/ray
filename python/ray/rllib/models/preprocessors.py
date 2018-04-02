@@ -6,6 +6,7 @@ import numpy as np
 import gym
 
 ATARI_OBS_SHAPE = (210, 160, 3)
+CAR_RACING_OBS_SHAPE = (96, 96, 3)
 ATARI_RAM_OBS_SHAPE = (128,)
 
 
@@ -130,7 +131,7 @@ def get_preprocessor(space):
     if isinstance(space, gym.spaces.Discrete):
         print("Using one-hot preprocessor for discrete envs.")
         preprocessor = OneHotPreprocessor
-    elif obs_shape == ATARI_OBS_SHAPE:
+    elif obs_shape in [ATARI_OBS_SHAPE, CAR_RACING_OBS_SHAPE]:
         print("Assuming Atari pixel env, using AtariPixelPreprocessor.")
         preprocessor = AtariPixelPreprocessor
     elif obs_shape == ATARI_RAM_OBS_SHAPE:
