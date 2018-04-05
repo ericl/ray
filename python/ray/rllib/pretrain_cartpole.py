@@ -3,6 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import os
+import collections
 from collections import deque
 import json
 import random
@@ -54,6 +55,25 @@ def make_net(inputs, h_size, image, config):
     return feature_layer, action_layer
 
 
+def decode_image(feature_layer):
+    print("Feature layer", feature_layer)
+    expanded = tf.expand_dims(tf.expand_dims(feature_layer, 1), 1)
+    print("expanded", expanded)
+    fc2_inv = slim.conv2d_transpose(
+        expanded, 512, [1, 1], activation_fn=None, scope="fc2_inv")
+    print("fc2_inv", fc2_inv)
+    fc1_inv = slim.conv2d_transpose(
+        fc2_inv, 32, [10, 10], 1, padding="VALID", scope="fc1_inv")
+    print("fc1_inv", fc1_inv)
+    conv2_inv = slim.conv2d_transpose(
+        fc1_inv, 16, [4, 4], 2, scope="conv2_inv")
+    print("conv2_inv", conv2_inv)
+    conv1_inv = slim.conv2d_transpose(
+        conv2_inv, 4, [8, 8], 4, scope="conv1_inv")
+    print("conv1_inv", conv1_inv)
+    return conv1_inv
+
+
 def train(config, reporter):
     k = 4
     h_size = config["h_size"]
@@ -64,11 +84,12 @@ def train(config, reporter):
     out_size = config.get("out_size", 200)
     batch_size = config.get("batch_size", 128)
     il_loss_enabled = mode == "il"
-    autoencoder_loss_enabled = mode == "oracle"
+    ae_loss_enabled = mode == "ae"
+    oracle_loss_enabled = mode == "oracle"
     ivd_loss_enabled = mode in ["ivd", "ivd_fwd"]
     forward_loss_enabled = mode in ["fwd", "ivd_fwd"]
-    assert il_loss_enabled or autoencoder_loss_enabled or \
-        ivd_loss_enabled or forward_loss_enabled
+    assert il_loss_enabled or oracle_loss_enabled or \
+        ivd_loss_enabled or forward_loss_enabled or ae_loss_enabled
 
     # Set up decoder network
     if image:
@@ -88,16 +109,25 @@ def train(config, reporter):
     print("IL loss", il_loss)
 
     # Set up autoencoder loss
+    autoencoder_out = decode_image(feature_layer)
+    if ae_loss_enabled:
+        ae_loss = tf.reduce_mean(
+            tf.squared_difference(observations, autoencoder_out))
+    else:
+        ae_loss = tf.constant(0.0)
+    print("ae loss", ae_loss)
+
+    # Set up oracle loss
     orig_obs = tf.placeholder(tf.float32, [None, 4])
-    autoencoder_in = feature_layer
-    if not autoencoder_loss_enabled:
-        autoencoder_in = tf.stop_gradient(autoencoder_in)
+    oracle_in = feature_layer
+    if not oracle_loss_enabled:
+        oracle_in = tf.stop_gradient(oracle_in)
     recons_obs = slim.fully_connected(
-        autoencoder_in, 4,
+        oracle_in, 4,
         weights_initializer=normc_initializer(0.01),
-        activation_fn=None, scope="fc_autoencoder_out")
-    autoencoder_loss = tf.reduce_mean(tf.squared_difference(orig_obs, recons_obs))
-    print("Autoencoder loss", autoencoder_loss)
+        activation_fn=None, scope="fc_oracle_out")
+    oracle_loss = tf.reduce_mean(tf.squared_difference(orig_obs, recons_obs))
+    print("oracle loss", oracle_loss)
 
     # Set up inverse dynamics loss
     tf.get_variable_scope()._reuse = tf.AUTO_REUSE
@@ -151,7 +181,9 @@ def train(config, reporter):
 
     # Set up optimizer
     optimizer = tf.train.AdamOptimizer()
-    summed_loss = autoencoder_loss + il_loss + ivd_loss + fwd_loss * config["fwd_weight"]
+    summed_loss = (
+        oracle_loss + il_loss + ivd_loss + ae_loss +
+        fwd_loss * config.get("fwd_weight", 0.0))
     grads = _minimize_and_clip(optimizer, summed_loss)
     train_op = optimizer.apply_gradients(grads)
 
@@ -212,46 +244,44 @@ def train(config, reporter):
     print("train batch size", len(data))
     print("test batch size", len(test_data))
 
+    LOSSES = [
+        ("ae", ae_loss),
+        ("fwd", fwd_loss),
+        ("il", il_loss),
+        ("ivd", ivd_loss),
+        ("oracle", oracle_loss),
+    ]
+
     print("start training")
     for ix in range(1000):
-        il_losses = []
-        auto_losses = []
-        ivd_losses = []
-        fwd_losses = []
+        train_losses = collections.defaultdict(list)
         for _ in range(len(data) // batch_size):
             batch = np.random.choice(data, batch_size)
-            cur_fwd_loss, cur_ivd_loss, cur_il_loss, cur_auto_loss, _ = sess.run(
-                [fwd_loss, ivd_loss, il_loss, autoencoder_loss, train_op],
+            results = sess.run(
+                [tensor for (_, tensor) in LOSSES] + [train_op],
                 feed_dict={
                     observations: [t["encoded_obs"] for t in batch],
                     expert_actions: [t["action"] for t in batch],
                     orig_obs: [t["obs"] for t in batch],
                     next_obs: [t["encoded_next_obs"] for t in batch],
                 })
-            il_losses.append(cur_il_loss)
-            auto_losses.append(cur_auto_loss)
-            ivd_losses.append(cur_ivd_loss)
-            fwd_losses.append(cur_fwd_loss)
+            for (name, _), value in zip(LOSSES, results):
+                train_losses[name].append(value)
 
         print("testing")
-        test_ivd_losses = []
-        test_il_losses = []
-        test_auto_losses = []
-        test_fwd_losses = []
-        for _ in range(len(test_data) // batch_size):
+        test_losses = collections.defaultdict(list)
+        for _ in range(max(1, len(test_data) // batch_size)):
             test_batch = np.random.choice(test_data, batch_size)
-            test_fwd_loss, test_ivd_loss, test_il_loss, test_auto_loss = sess.run(
-                [fwd_loss, ivd_loss, il_loss, autoencoder_loss],
+            results = sess.run(
+                [tensor for (_, tensor) in LOSSES],
                 feed_dict={
                     observations: [t["encoded_obs"] for t in test_batch],
                     expert_actions: [t["action"] for t in test_batch],
                     orig_obs: [t["obs"] for t in test_batch],
                     next_obs: [t["encoded_next_obs"] for t in test_batch],
                 })
-            test_ivd_losses.append(test_ivd_loss)
-            test_il_losses.append(test_il_loss)
-            test_auto_losses.append(test_auto_loss)
-            test_fwd_losses.append(test_fwd_loss)
+            for (name, _), value in zip(LOSSES, results):
+                test_losses[name].append(value)
 
         # Evaluate IL performance
         rewards = []
@@ -265,20 +295,16 @@ def train(config, reporter):
                 reward += rew
             rewards.append(reward)
 
+        loss_info = {}
+        mean_train_loss = 0.0
+        for name, values in train_losses.items():
+            mean_train_loss += np.mean(values)
+            loss_info["train_{}_loss".format(name)] = np.mean(values)
+        for name, values in test_losses.items():
+            loss_info["test_{}_loss".format(name)] = np.mean(values)
+
         reporter(
-            timesteps_total=ix,
-            mean_loss=np.mean(il_losses) + np.mean(auto_losses) + np.mean(ivd_losses) + np.mean(fwd_losses),
-            info={
-                "train_il_acc": np.mean([np.exp(-l) for l in il_losses]),
-                "train_auto_loss": np.mean(auto_losses),
-                "train_fwd_loss": np.mean(fwd_losses),
-                "train_ivd_acc": np.mean([np.exp(-l) for l in ivd_losses]),
-                "test_il_mean_reward": np.mean(rewards),
-                "test_il_acc": np.mean([np.exp(-l) for l in test_il_losses]),
-                "test_auto_loss": np.mean(test_auto_losses),
-                "test_fwd_loss": np.mean(test_fwd_losses),
-                "test_ivd_acc": np.mean([np.exp(-l) for l in test_ivd_losses]),
-            })
+            timesteps_total=ix, mean_loss=mean_train_loss, info=loss_info)
 
         if ix % 1 == 0:
             fname = "weights_{}".format(ix)
@@ -300,10 +326,10 @@ if __name__ == '__main__':
                         "background": args.background,
                     },
                     "data": os.path.expanduser(args.dataset),
-                    "h_size": 32,
+                    "h_size": 8,
                     "image": True,
-                    "mode": grid_search(["ivd_fwd"]),
-                    "fwd_weight": grid_search([.01, .001, .0001, .00001]),
+                    "mode": "ae",
+#                    "fwd_weight": grid_search([.01, .001, .0001, .00001]),
                 },
             }
         })
