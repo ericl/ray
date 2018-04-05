@@ -11,6 +11,7 @@ import random
 import pickle
 import numpy as np
 import gym
+from scipy.misc import imsave
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 
@@ -24,6 +25,13 @@ from ray.rllib.models.misc import normc_initializer
 from ray.rllib.models.preprocessors import NoPreprocessor
 from ray.rllib.render_cartpole import render_frame
 from ray.tune import run_experiments, register_trainable, grid_search
+
+
+def save_image(data, name):
+    dest = os.path.expanduser("~/Desktop/ae")
+    if not os.path.exists(dest):
+        os.makedirs(dest)
+    imsave(os.path.join(dest, name), data)
 
 
 def _minimize_and_clip(optimizer, objective, clip_val=10):
@@ -270,10 +278,10 @@ def train(config, reporter):
 
         print("testing")
         test_losses = collections.defaultdict(list)
-        for _ in range(max(1, len(test_data) // batch_size)):
+        for jx in range(max(1, len(test_data) // batch_size)):
             test_batch = np.random.choice(test_data, batch_size)
             results = sess.run(
-                [tensor for (_, tensor) in LOSSES],
+                [tensor for (_, tensor) in LOSSES] + [autoencoder_out],
                 feed_dict={
                     observations: [t["encoded_obs"] for t in test_batch],
                     expert_actions: [t["action"] for t in test_batch],
@@ -282,6 +290,9 @@ def train(config, reporter):
                 })
             for (name, _), value in zip(LOSSES, results):
                 test_losses[name].append(value)
+            if jx == 0:
+                save_image(test_batch[0]["encoded_obs"][:, :, 0], "{}_{}_in.png".format(ix, jx))
+                save_image(results[-1][0][:, :, 0], "{}_{}_out.png".format(ix, jx))
 
         # Evaluate IL performance
         rewards = []
