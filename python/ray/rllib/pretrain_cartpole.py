@@ -134,22 +134,6 @@ def train(config, reporter):
     oracle_loss = tf.reduce_mean(tf.squared_difference(orig_obs, recons_obs))
     print("oracle loss", oracle_loss)
 
-    # Set up autoencoder loss
-    autoencoder_out = decode_image(feature_layer, 1)
-    if ae_loss_enabled:
-        if ae_1step:
-            ae_loss = tf.reduce_mean(
-                tf.squared_difference(next_obs[..., -1:], autoencoder_out))
-        elif ae_1diff:
-            ae_loss = tf.reduce_mean(
-                tf.squared_difference(next_obs[..., -1:] - observations[..., -1:], autoencoder_out))
-        else:
-            ae_loss = tf.reduce_mean(
-                tf.squared_difference(observations[..., -1:], autoencoder_out))
-    else:
-        ae_loss = tf.constant(0.0)
-    print("ae loss", ae_loss)
-
     # Set up inverse dynamics loss
     tf.get_variable_scope()._reuse = tf.AUTO_REUSE
     if image:
@@ -174,6 +158,24 @@ def train(config, reporter):
     else:
         ivd_loss = tf.constant(0.0)
     print("Inv Dynamics loss", ivd_loss)
+
+    # Set up autoencoder loss
+    autoencoder_out = decode_image(feature_layer, 1)
+    if ae_loss_enabled:
+        if ae_1step:
+            ae_loss = tf.reduce_mean(
+                tf.squared_difference(next_obs[..., -1:], autoencoder_out))
+        elif ae_1diff:
+            ae_loss = tf.reduce_mean(
+                tf.squared_difference(
+                    next_obs[..., -1:] - observations[..., -1:],
+                    autoencoder_out))
+        else:
+            ae_loss = tf.reduce_mean(
+                tf.squared_difference(observations[..., -1:], autoencoder_out))
+    else:
+        ae_loss = tf.constant(0.0)
+    print("ae loss", ae_loss)
 
     # Set up forward loss
     feature_and_action = tf.concat(
@@ -305,7 +307,7 @@ def train(config, reporter):
                 test_losses[name].append(value)
             if jx <= 5:
                 save_image(flatten(test_batch[0]["encoded_obs"]), "{}_{}_{}_in.png".format(mode, ix, jx))
-                save_image(flatten(results[-1][0]), "{}_{}_{}_out.png".format(mode, ix, jx))
+                save_image(results[-1][0].squeeze(), "{}_{}_{}_out.png".format(mode, ix, jx))
 
         # Evaluate IL performance
         rewards = []
