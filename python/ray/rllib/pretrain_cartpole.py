@@ -159,24 +159,6 @@ def train(config, reporter):
         ivd_loss = tf.constant(0.0)
     print("Inv Dynamics loss", ivd_loss)
 
-    # Set up autoencoder loss
-    autoencoder_out = decode_image(feature_layer, 1)
-    if ae_loss_enabled:
-        if ae_1step:
-            ae_loss = tf.reduce_mean(
-                tf.squared_difference(next_obs[..., -1:], autoencoder_out))
-        elif ae_1stepdiff:
-            ae_loss = tf.reduce_mean(
-                tf.squared_difference(
-                    next_obs[..., -1:],
-                    observations[..., -1:] + autoencoder_out))
-        else:
-            ae_loss = tf.reduce_mean(
-                tf.squared_difference(observations[..., -1:], autoencoder_out))
-    else:
-        ae_loss = tf.constant(0.0)
-    print("ae loss", ae_loss)
-
     # Set up forward loss
     feature_and_action = tf.concat(
         [feature_layer, tf.one_hot(expert_actions, 2)], axis=1)
@@ -201,6 +183,24 @@ def train(config, reporter):
         )
     else:
         fwd_loss = tf.constant(0.0)
+
+    # Set up autoencoder loss
+    autoencoder_out = decode_image(feature_and_action, 1)
+    if ae_loss_enabled:
+        if ae_1step:
+            ae_loss = tf.reduce_mean(
+                tf.squared_difference(next_obs[..., -1:], autoencoder_out))
+        elif ae_1stepdiff:
+            ae_loss = tf.reduce_mean(
+                tf.squared_difference(
+                    next_obs[..., -1:],
+                    observations[..., -1:] + autoencoder_out))
+        else:
+            ae_loss = tf.reduce_mean(
+                tf.squared_difference(observations[..., -1:], autoencoder_out))
+    else:
+        ae_loss = tf.constant(0.0)
+    print("ae loss", ae_loss)
 
     # Set up optimizer
     optimizer = tf.train.AdamOptimizer()
