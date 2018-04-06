@@ -294,7 +294,7 @@ def train(config, reporter):
                 })
             for (name, _), value in zip(LOSSES, results):
                 test_losses[name].append(value)
-            if jx == 0:
+            if jx <= 5:
                 save_image(flatten(test_batch[0]["encoded_obs"]), "{}_{}_in.png".format(ix, jx))
                 save_image(flatten(results[-1][0]), "{}_{}_out.png".format(ix, jx))
 
