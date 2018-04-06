@@ -31,7 +31,7 @@ def render_frame(obs, env_config):
     cart_velocity = obs[1]
     pole_angle = obs[2]
     angle_velocity = obs[3]
-    angle_multiple = 3
+    angle_multiple = 5
     w = 80  # screen width
     xpos = cart_pos / 2.4 * w/2 + w/2
     if env_config["background"] == "noise":

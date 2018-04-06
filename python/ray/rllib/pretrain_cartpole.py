@@ -34,6 +34,10 @@ def save_image(data, name):
     imsave(os.path.join(dest, name), data)
 
 
+def flatten(stacked_img):
+    return stacked_img[:, :, -3:]
+
+
 def _minimize_and_clip(optimizer, objective, clip_val=10):
     """Minimized `objective` using `optimizer` w.r.t. variables in
     `var_list` while ensure the norm of the gradients for each
@@ -291,8 +295,8 @@ def train(config, reporter):
             for (name, _), value in zip(LOSSES, results):
                 test_losses[name].append(value)
             if jx == 0:
-                save_image(test_batch[0]["encoded_obs"][:, :, 0], "{}_{}_in.png".format(ix, jx))
-                save_image(results[-1][0][:, :, 0], "{}_{}_out.png".format(ix, jx))
+                save_image(flatten(test_batch[0]["encoded_obs"]), "{}_{}_in.png".format(ix, jx))
+                save_image(flatten(results[-1][0]), "{}_{}_out.png".format(ix, jx))
 
         # Evaluate IL performance
         rewards = []
