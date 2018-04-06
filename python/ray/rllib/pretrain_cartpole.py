@@ -96,9 +96,9 @@ def train(config, reporter):
     out_size = config.get("out_size", 200)
     batch_size = config.get("batch_size", 128)
     il_loss_enabled = mode == "il"
-    ae_loss_enabled = mode in ["ae", "ae1step", "ae1diff"]
+    ae_loss_enabled = mode in ["ae", "ae1step", "ae1stepdiff"]
     ae_1step = mode == "ae1step"
-    ae_1diff = mode == "ae1diff"
+    ae_1stepdiff = mode == "ae1stepdiff"
     oracle_loss_enabled = mode == "oracle"
     ivd_loss_enabled = mode in ["ivd", "ivd_fwd"]
     forward_loss_enabled = mode in ["fwd", "ivd_fwd"]
@@ -165,11 +165,11 @@ def train(config, reporter):
         if ae_1step:
             ae_loss = tf.reduce_mean(
                 tf.squared_difference(next_obs[..., -1:], autoencoder_out))
-        elif ae_1diff:
+        elif ae_1stepdiff:
             ae_loss = tf.reduce_mean(
                 tf.squared_difference(
-                    next_obs[..., -1:] - observations[..., -1:],
-                    autoencoder_out))
+                    next_obs[..., -1:],
+                    observations[..., -1:] + autoencoder_out))
         else:
             ae_loss = tf.reduce_mean(
                 tf.squared_difference(observations[..., -1:], autoencoder_out))
@@ -354,7 +354,7 @@ if __name__ == '__main__':
                     "data": os.path.expanduser(args.dataset),
                     "h_size": 8,
                     "image": True,
-                    "mode": grid_search(["ae", "ae1diff", "ae1step", "ivd"]),
+                    "mode": grid_search(["ae", "ae1stepdiff", "ae1step", "ivd"]),
 #                    "fwd_weight": grid_search([.01, .001, .0001, .00001]),
                 },
             }
