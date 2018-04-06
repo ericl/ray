@@ -139,13 +139,13 @@ def train(config, reporter):
     if ae_loss_enabled:
         if ae_1step:
             ae_loss = tf.reduce_mean(
-                tf.squared_difference(next_obs[:, :, -1:], autoencoder_out))
+                tf.squared_difference(next_obs[..., -1:], autoencoder_out))
         elif ae_1diff:
             ae_loss = tf.reduce_mean(
-                tf.squared_difference(next_obs[:, :, -1:] - observations[:, :, -1:], autoencoder_out))
+                tf.squared_difference(next_obs[..., -1:] - observations[..., -1:], autoencoder_out))
         else:
             ae_loss = tf.reduce_mean(
-                tf.squared_difference(observations[:, :, -1:], autoencoder_out))
+                tf.squared_difference(observations[..., -1:], autoencoder_out))
     else:
         ae_loss = tf.constant(0.0)
     print("ae loss", ae_loss)
