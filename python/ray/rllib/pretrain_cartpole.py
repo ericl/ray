@@ -67,7 +67,7 @@ def make_net(inputs, h_size, image, config):
     return feature_layer, action_layer
 
 
-def decode_image(feature_layer):
+def decode_image(feature_layer, k):
     print("Feature layer", feature_layer)
     expanded = tf.expand_dims(tf.expand_dims(feature_layer, 1), 1)
     print("expanded", expanded)
@@ -81,7 +81,7 @@ def decode_image(feature_layer):
         fc1_inv, 16, [4, 4], 2, scope="conv2_inv")
     print("conv2_inv", conv2_inv)
     conv1_inv = slim.conv2d_transpose(
-        conv2_inv, 4, [8, 8], 4, scope="conv1_inv")
+        conv2_inv, k, [8, 8], 4, scope="conv1_inv")
     print("conv1_inv", conv1_inv)
     return conv1_inv
 
@@ -96,7 +96,9 @@ def train(config, reporter):
     out_size = config.get("out_size", 200)
     batch_size = config.get("batch_size", 128)
     il_loss_enabled = mode == "il"
-    ae_loss_enabled = mode == "ae"
+    ae_loss_enabled = mode in ["ae", "ae1step", "ae1diff"]
+    ae_1step = mode == "ae1step"
+    ae_1diff = mode == "ae1diff"
     oracle_loss_enabled = mode == "oracle"
     ivd_loss_enabled = mode in ["ivd", "ivd_fwd"]
     forward_loss_enabled = mode in ["fwd", "ivd_fwd"]
@@ -120,15 +122,6 @@ def train(config, reporter):
     act = action_dist.sample()
     print("IL loss", il_loss)
 
-    # Set up autoencoder loss
-    autoencoder_out = decode_image(feature_layer)
-    if ae_loss_enabled:
-        ae_loss = tf.reduce_mean(
-            tf.squared_difference(observations, autoencoder_out))
-    else:
-        ae_loss = tf.constant(0.0)
-    print("ae loss", ae_loss)
-
     # Set up oracle loss
     orig_obs = tf.placeholder(tf.float32, [None, 4])
     oracle_in = feature_layer
@@ -140,6 +133,22 @@ def train(config, reporter):
         activation_fn=None, scope="fc_oracle_out")
     oracle_loss = tf.reduce_mean(tf.squared_difference(orig_obs, recons_obs))
     print("oracle loss", oracle_loss)
+
+    # Set up autoencoder loss
+    autoencoder_out = decode_image(feature_layer, 1)
+    if ae_loss_enabled:
+        if ae_1step:
+            ae_loss = tf.reduce_mean(
+                tf.squared_difference(next_obs[:, :, -1], autoencoder_out))
+        elif ae_1diff:
+            ae_loss = tf.reduce_mean(
+                tf.squared_difference(next_obs[:, :, -1] - observations[:, :, -1], autoencoder_out))
+        else:
+            ae_loss = tf.reduce_mean(
+                tf.squared_difference(observations[:, :, -1], autoencoder_out))
+    else:
+        ae_loss = tf.constant(0.0)
+    print("ae loss", ae_loss)
 
     # Set up inverse dynamics loss
     tf.get_variable_scope()._reuse = tf.AUTO_REUSE
@@ -295,8 +304,8 @@ def train(config, reporter):
             for (name, _), value in zip(LOSSES, results):
                 test_losses[name].append(value)
             if jx <= 5:
-                save_image(flatten(test_batch[0]["encoded_obs"]), "{}_{}_in.png".format(ix, jx))
-                save_image(flatten(results[-1][0]), "{}_{}_out.png".format(ix, jx))
+                save_image(flatten(test_batch[0]["encoded_obs"]), "{}_{}_{}_in.png".format(mode, ix, jx))
+                save_image(flatten(results[-1][0]), "{}_{}_{}_out.png".format(mode, ix, jx))
 
         # Evaluate IL performance
         rewards = []
