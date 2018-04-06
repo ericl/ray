@@ -352,7 +352,7 @@ if __name__ == '__main__':
                     "data": os.path.expanduser(args.dataset),
                     "h_size": 8,
                     "image": True,
-                    "mode": "ae",
+                    "mode": grid_search(["ae", "ae1diff", "ae1step", "ivd"]),
 #                    "fwd_weight": grid_search([.01, .001, .0001, .00001]),
                 },
             }
