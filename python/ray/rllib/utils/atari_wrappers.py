@@ -13,29 +13,20 @@ class NoopResetEnv(gym.Wrapper):
         """
         gym.Wrapper.__init__(self, env)
         self.noop_max = noop_max
-        self.override_num_noops = None
+        self.override_num_noops = 50
         self.noop_action = 0
         self.random_starts = random_starts
-        assert env.unwrapped.get_action_meanings()[0] == 'NOOP'
+#        assert env.unwrapped.get_action_meanings()[0] == 'NOOP'
 
     def reset(self, **kwargs):
         """ Do no-op action for a number of steps in [1, noop_max]."""
         self.env.reset(**kwargs)
-        if self.override_num_noops is not None:
-            noops = self.override_num_noops
-        else:
-            noops = self.unwrapped.np_random.randint(
-                1, self.noop_max + 1)
-        assert noops > 0
+        noops = self.override_num_noops
         obs = None
         for _ in range(noops):
-            if self.random_starts:
-                action = np.random.randint(self.env.action_space.n)
-            else:
-                action = self.noop_action
+            action = np.zeros_like(self.env.action_space.sample())
             obs, _, done, _ = self.env.step(action)
-            if done:
-                obs = self.env.reset(**kwargs)
+        obs, _, done, _ = self.env.step(self.env.action_space.sample())
         return obs
 
     def step(self, ac):
@@ -197,9 +188,9 @@ def wrap_deepmind(env, random_starts=True, dim=80):
     env = NoopResetEnv(env, noop_max=30, random_starts=random_starts)
     if 'NoFrameskip' in env.spec.id:
         env = MaxAndSkipEnv(env, skip=4)
-    env = EpisodicLifeEnv(env)
-    if 'FIRE' in env.unwrapped.get_action_meanings():
-        env = FireResetEnv(env)
+#    env = EpisodicLifeEnv(env)
+#    if 'FIRE' in env.unwrapped.get_action_meanings():
+#        env = FireResetEnv(env)
     env = WarpFrame(env, dim)
     # env = ClipRewardEnv(env)  # reward clipping is handled by DQN replay
     env = FrameStack(env, 4)

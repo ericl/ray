@@ -24,7 +24,7 @@ from ray.rllib.cartpole import ImageCartPole, CartpoleEncoder, parser
 from ray.rllib.models.misc import normc_initializer
 from ray.rllib.models.preprocessors import NoPreprocessor
 from ray.rllib.render_cartpole import render_frame
-from ray.rllib.utils.atari_wrappers import FrameStack, WarpFrame
+from ray.rllib.utils.atari_wrappers import wrap_deepmind
 from ray.rllib.utils.compression import unpack
 from ray.tune import run_experiments, register_trainable, grid_search
 
@@ -254,8 +254,7 @@ def train(config, reporter):
     else:
         env = gym.make("CartPole-v0")
     if args.car:
-        resized = WarpFrame(env, 80)
-        env = FrameStack(resized, 4)
+        env = wrap_deepmind(env)
         preprocessor = NoPreprocessor(env.observation_space, {})
     elif args.image:
         env = ImageCartPole(env, k, env_config)

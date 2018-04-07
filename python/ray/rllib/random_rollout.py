@@ -18,6 +18,7 @@ import ray
 from ray.rllib.agent import get_agent_class
 from ray.rllib.dqn.common.wrappers import wrap_dqn
 from ray.rllib.models import ModelCatalog
+from ray.rllib.utils.atari_wrappers import wrap_deepmind
 from ray.rllib.utils.compression import pack
 from ray.tune.registry import get_registry
 
@@ -69,16 +70,19 @@ if __name__ == "__main__":
     num_steps = int(args.steps)
 
     env = gym.make(args.env)
+    env = wrap_deepmind(env)
+    env = gym.wrappers.Monitor(env, "/tmp/rollouts", force=True)
     out = open(args.out, "w")
     steps = 0
     while steps < (num_steps or steps + 1):
         rollout = []
         state = env.reset()
+        state = env.reset()
         done = False
         reward_total = 0.0
         while not done and steps < (num_steps or steps + 1):
             if args.image_out:
-                save_image(state, args.image_out, steps)
+                save_image(state[..., -1], args.image_out, steps)
             action = env.action_space.sample()
             next_state, reward, done, _ = env.step(action)
             reward_total += reward
