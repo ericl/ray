@@ -111,6 +111,10 @@ class Deterministic(ActionDistribution):
     def sample(self):
         return self.inputs
 
+    def logp(self, x):
+        """The log-likelihood of the action distribution."""
+        return -tf.squared_difference(self.inputs, x)
+
 
 class MultiActionDistribution(ActionDistribution):
     """Action distribution that operates for list of actions.

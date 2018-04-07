@@ -28,6 +28,7 @@ from ray.rllib.render_cartpole import render_frame
 
 
 parser = argparse.ArgumentParser()
+parser.add_argument("--car", action="store_true")
 parser.add_argument("--image", action="store_true")
 parser.add_argument("--decode-model", default=None)
 parser.add_argument("--background", default="noise")

@@ -17,14 +17,23 @@ import tensorflow.contrib.slim as slim
 
 import ray
 from ray.experimental.tfutils import TensorFlowVariables
-from ray.rllib.models.action_dist import Categorical
+from ray.rllib.models.action_dist import Categorical, Deterministic
 from ray.rllib.models.fcnet import FullyConnectedNetwork
 from ray.rllib.models.visionnet import VisionNetwork
 from ray.rllib.cartpole import ImageCartPole, CartpoleEncoder, parser
 from ray.rllib.models.misc import normc_initializer
 from ray.rllib.models.preprocessors import NoPreprocessor
 from ray.rllib.render_cartpole import render_frame
+from ray.rllib.utils.atari_wrappers import FrameStack, WarpFrame
+from ray.rllib.utils.compression import unpack
 from ray.tune import run_experiments, register_trainable, grid_search
+
+
+def decode(obj):
+    if isinstance(obj, str):
+        return unpack(obj)
+    else:
+        return obj
 
 
 def save_image(data, name):
@@ -112,9 +121,18 @@ def train(config, reporter):
         observations = tf.placeholder(tf.float32, [None, out_size])
     feature_layer, action_layer = make_net(observations, h_size, image, config)
 
+    if args.car:
+        action_dist_cls = Deterministic
+    else:
+        action_dist_cls = Categorical
+
     # Set up IL loss
-    expert_actions = tf.placeholder(tf.int32, [None])
-    action_dist = Categorical(action_layer)
+    if args.car:
+        expert_actions = tf.placeholder(tf.float32, [None, 3])
+        action_dist = action_dist_cls(action_layer)
+    else:
+        expert_actions = tf.placeholder(tf.int32, [None])
+        action_dist = action_dist_cls(action_layer)
     if il_loss_enabled:
         il_loss = -tf.reduce_mean(action_dist.logp(expert_actions))
     else:
@@ -123,15 +141,20 @@ def train(config, reporter):
     print("IL loss", il_loss)
 
     # Set up oracle loss
-    orig_obs = tf.placeholder(tf.float32, [None, 4])
+    if args.car:
+        orig_obs = tf.placeholder(tf.float32, [None, 96, 96, 3])  # TODO?
+    else:
+        orig_obs = tf.placeholder(tf.float32, [None, 4])
     oracle_in = feature_layer
-    if not oracle_loss_enabled:
-        oracle_in = tf.stop_gradient(oracle_in)
-    recons_obs = slim.fully_connected(
-        oracle_in, 4,
-        weights_initializer=normc_initializer(0.01),
-        activation_fn=None, scope="fc_oracle_out")
-    oracle_loss = tf.reduce_mean(tf.squared_difference(orig_obs, recons_obs))
+    if oracle_loss_enabled:
+        assert not args.car, "Not supported"
+        recons_obs = slim.fully_connected(
+            oracle_in, 4,
+            weights_initializer=normc_initializer(0.01),
+            activation_fn=None, scope="fc_oracle_out")
+        oracle_loss = tf.reduce_mean(tf.squared_difference(orig_obs, recons_obs))
+    else:
+        oracle_loss = tf.constant(0.0)
     print("oracle loss", oracle_loss)
 
     # Set up inverse dynamics loss
@@ -151,7 +174,7 @@ def train(config, reporter):
         fused, 2,
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="ivd_pred_out")
-    ivd_action_dist = Categorical(predicted_action)
+    ivd_action_dist = action_dist_cls(predicted_action)
     if ivd_loss_enabled:
         ivd_loss = -tf.reduce_mean(
             ivd_action_dist.logp(expert_actions))
@@ -160,8 +183,12 @@ def train(config, reporter):
     print("Inv Dynamics loss", ivd_loss)
 
     # Set up forward loss
-    feature_and_action = tf.concat(
-        [feature_layer, tf.one_hot(expert_actions, 2)], axis=1)
+    if args.car:
+        feature_and_action = tf.concat(
+            [feature_layer, expert_actions], axis=1)
+    else:
+        feature_and_action = tf.concat(
+            [feature_layer, tf.one_hot(expert_actions, 2)], axis=1)
     fwd1 = slim.fully_connected(
         feature_and_action, 64,
         weights_initializer=normc_initializer(1.0),
@@ -222,8 +249,15 @@ def train(config, reporter):
     grads = _minimize_and_clip(optimizer, summed_loss)
     train_op = optimizer.apply_gradients(grads)
 
-    env = gym.make("CartPole-v0")
-    if args.image:
+    if args.car:
+        env = gym.make("CarRacing-v0")
+    else:
+        env = gym.make("CartPole-v0")
+    if args.car:
+        resized = WarpFrame(env, 80)
+        env = FrameStack(resized, 4)
+        preprocessor = NoPreprocessor(env.observation_space, {})
+    elif args.image:
         env = ImageCartPole(env, k, env_config)
         preprocessor = NoPreprocessor(env.observation_space, {})
     else:
@@ -249,16 +283,26 @@ def train(config, reporter):
 
     data = [json.loads(x) for x in open(data).readlines()]
     print("preprocessing data")
-    if args.image:
+    for t in data:
+        t["obs"] = decode(t["obs"])
+        t["new_obs"] = decode(t["new_obs"])
+
+    def render(raw_obs, config):
+        if args.car:
+            return resized.observation(raw_obs)
+        else:
+            return render_frame(raw_obs, config)
+
+    if args.image or args.car:
         frames = deque([], maxlen=k)
         data_out = []
         for t in data:
             ok = len(frames) >= k
             if len(frames) == 0:
-                frames.append(render_frame(t["obs"], config["env_config"]))
+                frames.append(render(t["obs"], config["env_config"]))
             if ok:
                 t["encoded_obs"] = np.concatenate(frames, axis=2)
-            frames.append(render_frame(t["new_obs"], config["env_config"]))
+            frames.append(render(t["new_obs"], config["env_config"]))
             if ok:
                 t["encoded_next_obs"] = np.concatenate(frames, axis=2)
                 data_out.append(t)
@@ -323,15 +367,16 @@ def train(config, reporter):
 
         # Evaluate IL performance
         rewards = []
-        for _ in range(100):
-            obs = env.reset()
-            reward = 0
-            done = False
-            while not done:
-                action = sess.run(act, feed_dict={observations: [preprocessor.transform(obs)]})[0]
-                obs, rew, done, _ = env.step(action)
-                reward += rew
-            rewards.append(reward)
+        if not args.car:  # TODO
+            for _ in range(100):
+                obs = env.reset()
+                reward = 0
+                done = False
+                while not done:
+                    action = sess.run(act, feed_dict={observations: [preprocessor.transform(obs)]})[0]
+                    obs, rew, done, _ = env.step(action)
+                    reward += rew
+                rewards.append(reward)
 
         loss_info = {}
         mean_train_loss = 0.0
@@ -355,7 +400,22 @@ if __name__ == '__main__':
     args = parser.parse_args()
     ray.init()
     register_trainable("pretrain", train)
-    if args.image:
+    if args.car:
+        run_experiments({
+            "pretrain_car_{}".format(args.experiment): {
+                "run": "pretrain",
+                "config": {
+                    "env_config": {
+                        "background": args.background,
+                    },
+                    "data": os.path.expanduser(args.dataset),
+                    "h_size": 8,
+                    "image": True,
+                    "mode": grid_search(["vae"]),
+                },
+            }
+        })
+    elif args.image:
         run_experiments({
             "pretrain_{}".format(args.experiment): {
                 "run": "pretrain",
@@ -367,7 +427,6 @@ if __name__ == '__main__':
                     "h_size": 8,
                     "image": True,
                     "mode": grid_search(["vae", "vae1step"]),
-#                    "fwd_weight": grid_search([.01, .001, .0001, .00001]),
                 },
             }
         })

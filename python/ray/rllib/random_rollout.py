@@ -5,16 +5,20 @@ from __future__ import division
 from __future__ import print_function
 
 import argparse
+import numpy as np
 import random
 import json
 import os
 import pickle
+
+from scipy.misc import imsave
 
 import gym
 import ray
 from ray.rllib.agent import get_agent_class
 from ray.rllib.dqn.common.wrappers import wrap_dqn
 from ray.rllib.models import ModelCatalog
+from ray.rllib.utils.compression import pack
 from ray.tune.registry import get_registry
 
 EXAMPLE_USAGE = """
@@ -34,6 +38,25 @@ parser.add_argument(
     "--steps", default=None, help="Number of steps to roll out.")
 parser.add_argument(
     "--out", default=None, help="Output filename.")
+parser.add_argument(
+    "--image-out", default=None, help="Output images to dir.")
+
+
+def encode(obj):
+    if isinstance(obj, np.ndarray):
+        if len(obj) > 10:
+            return pack(obj.copy()).decode("utf-8")
+        else:
+            return obj.tolist()
+    else:
+        return obj
+
+
+def save_image(data, dest, i):
+    if not os.path.exists(dest):
+        os.makedirs(dest)
+    imsave(os.path.join(dest, str(i) + ".png"), data)
+
 
 if __name__ == "__main__":
     args = parser.parse_args()
@@ -54,13 +77,15 @@ if __name__ == "__main__":
         done = False
         reward_total = 0.0
         while not done and steps < (num_steps or steps + 1):
-            action = random.choice(range(env.action_space.n))
+            if args.image_out:
+                save_image(state, args.image_out, steps)
+            action = env.action_space.sample()
             next_state, reward, done, _ = env.step(action)
             reward_total += reward
             out.write(json.dumps({
-                "obs": state.tolist(),
-                "new_obs": next_state.tolist(),
-                "action": action,
+                "obs": encode(state),
+                "new_obs": encode(next_state),
+                "action": encode(action),
                 "done": done,
                 "timestep": steps,
                 "reward": reward,
