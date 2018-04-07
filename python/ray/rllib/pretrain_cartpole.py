@@ -96,9 +96,9 @@ def train(config, reporter):
     out_size = config.get("out_size", 200)
     batch_size = config.get("batch_size", 128)
     il_loss_enabled = mode == "il"
-    ae_loss_enabled = mode in ["ae", "ae1step", "ae1stepdiff"]
+    ae_loss_enabled = mode in ["ae", "ae1step", "vae", "vae1step"]
+    variational = ae_loss_enabled and mode.startswith("vae")
     ae_1step = mode == "ae1step"
-    ae_1stepdiff = mode == "ae1stepdiff"
     oracle_loss_enabled = mode == "oracle"
     ivd_loss_enabled = mode in ["ivd", "ivd_fwd"]
     forward_loss_enabled = mode in ["fwd", "ivd_fwd"]
@@ -185,22 +185,34 @@ def train(config, reporter):
         fwd_loss = tf.constant(0.0)
 
     # Set up autoencoder loss
-    autoencoder_out = decode_image(feature_and_action, 1)
+    if variational:
+        mu = slim.fully_connected(
+            feature_and_action, h_size,
+            weights_initializer=normc_initializer(1.0),
+            activation_fn=tf.nn.relu, scope="vae_mean")
+        sigma = slim.fully_connected(
+            feature_and_action, h_size,
+            weights_initializer=normc_initializer(1.0),
+            activation_fn=tf.nn.relu, scope="vae_stddev")
+        latent_vector = mu + sigma * tf.random_normal(tf.shape(mu), 0, 1, dtype=tf.float32)
+    else:
+        latent_vector = feature_and_action
+    autoencoder_out = decode_image(latent_vector, 1)
     if ae_loss_enabled:
         if ae_1step:
-            ae_loss = tf.reduce_mean(
-                tf.squared_difference(next_obs[..., -1:], autoencoder_out))
-        elif ae_1stepdiff:
-            ae_loss = tf.reduce_mean(
-                tf.squared_difference(
-                    next_obs[..., -1:],
-                    observations[..., -1:] + autoencoder_out))
+            target = next_obs[..., -1:]
         else:
-            ae_loss = tf.reduce_mean(
-                tf.squared_difference(observations[..., -1:], autoencoder_out))
+            target = observations[..., -1:]
+        if variational:
+            generation_loss = tf.reduce_mean(tf.squared_difference(target, autoencoder_out))
+            kl_loss = tf.reduce_mean(
+                0.5 * tf.reduce_sum(tf.square(mu) + tf.square(sigma) - tf.log(1e-8 + tf.square(sigma)) - 1, 1))
+            ae_loss = generation_loss + kl_loss
+        else:
+            ae_loss = tf.reduce_mean(tf.squared_difference(target, autoencoder_out))
     else:
         ae_loss = tf.constant(0.0)
-    print("ae loss", ae_loss)
+    print("(v)ae loss", ae_loss)
 
     # Set up optimizer
     optimizer = tf.train.AdamOptimizer()
@@ -354,7 +366,7 @@ if __name__ == '__main__':
                     "data": os.path.expanduser(args.dataset),
                     "h_size": 8,
                     "image": True,
-                    "mode": grid_search(["ae", "ae1stepdiff", "ae1step", "ivd"]),
+                    "mode": grid_search(["vae"]), #, "vae1step"]),
 #                    "fwd_weight": grid_search([.01, .001, .0001, .00001]),
                 },
             }
