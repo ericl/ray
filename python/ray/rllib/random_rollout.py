@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# xvfb-run -s '+iglx -screen 0 2048x2048x24' python random_rollout.py --env CarRacing-v0 --steps 500 --out car.json --image-out ~/Desktop/car
 
 from __future__ import absolute_import
 from __future__ import division
