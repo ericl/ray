@@ -30,7 +30,7 @@ from ray.tune import run_experiments, register_trainable, grid_search
 
 
 def decode(obj):
-    if isinstance(obj, str):
+    if type(obj) in [str, unicode]:
         return unpack(obj)
     else:
         return obj
