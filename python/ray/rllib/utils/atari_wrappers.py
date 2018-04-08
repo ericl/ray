@@ -161,7 +161,7 @@ class ClampActions(gym.Wrapper):
         before = np.array(action).copy()
         action[0] = np.tanh(action[0])
         action[1] = 0.5 + np.tanh(action[1]) / 2
-        action[2] = 0.5 + np.tanh(action[2]) / 2
+        action[2] = 0  #0.5 + np.tanh(action[2]) / 2
 #        print("before", before, "after", action)
         return self.env.step(action)
 

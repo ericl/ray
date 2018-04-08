@@ -225,6 +225,7 @@ if __name__ == '__main__':
                         "extra_cpu": lambda spec: spec.config.num_workers,
                     },
                     "config": {
+                        "gamma": 0.95,
                         "devices": ["/cpu:0"],
                         "num_sgd_iter": 10,
                         "num_workers": 7,
