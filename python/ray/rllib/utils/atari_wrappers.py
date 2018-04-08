@@ -150,6 +150,26 @@ class WarpFrame(gym.ObservationWrapper):
         return frame[:, :, None]
 
 
+class ClampActions(gym.Wrapper):
+    def __init__(self, env):
+        gym.Wrapper.__init__(self, env)
+
+    def reset(self):
+        return self.env.reset()
+
+    def step(self, action):
+        before = np.array(action).copy()
+        action[0] = np.tanh(action[0])
+        action[1] = 0.5 + np.tanh(action[1]) / 2
+        action[2] = 0.5 + np.tanh(action[2]) / 2
+#        print("before", before, "after", action)
+        return self.env.step(action)
+
+    def _get_ob(self):
+        assert len(self.frames) == self.k
+        return np.concatenate(self.frames, axis=2)
+
+
 class FrameStack(gym.Wrapper):
     def __init__(self, env, k):
         """Stack k last frames."""
@@ -194,6 +214,7 @@ def wrap_deepmind(env, random_starts=True, dim=80):
     env = WarpFrame(env, dim)
     # env = ClipRewardEnv(env)  # reward clipping is handled by DQN replay
     env = FrameStack(env, 4)
+    env = ClampActions(env)
     # hack needed to fix rendering on CarRacing-v0
     env = gym.wrappers.Monitor(env, "/tmp/rollouts", force=True)
     return env
