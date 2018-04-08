@@ -72,7 +72,6 @@ if __name__ == "__main__":
 
     env = gym.make(args.env)
     env = wrap_deepmind(env)
-    env = gym.wrappers.Monitor(env, "/tmp/rollouts", force=True)
     out = open(args.out, "w")
     steps = 0
     while steps < (num_steps or steps + 1):

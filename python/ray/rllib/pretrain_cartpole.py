@@ -24,7 +24,7 @@ from ray.rllib.cartpole import ImageCartPole, CartpoleEncoder, parser
 from ray.rllib.models.misc import normc_initializer
 from ray.rllib.models.preprocessors import NoPreprocessor
 from ray.rllib.render_cartpole import render_frame
-from ray.rllib.utils.atari_wrappers import wrap_deepmind
+from ray.rllib.utils.atari_wrappers import wrap_deepmind, WarpFrame
 from ray.rllib.utils.compression import unpack
 from ray.tune import run_experiments, register_trainable, grid_search
 
@@ -142,7 +142,7 @@ def train(config, reporter):
 
     # Set up oracle loss
     if args.car:
-        orig_obs = tf.placeholder(tf.float32, [None, 96, 96, 3])  # TODO?
+        orig_obs = tf.placeholder(tf.float32, [None, 80, 80, k])
     else:
         orig_obs = tf.placeholder(tf.float32, [None, 4])
     oracle_in = feature_layer
@@ -254,6 +254,7 @@ def train(config, reporter):
     else:
         env = gym.make("CartPole-v0")
     if args.car:
+        resizer = WarpFrame(env, 80)
         env = wrap_deepmind(env)
         preprocessor = NoPreprocessor(env.observation_space, {})
     elif args.image:
@@ -288,7 +289,7 @@ def train(config, reporter):
 
     def render(raw_obs, config):
         if args.car:
-            return resized.observation(raw_obs)
+            return resizer.observation(raw_obs)
         else:
             return render_frame(raw_obs, config)
 

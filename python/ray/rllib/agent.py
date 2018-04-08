@@ -11,9 +11,25 @@ import tensorflow as tf
 from ray.tune.registry import ENV_CREATOR
 from ray.tune.result import TrainingResult
 from ray.tune.trainable import Trainable
+from ray.rllib.utils.atari_wrappers import wrap_deepmind
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+
+def atari_env_creator(env_name):
+
+    def creator(env_config):
+        import gym  # soft dependency
+        env = gym.make(env_name)
+
+        is_atari = hasattr(env.unwrapped, "ale") or env_name == "CarRacing-v0"
+        if is_atari:
+            env = wrap_deepmind(env)
+        print("Is atari?", is_atari)
+        return env
+
+    return creator
 
 
 def _deep_update(original, new_dict, new_keys_allowed, whitelist):
@@ -90,8 +106,7 @@ class Agent(Trainable):
             if self.registry and self.registry.contains(ENV_CREATOR, env):
                 self.env_creator = self.registry.get(ENV_CREATOR, env)
             else:
-                import gym  # soft dependency
-                self.env_creator = lambda env_config: gym.make(env)
+                self.env_creator = atari_env_creator(env)
         else:
             self.env_creator = lambda env_config: None
 

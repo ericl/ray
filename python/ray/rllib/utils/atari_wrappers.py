@@ -194,4 +194,6 @@ def wrap_deepmind(env, random_starts=True, dim=80):
     env = WarpFrame(env, dim)
     # env = ClipRewardEnv(env)  # reward clipping is handled by DQN replay
     env = FrameStack(env, 4)
+    # hack needed to fix rendering on CarRacing-v0
+    env = gym.wrappers.Monitor(env, "/tmp/rollouts", force=True)
     return env
