@@ -171,7 +171,7 @@ def train(config, reporter):
         activation_fn=tf.nn.relu,
         scope="ivd_pred1")
     predicted_action = slim.fully_connected(
-        fused, 2,
+        fused, 3 if args.car else 2,
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="ivd_pred_out")
     ivd_action_dist = action_dist_cls(predicted_action)
@@ -411,7 +411,7 @@ if __name__ == '__main__':
                     "data": os.path.expanduser(args.dataset),
                     "h_size": 8,
                     "image": True,
-                    "mode": grid_search(["vae"]),
+                    "mode": grid_search(["ivd"]),
                 },
             }
         })
