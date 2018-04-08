@@ -202,7 +202,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     decode_model = args.decode_model and os.path.expanduser(args.decode_model)
-    if args.image:
+    if args.image or args.car:
         if decode_model:
             model_opts = {
                 "custom_preprocessor": "img_decoder",
@@ -213,30 +213,50 @@ if __name__ == '__main__':
             }
         else:
             model_opts = {}
-        run_experiments({
-            args.experiment: {
-                "run": "PPO",
-                "env": "ImageCartPole-v0",
-                "repeat": 1,
-                "trial_resources": {
-                    "cpu": 1,
-                    "gpu": 1,
-                    "extra_cpu": lambda spec: spec.config.num_workers,
-                },
-                "stop": {
-                    "episode_reward_mean": 200,
-                },
-                "config": {
-                    "env_config": {
-                        "background": args.background,
+        if args.car:
+            run_experiments({
+                args.experiment: {
+                    "run": "PPO",
+                    "env": "CarRacing-v0",
+                    "repeat": 1,
+                    "trial_resources": {
+                        "cpu": 1,
+                        "gpu": 1,
+                        "extra_cpu": lambda spec: spec.config.num_workers,
                     },
-                    "devices": ["/gpu:0"],
-                    "num_sgd_iter": 10,
-                    "num_workers": 7,
-                    "model": model_opts,
-                },
-            }
-        })
+                    "config": {
+                        "devices": ["/cpu:0"],
+                        "num_sgd_iter": 10,
+                        "num_workers": 7,
+                        "model": model_opts,
+                    },
+                }
+            })
+        else:
+            run_experiments({
+                args.experiment: {
+                    "run": "PPO",
+                    "env": "ImageCartPole-v0",
+                    "repeat": 1,
+                    "trial_resources": {
+                        "cpu": 1,
+                        "gpu": 1,
+                        "extra_cpu": lambda spec: spec.config.num_workers,
+                    },
+                    "stop": {
+                        "episode_reward_mean": 200,
+                    },
+                    "config": {
+                        "env_config": {
+                            "background": args.background,
+                        },
+                        "devices": ["/gpu:0"],
+                        "num_sgd_iter": 10,
+                        "num_workers": 7,
+                        "model": model_opts,
+                    },
+                }
+            })
     else:
         run_experiments({
             args.experiment: {
