@@ -171,9 +171,9 @@ def train(config, reporter):
         activation_fn=tf.nn.relu,
         scope="ivd_pred1")
     predicted_action = slim.fully_connected(
-        fused, 3 if args.car else 2,
+        fused, 1 if args.car else 2,
         weights_initializer=normc_initializer(0.01),
-        activation_fn=None, scope="ivd_pred_out")
+        activation_fn=None, scope="ivd_pred_out").squeeze()
     ivd_action_dist = action_dist_cls(predicted_action)
     if ivd_loss_enabled:
         ivd_loss = -tf.reduce_mean(
