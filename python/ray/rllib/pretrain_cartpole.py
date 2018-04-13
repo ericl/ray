@@ -185,7 +185,7 @@ def train(config, reporter):
     # Set up forward loss
     if args.car:
         feature_and_action = tf.concat(
-            [feature_layer, expert_actions], axis=1)
+            [feature_layer, tf.expand_dims(expert_actions, 1)], axis=1)
     else:
         feature_and_action = tf.concat(
             [feature_layer, tf.one_hot(expert_actions, 2)], axis=1)
