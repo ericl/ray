@@ -128,7 +128,7 @@ def train(config, reporter):
 
     # Set up IL loss
     if args.car:
-        expert_actions = tf.placeholder(tf.float32, [None, 3])
+        expert_actions = tf.placeholder(tf.float32, [None])
         action_dist = action_dist_cls(action_layer)
     else:
         expert_actions = tf.placeholder(tf.int32, [None])
