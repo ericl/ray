@@ -20,14 +20,18 @@ def build_racing_env(_):
 env_creator_name = "discrete-carracing-v0"
 register_env(env_creator_name, build_racing_env)
 
-ray.init()
-run_experiments({
-        "demo": {
-            "run": "A3C",
-            "env": "discrete-carracing-v0",
-            "config": {
-                "num_workers": 1
-            }
-        },
-    })
+if __name__ == '__main__':
+    ray.init()
+    run_experiments({
+            "demo": {
+                "run": "A3C",
+                "env": "discrete-carracing-v0",
+                "config": {
+                    "num_workers": 1,
+                    "optimizer": {
+                        "grads_per_step": 1000,
+                    },
+                }
+            },
+        })
 

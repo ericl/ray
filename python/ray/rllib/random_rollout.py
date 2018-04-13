@@ -13,7 +13,7 @@ import os
 import pickle
 
 from scipy.misc import imsave
-
+from ray.rllib.carracing_discrete import env_test
 import gym
 import ray
 from ray.rllib.agent import get_agent_class
@@ -67,11 +67,10 @@ if __name__ == "__main__":
         if not args.config.get("env"):
             parser.error("the following arguments are required: --env")
         args.env = args.config.get("env")
-
+    
     num_steps = int(args.steps)
 
-    env = gym.make(args.env)
-    env = wrap_deepmind(env)
+    env = env_test.build_racing_env(0) 
     out = open(args.out, "w")
     steps = 0
     while steps < (num_steps or steps + 1):
