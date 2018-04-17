@@ -97,3 +97,4 @@ if __name__ == "__main__":
             steps += 1
             state = next_state
         print("Episode reward", reward_total)
+

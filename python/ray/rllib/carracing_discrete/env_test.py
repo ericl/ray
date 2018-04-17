@@ -26,8 +26,16 @@ if __name__ == '__main__':
             "demo": {
                 "run": "A3C",
                 "env": "discrete-carracing-v0",
+                "stop" : {
+                    "episode_reward_mean": 1000
+                }, 
+                "trial_resources": {
+                    "cpu": 1,
+                    "gpu": 0,
+                    "extra_cpu": lambda spec: spec.config.num_workers,
+                },
                 "config": {
-                    "num_workers": 1,
+                    "num_workers": 15,
                     "optimizer": {
                         "grads_per_step": 1000,
                     },

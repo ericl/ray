@@ -16,6 +16,7 @@ import time
 import tensorflow as tf
 
 import ray
+from ray.rllib.carracing_discrete import env_test
 from ray.experimental.tfutils import TensorFlowVariables
 from ray.rllib.models.fcnet import FullyConnectedNetwork
 from ray.rllib.models.visionnet import VisionNetwork
@@ -25,7 +26,9 @@ from ray.rllib.models.preprocessors import Preprocessor
 from ray.rllib.ppo import PPOAgent
 #from ray.rllib import bullet_cartpole
 from ray.rllib.render_cartpole import render_frame
-
+from ray.rllib import a3c
+from ray.rllib.carracing_discrete.atari_wrappers import NoopResetEnv, WarpFrame, FrameStack
+from ray.rllib.carracing_discrete.wrapper import DiscreteCarRacing
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--car", action="store_true")
@@ -35,6 +38,18 @@ parser.add_argument("--background", default="noise")
 parser.add_argument("--experiment", default="cartpole-decode")
 parser.add_argument("--dataset", default=None)
 parser.add_argument("--h-size", default=8, type=int)
+
+def build_racing_env(_):
+    env = gym.make('CarRacing-v0')
+    env = DiscreteCarRacing(env)
+    env = NoopResetEnv(env)
+    env.override_num_noops = 50
+    env = WarpFrame(env, 80)
+    env = FrameStack(env, 4)
+    # hack needed to fix rendering on CarRacing-v0
+    env = gym.wrappers.Monitor(env, "/tmp/rollouts", force=True)
+    return env
+
 
 
 def load_image_model(weights_file, obs_ph, sess, h_size):
@@ -197,7 +212,11 @@ if __name__ == '__main__':
 #            bullet_cartpole.add_opts(
 #                argparse.ArgumentParser()).parse_args([]),
 #            discrete_actions=True))
+    
+    env_creator_name = "discrete-carracing-v0"
+    register_env(env_creator_name, build_racing_env)
 
+    
     ray.init()
     args = parser.parse_args()
 
@@ -216,19 +235,19 @@ if __name__ == '__main__':
         if args.car:
             run_experiments({
                 args.experiment: {
-                    "run": "PPO",
-                    "env": "CarRacing-v0",
+                    "run": "A3C",
+                    "env": "discrete-carracing-v0",
                     "repeat": 1,
                     "trial_resources": {
                         "cpu": 1,
-                        "gpu": 1,
+                        "gpu": 0,
                         "extra_cpu": lambda spec: spec.config.num_workers,
                     },
                     "config": {
-                        "gamma": 0.95,
-                        "devices": ["/cpu:0"],
-                        "num_sgd_iter": 10,
                         "num_workers": 7,
+                        "optimizer": {
+                            "grads_per_step": 1000    
+                        },
                         "model": model_opts,
                     },
                 }
