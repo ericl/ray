@@ -133,7 +133,7 @@ def train(config, reporter):
 
     # Set up IL loss
     if args.car:
-        expert_actions = tf.placeholder(tf.float32, [None])
+        expert_actions = tf.placeholder(tf.int32, [None])
         action_dist = action_dist_cls(action_layer)
     else:
         expert_actions = tf.placeholder(tf.int32, [None])
@@ -185,7 +185,7 @@ def train(config, reporter):
         activation_fn=tf.nn.relu,
         scope="ivd_pred1")
     predicted_action = tf.squeeze(slim.fully_connected(
-        fused, 1 if args.car else 2,
+        fused, 4 if args.car else 2,
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="ivd_pred_out"))
     ivd_action_dist = action_dist_cls(predicted_action)
@@ -199,7 +199,7 @@ def train(config, reporter):
     # Set up forward loss
     if args.car:
         feature_and_action = tf.concat(
-            [feature_layer, tf.expand_dims(expert_actions, 1)], axis=1)
+            [feature_layer, tf.one_hot(expert_actions, 4)], axis=1)
     else:
         feature_and_action = tf.concat(
             [feature_layer, tf.one_hot(expert_actions, 2)], axis=1)
