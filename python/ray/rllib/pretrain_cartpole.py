@@ -117,8 +117,10 @@ def train(config, reporter):
     oracle_loss_enabled = mode == "oracle"
     ivd_loss_enabled = mode in ["ivd", "ivd_fwd"]
     forward_loss_enabled = mode in ["fwd", "ivd_fwd"]
+    prediction_loss_enabled = mode in ["prediction"]
     assert il_loss_enabled or oracle_loss_enabled or \
-        ivd_loss_enabled or forward_loss_enabled or ae_loss_enabled
+        ivd_loss_enabled or forward_loss_enabled or ae_loss_enabled or \
+        prediction_loss
 
     # Set up decoder network
     if image:
@@ -127,10 +129,7 @@ def train(config, reporter):
         observations = tf.placeholder(tf.float32, [None, out_size])
     feature_layer, action_layer = make_net(observations, h_size, image, config)
 
-    if args.car:
-        action_dist_cls = Deterministic
-    else:
-        action_dist_cls = Categorical
+    action_dist_cls = Categorical
 
     # Set up IL loss
     if args.car:
@@ -146,11 +145,20 @@ def train(config, reporter):
     act = action_dist.sample()
     print("IL loss", il_loss)
 
+    # Set up prediction loss
+    pred_h0 = tf.concat([feature_layer, next_ten_actions], axis=1)
+    pred_h1 = slim.fully_connected(
+        pred_h0, 64,
+        weights_initializer=normc_initializer(1.0),
+        activation_fn=tf.nn.relu,
+        scope="pred_h1")
+    pred_out = slim.fully_connected(
+        pred_h1, 20,
+        weights_initializer=normc_initializer(0.01),
+        activation_fn=None, scope="reward_prediction")
+
     # Set up oracle loss
-    if args.car:
-        orig_obs = tf.placeholder(tf.float32, [None, 80, 80, k])
-    else:
-        orig_obs = tf.placeholder(tf.float32, [None, 4])
+    orig_obs = tf.placeholder(tf.float32, [None, 4])
     oracle_in = feature_layer
     if oracle_loss_enabled:
         assert not args.car, "Not supported"
