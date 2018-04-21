@@ -3,8 +3,8 @@ import ray
 from ray.tune.registry import register_env
 from ray.tune import run_experiments
 from ray.rllib import a3c
-from atari_wrappers import NoopResetEnv, WarpFrame, FrameStack
-from wrapper import DiscreteCarRacing
+from ray.rllib.carracing_discrete.atari_wrappers import NoopResetEnv, WarpFrame, FrameStack
+from ray.rllib.carracing_discrete.wrapper import DiscreteCarRacing
 
 def build_racing_env(_):
     env = gym.make('CarRacing-v0')

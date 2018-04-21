@@ -28,6 +28,12 @@ from ray.rllib.utils.atari_wrappers import wrap_deepmind, WarpFrame
 from ray.rllib.utils.compression import unpack
 from ray.tune import run_experiments, register_trainable, grid_search
 
+# Fix Python 2.x.
+try:
+    UNICODE_EXISTS = bool(type(unicode))
+except NameError:
+    unicode = lambda s: str(s)
+
 
 def decode(obj):
     if type(obj) in [str, unicode]:
@@ -296,7 +302,17 @@ def train(config, reporter):
         else:
             return render_frame(raw_obs, config)
 
-    if args.image or args.car:
+    if args.car:
+        data_out = []
+        for t in data:
+            t["encoded_obs"] = t["obs"]
+            t["encoded_next_obs"] = t["new_obs"]
+            if len(data_out) % 1000 == 0:
+                print("Loaded frames", len(data_out))
+            print(t["obs"].shape)
+            data_out.append(t)
+        data = data_out
+    elif args.image:
         frames = deque([], maxlen=k)
         data_out = []
         for t in data:

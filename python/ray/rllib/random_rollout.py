@@ -36,6 +36,8 @@ parser = argparse.ArgumentParser(
 required_named = parser.add_argument_group("required named arguments")
 required_named.add_argument(
     "--env", type=str, help="The gym environment to use.")
+required_named.add_argument(
+    "--repeat-prob", default=0, type=float, help="Probability of repeating.")
 parser.add_argument(
     "--steps", default=None, help="Number of steps to roll out.")
 parser.add_argument(
@@ -60,6 +62,13 @@ def save_image(data, dest, i):
     imsave(os.path.join(dest, str(i) + ".png"), data)
 
 
+def get_repeat(repeat_prob):
+    if random.random() < repeat_prob:
+        return 20
+    else:
+        return 0
+
+
 if __name__ == "__main__":
     args = parser.parse_args()
 
@@ -72,6 +81,7 @@ if __name__ == "__main__":
 
     env = env_test.build_racing_env(0) 
     out = open(args.out, "w")
+    repeat = 0
     steps = 0
     while steps < (num_steps or steps + 1):
         rollout = []
@@ -82,7 +92,11 @@ if __name__ == "__main__":
         while not done and steps < (num_steps or steps + 1):
             if args.image_out:
                 save_image(state[..., -1], args.image_out, steps)
-            action = env.action_space.sample()
+            if repeat > 0:
+                repeat -= 1
+            else:
+                action = env.action_space.sample()
+                repeat = get_repeat(args.repeat_prob)
             next_state, reward, done, _ = env.step(action)
             reward_total += reward
             out.write(json.dumps({
@@ -91,6 +105,7 @@ if __name__ == "__main__":
                 "action": encode(action),
                 "done": done,
                 "timestep": steps,
+                "repeat": repeat,
                 "reward": reward,
             }))
             out.write("\n")
