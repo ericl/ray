@@ -145,17 +145,17 @@ def train(config, reporter):
     act = action_dist.sample()
     print("IL loss", il_loss)
 
-    # Set up prediction loss
-    pred_h0 = tf.concat([feature_layer, next_ten_actions], axis=1)
-    pred_h1 = slim.fully_connected(
-        pred_h0, 64,
-        weights_initializer=normc_initializer(1.0),
-        activation_fn=tf.nn.relu,
-        scope="pred_h1")
-    pred_out = slim.fully_connected(
-        pred_h1, 20,
-        weights_initializer=normc_initializer(0.01),
-        activation_fn=None, scope="reward_prediction")
+#    # Set up prediction loss
+#    pred_h0 = tf.concat([feature_layer, next_ten_actions], axis=1)
+#    pred_h1 = slim.fully_connected(
+#        pred_h0, 64,
+#        weights_initializer=normc_initializer(1.0),
+#        activation_fn=tf.nn.relu,
+#        scope="pred_h1")
+#    pred_out = slim.fully_connected(
+#        pred_h1, 20,
+#        weights_initializer=normc_initializer(0.01),
+#        activation_fn=None, scope="reward_prediction")
 
     # Set up oracle loss
     orig_obs = tf.placeholder(tf.float32, [None, 4])
