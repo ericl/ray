@@ -124,19 +124,19 @@ def train(config, reporter):
 
     # Set up decoder network
     if image:
-        observations = tf.placeholder(tf.float32, [None, 80, 80, k])
+        observations = tf.placeholder(tf.float32, [None, 80, 80, k], name="observations")
     else:
-        observations = tf.placeholder(tf.float32, [None, out_size])
+        observations = tf.placeholder(tf.float32, [None, out_size], name="observations")
     feature_layer, action_layer = make_net(observations, h_size, image, config)
 
     action_dist_cls = Categorical
 
     # Set up IL loss
     if args.car:
-        expert_actions = tf.placeholder(tf.int32, [None])
+        expert_actions = tf.placeholder(tf.int32, [None], name="expert_actions")
         action_dist = action_dist_cls(action_layer)
     else:
-        expert_actions = tf.placeholder(tf.int32, [None])
+        expert_actions = tf.placeholder(tf.int32, [None], name="expert_actions")
         action_dist = action_dist_cls(action_layer)
     if il_loss_enabled:
         il_loss = -tf.reduce_mean(action_dist.logp(expert_actions))
@@ -150,7 +150,7 @@ def train(config, reporter):
         pred_h0 = tf.concat([feature_layer, tf.one_hot(expert_actions, 4)], axis=1)
     else:
         pred_h0 = tf.concat([feature_layer, tf.one_hot(expert_actions, 2)], axis=1)
-    next_ten_rewards = tf.placeholder(tf.float32, [None, 10])
+    next_ten_rewards = tf.placeholder(tf.float32, [None, 10], name="next_10_rewards")
     pred_h1 = slim.fully_connected(
         pred_h0, 64,
         weights_initializer=normc_initializer(1.0),
@@ -160,7 +160,7 @@ def train(config, reporter):
         pred_h1, 10,
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="reward_prediction")
-    repeat = tf.placeholder(tf.int32, [None])
+    repeat = tf.placeholder(tf.int32, [None], name="repeat")
     if prediction_loss_enabled:
         # Only try to predict 10-step action repeats
         can_predict = tf.expand_dims(
@@ -171,7 +171,7 @@ def train(config, reporter):
         prediction_loss = tf.constant(0.0)
 
     # Set up oracle loss
-    orig_obs = tf.placeholder(tf.float32, [None, 4])
+    orig_obs = tf.placeholder(tf.float32, [None, 4], name="orig_obs")
     oracle_in = feature_layer
     if oracle_loss_enabled:
         assert not args.car, "Not supported"
@@ -187,9 +187,9 @@ def train(config, reporter):
     # Set up inverse dynamics loss
     tf.get_variable_scope()._reuse = tf.AUTO_REUSE
     if image:
-        next_obs = tf.placeholder(tf.float32, [None, 80, 80, k])
+        next_obs = tf.placeholder(tf.float32, [None, 80, 80, k], name="next_obs")
     else:
-        next_obs = tf.placeholder(tf.float32, [None, out_size])
+        next_obs = tf.placeholder(tf.float32, [None, out_size], name="next_obs")
     feature_layer2, _ = make_net(next_obs, h_size, image, config)
     fused = tf.concat([feature_layer, feature_layer2], axis=1)
     fused2 = slim.fully_connected(
@@ -339,6 +339,7 @@ def train(config, reporter):
         for t in data:
             t["encoded_obs"] = t["obs"]
             t["encoded_next_obs"] = t["new_obs"]
+            t["obs"] = [0, 0, 0, 0]  # "true" latent state not available
             if len(data_out) % 1000 == 0:
                 print("Loaded frames", len(data_out))
             data_out.append(t)
