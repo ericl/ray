@@ -78,13 +78,22 @@ if __name__ == "__main__":
         args.env = args.config.get("env")
     
     num_steps = int(args.steps)
+    agent = None
 
-    env = env_test.build_racing_env(0) 
+    ray.init()
+    cls = get_agent_class("PPO")
+    agent = cls(env=args.env)
+    agent.restore("/home/eric/ray_results/default/PPO_CartPole-v0_0_2018-04-21_19-20-34up8nkm35/checkpoint-10")
+
+    if args.env == "car":
+        env = env_test.build_racing_env(0) 
+    else:
+        env = gym.make(args.env)
     out = open(args.out, "w")
-    repeat = 0
     steps = 0
     while steps < (num_steps or steps + 1):
         rollout = []
+        repeat = 0
         state = env.reset()
         state = env.reset()
         done = False
@@ -95,8 +104,11 @@ if __name__ == "__main__":
             if repeat > 0:
                 repeat -= 1
             else:
-                action = env.action_space.sample()
                 repeat = get_repeat(args.repeat_prob)
+                if repeat > 0 or not agent:
+                    action = env.action_space.sample()
+                else:
+                    action = int(agent.compute_action(state))
             next_state, reward, done, _ = env.step(action)
             reward_total += reward
             out.write(json.dumps({

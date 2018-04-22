@@ -160,9 +160,13 @@ def train(config, reporter):
         pred_h1, 10,
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="reward_prediction")
+    repeat = tf.placeholder(tf.int32, [None])
     if prediction_loss_enabled:
+        # Only try to predict 10-step action repeats
+        can_predict = tf.expand_dims(
+            tf.cast(tf.greater(repeat, 10), tf.float32), 1)
         prediction_loss = tf.reduce_mean(
-            tf.squared_difference(pred_out, next_ten_rewards))
+            tf.squared_difference(can_predict * pred_out, can_predict * next_ten_rewards))
     else:
         prediction_loss = 0.0
 
@@ -392,6 +396,7 @@ def train(config, reporter):
                     orig_obs: [t["obs"] for t in batch],
                     next_obs: [t["encoded_next_obs"] for t in batch],
                     next_ten_rewards: [t["next_ten_rewards"] for t in batch],
+                    repeat: [t.get("repeat", 0) for t in batch],
                 })
             for (name, _), value in zip(LOSSES, results):
                 train_losses[name].append(value)
@@ -408,6 +413,7 @@ def train(config, reporter):
                     orig_obs: [t["obs"] for t in test_batch],
                     next_obs: [t["encoded_next_obs"] for t in test_batch],
                     next_ten_rewards: [t["next_ten_rewards"] for t in test_batch],
+                    repeat: [t.get("repeat", 0) for t in test_batch],
                 })
             for (name, _), value in zip(LOSSES, results):
                 test_losses[name].append(value)
