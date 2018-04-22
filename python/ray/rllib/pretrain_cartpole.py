@@ -120,7 +120,7 @@ def train(config, reporter):
     prediction_loss_enabled = mode in ["prediction"]
     assert il_loss_enabled or oracle_loss_enabled or \
         ivd_loss_enabled or forward_loss_enabled or ae_loss_enabled or \
-        prediction_loss
+        prediction_loss_enabled
 
     # Set up decoder network
     if image:
@@ -145,17 +145,26 @@ def train(config, reporter):
     act = action_dist.sample()
     print("IL loss", il_loss)
 
-#    # Set up prediction loss
-#    pred_h0 = tf.concat([feature_layer, next_ten_actions], axis=1)
-#    pred_h1 = slim.fully_connected(
-#        pred_h0, 64,
-#        weights_initializer=normc_initializer(1.0),
-#        activation_fn=tf.nn.relu,
-#        scope="pred_h1")
-#    pred_out = slim.fully_connected(
-#        pred_h1, 20,
-#        weights_initializer=normc_initializer(0.01),
-#        activation_fn=None, scope="reward_prediction")
+    # Set up prediction loss
+    if args.car:
+        pred_h0 = tf.concat([feature_layer, tf.one_hot(expert_actions, 4)], axis=1)
+    else:
+        pred_h0 = tf.concat([feature_layer, tf.one_hot(expert_actions, 2)], axis=1)
+    next_ten_rewards = tf.placeholder(tf.float32, [None, 10])
+    pred_h1 = slim.fully_connected(
+        pred_h0, 64,
+        weights_initializer=normc_initializer(1.0),
+        activation_fn=tf.nn.relu,
+        scope="pred_h1")
+    pred_out = slim.fully_connected(
+        pred_h1, 10,
+        weights_initializer=normc_initializer(0.01),
+        activation_fn=None, scope="reward_prediction")
+    if prediction_loss_enabled:
+        prediction_loss = tf.reduce_mean(
+            tf.squared_difference(pred_out, next_ten_rewards))
+    else:
+        prediction_loss = 0.0
 
     # Set up oracle loss
     orig_obs = tf.placeholder(tf.float32, [None, 4])
@@ -261,7 +270,7 @@ def train(config, reporter):
     # Set up optimizer
     optimizer = tf.train.AdamOptimizer()
     summed_loss = (
-        oracle_loss + il_loss + ivd_loss + ae_loss +
+        oracle_loss + il_loss + ivd_loss + ae_loss + prediction_loss +
         fwd_loss * config.get("fwd_weight", 0.0))
     grads = _minimize_and_clip(optimizer, summed_loss)
     train_op = optimizer.apply_gradients(grads)
@@ -298,11 +307,22 @@ def train(config, reporter):
 
     vars = TensorFlowVariables(summed_loss, sess)
 
+    def get_next_ten_rewards(data, start_i):
+        rew = [0] * 10
+        for i in range(10):
+            offset = start_i + i
+            if offset < len(data):
+                rew[i] = data[offset]["reward"]
+                if data[offset]["done"]:
+                    break
+        return rew
+
     data = [json.loads(x) for x in open(data).readlines()]
     print("preprocessing data")
-    for t in data:
+    for i, t in enumerate(data):
         t["obs"] = decode(t["obs"])
         t["new_obs"] = decode(t["new_obs"])
+        t["next_ten_rewards"] = get_next_ten_rewards(data, i)
 
     def render(raw_obs, config):
         if args.car:
@@ -356,6 +376,7 @@ def train(config, reporter):
         ("il", il_loss),
         ("ivd", ivd_loss),
         ("oracle", oracle_loss),
+        ("prediction", prediction_loss),
     ]
 
     print("start training")
@@ -370,6 +391,7 @@ def train(config, reporter):
                     expert_actions: [t["action"] for t in batch],
                     orig_obs: [t["obs"] for t in batch],
                     next_obs: [t["encoded_next_obs"] for t in batch],
+                    next_ten_rewards: [t["next_ten_rewards"] for t in batch],
                 })
             for (name, _), value in zip(LOSSES, results):
                 train_losses[name].append(value)
@@ -385,6 +407,7 @@ def train(config, reporter):
                     expert_actions: [t["action"] for t in test_batch],
                     orig_obs: [t["obs"] for t in test_batch],
                     next_obs: [t["encoded_next_obs"] for t in test_batch],
+                    next_ten_rewards: [t["next_ten_rewards"] for t in test_batch],
                 })
             for (name, _), value in zip(LOSSES, results):
                 test_losses[name].append(value)
@@ -453,7 +476,7 @@ if __name__ == '__main__':
                     "data": os.path.expanduser(args.dataset),
                     "h_size": 8,
                     "image": True,
-                    "mode": grid_search(["vae", "vae1step"]),
+                    "mode": grid_search(["prediction"]),
                 },
             }
         })
