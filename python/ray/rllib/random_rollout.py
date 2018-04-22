@@ -80,10 +80,10 @@ if __name__ == "__main__":
     num_steps = int(args.steps)
     agent = None
 
-    ray.init()
-    cls = get_agent_class("PPO")
-    agent = cls(env=args.env)
-    agent.restore("/home/eric/ray_results/default/PPO_CartPole-v0_0_2018-04-21_19-20-34up8nkm35/checkpoint-10")
+#    ray.init()
+#    cls = get_agent_class("PPO")
+#    agent = cls(env=args.env)
+#    agent.restore("/home/eric/ray_results/default/PPO_CartPole-v0_0_2018-04-21_19-20-34up8nkm35/checkpoint-10")
 
     if args.env == "car":
         env = env_test.build_racing_env(0) 
