@@ -341,7 +341,6 @@ def train(config, reporter):
             t["encoded_next_obs"] = t["new_obs"]
             if len(data_out) % 1000 == 0:
                 print("Loaded frames", len(data_out))
-            print(t["obs"].shape)
             data_out.append(t)
         data = data_out
     elif args.image:
@@ -465,7 +464,7 @@ if __name__ == '__main__':
                         "background": args.background,
                     },
                     "data": os.path.expanduser(args.dataset),
-                    "h_size": 32,
+                    "h_size": args.h_size,
                     "image": True,
                     "mode": grid_search(["ivd"]),
                 },
@@ -480,7 +479,7 @@ if __name__ == '__main__':
                         "background": args.background,
                     },
                     "data": os.path.expanduser(args.dataset),
-                    "h_size": 8,
+                    "h_size": args.h_size,
                     "image": True,
                     "mode": grid_search(["ivd", "prediction"]),
                 },
@@ -492,6 +491,7 @@ if __name__ == '__main__':
                 "run": "pretrain",
                 "config": {
                     "data": os.path.expanduser(args.dataset),
+                    "h_size": args.h_size,
                     "mode": grid_search(["ivd", "fwd", "ivd_fwd", "il", "oracle"]),
                     "model": {
                         "fcnet_activation": "relu",

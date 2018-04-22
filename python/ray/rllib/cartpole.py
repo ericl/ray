@@ -37,7 +37,7 @@ parser.add_argument("--decode-model", default=None)
 parser.add_argument("--background", default="noise")
 parser.add_argument("--experiment", default="cartpole-decode")
 parser.add_argument("--dataset", default=None)
-parser.add_argument("--h-size", default=8, type=int)
+parser.add_argument("--h-size", default=32, type=int)
 
 def build_racing_env(_):
     env = gym.make('CarRacing-v0')
