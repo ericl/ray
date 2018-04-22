@@ -168,7 +168,7 @@ def train(config, reporter):
         prediction_loss = tf.reduce_mean(
             tf.squared_difference(can_predict * pred_out, can_predict * next_ten_rewards))
     else:
-        prediction_loss = 0.0
+        prediction_loss = tf.constant(0.0)
 
     # Set up oracle loss
     orig_obs = tf.placeholder(tf.float32, [None, 4])
@@ -482,7 +482,7 @@ if __name__ == '__main__':
                     "data": os.path.expanduser(args.dataset),
                     "h_size": 8,
                     "image": True,
-                    "mode": grid_search(["prediction"]),
+                    "mode": grid_search(["ivd", "prediction"]),
                 },
             }
         })
