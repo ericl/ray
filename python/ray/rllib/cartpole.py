@@ -7,6 +7,7 @@ import os
 from collections import deque
 import math
 import numpy as np
+import json
 import pickle
 import gym
 from gym import spaces
@@ -29,6 +30,7 @@ from ray.rllib.render_cartpole import render_frame
 from ray.rllib import a3c
 from ray.rllib.carracing_discrete.atari_wrappers import NoopResetEnv, WarpFrame, FrameStack
 from ray.rllib.carracing_discrete.wrapper import DiscreteCarRacing
+from ray.rllib.utils.compression import unpack
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--car", action="store_true")
@@ -37,7 +39,43 @@ parser.add_argument("--decode-model", default=None)
 parser.add_argument("--background", default="noise")
 parser.add_argument("--experiment", default="cartpole-decode")
 parser.add_argument("--dataset", default=None)
+parser.add_argument("--pca", action="store_true")
 parser.add_argument("--h-size", default=32, type=int)
+
+
+def framestack_cartpole(data, k, env_config, args):
+    frames = deque([], maxlen=k)
+    data_out = []
+    for t in data:
+        ok = len(frames) >= k
+        if len(frames) == 0:
+            frames.append(render_frame(t["obs"], env_config))
+        if ok:
+            t["encoded_obs"] = np.concatenate(frames, axis=2)
+        frames.append(render_frame(t["new_obs"], env_config))
+        if ok:
+            t["encoded_next_obs"] = np.concatenate(frames, axis=2)
+            data_out.append(t)
+        if t["done"]:
+            frames.clear()
+        if len(data_out) % 1000 == 0:
+            print("Loaded frames", len(data_out))
+    return data_out
+
+
+def load_images(data, args, env_config):
+    data = [json.loads(x) for x in open(data).readlines()]
+    if args.car:
+        render_f = lambda args: args[0]
+    else:
+        render_f = render_frame
+    if args.car:
+        for d in data:
+            d["encoded_obs"] = d["obs"]
+    else:
+        data = framestack_cartpole(data, 4, env_config, args, render_f)
+    return np.stack(x["encoded_obs"].flatten() for x in data)
+
 
 def build_racing_env(_):
     env = gym.make('CarRacing-v0')
@@ -128,6 +166,28 @@ class Space(object):
         self.shape = shape
 
 
+class PCADecoder(Preprocessor):
+    def _init(self):
+        from sklearn.preprocessing import StandardScaler
+        from sklearn.decomposition import PCA
+
+        self.h_size = self._options["custom_options"].get("h_size")
+        dataset = self._options["custom_options"].get("pca_train")
+        env_config = self._options["custom_options"].get("env_config")
+        self.pca = PCA(0.95)
+        scaler = StandardScaler()
+        data = load_images(dataset, args, env_config)
+        s = scaler.fit(data)
+        data = s.transform(data)
+        print("Fitting PCA on data", data.shape)
+        self.pca.fit(data)
+        print("N PCA components", self.pca.n_components_)
+        self.shape = (self.h_size,)
+
+    def transform(self, obs):
+        return self.pca.transform([obs.flatten()])[0][:self.h_size]
+
+
 class ImageDecoder(Preprocessor):
     def _init(self):
         self.decode_model = self._options["custom_options"].get("decode_model")
@@ -203,6 +263,7 @@ if __name__ == '__main__':
     ModelCatalog.register_custom_preprocessor("flatten", Flatten)
     ModelCatalog.register_custom_preprocessor("decoder", Decoder)
     ModelCatalog.register_custom_preprocessor("img_decoder", ImageDecoder)
+    ModelCatalog.register_custom_preprocessor("pca_decoder", PCADecoder)
     register_env(
         "ImageCartPole-v0",
         lambda env_config: ImageCartPole(gym.make("CartPole-v0"), 4, env_config))
@@ -216,13 +277,24 @@ if __name__ == '__main__':
     env_creator_name = "discrete-carracing-v0"
     register_env(env_creator_name, build_racing_env)
 
-    
     ray.init()
     args = parser.parse_args()
+    env_config = {
+        "background": args.background,
+    }
 
     decode_model = args.decode_model and os.path.expanduser(args.decode_model)
     if args.image or args.car:
-        if decode_model:
+        if args.pca:
+            model_opts = {
+                "custom_preprocessor": "pca_decoder",
+                "custom_options": {
+                    "h_size": args.h_size,
+                    "pca_train": args.dataset,
+                    "env_config": env_config,
+                },
+            }
+        elif decode_model:
             model_opts = {
                 "custom_preprocessor": "img_decoder",
                 "custom_options": {
@@ -260,19 +332,17 @@ if __name__ == '__main__':
                     "repeat": 1,
                     "trial_resources": {
                         "cpu": 1,
-                        "gpu": 1,
+                        "gpu": 0,
                         "extra_cpu": lambda spec: spec.config.num_workers,
                     },
                     "stop": {
                         "episode_reward_mean": 200,
                     },
                     "config": {
-                        "env_config": {
-                            "background": args.background,
-                        },
+                        "env_config": env_config,
                         "devices": ["/gpu:0"],
                         "num_sgd_iter": 10,
-                        "num_workers": 7,
+                        "num_workers": 2,
                         "model": model_opts,
                     },
                 }

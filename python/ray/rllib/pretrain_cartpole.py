@@ -20,7 +20,7 @@ from ray.experimental.tfutils import TensorFlowVariables
 from ray.rllib.models.action_dist import Categorical, Deterministic
 from ray.rllib.models.fcnet import FullyConnectedNetwork
 from ray.rllib.models.visionnet import VisionNetwork
-from ray.rllib.cartpole import ImageCartPole, CartpoleEncoder, parser
+from ray.rllib.cartpole import ImageCartPole, CartpoleEncoder, parser, framestack
 from ray.rllib.models.misc import normc_initializer
 from ray.rllib.models.preprocessors import NoPreprocessor
 from ray.rllib.render_cartpole import render_frame
@@ -284,7 +284,6 @@ def train(config, reporter):
     else:
         env = gym.make("CartPole-v0")
     if args.car:
-        resizer = WarpFrame(env, 80)
         env = wrap_deepmind(env)
         preprocessor = NoPreprocessor(env.observation_space, {})
     elif args.image:
@@ -328,12 +327,6 @@ def train(config, reporter):
         t["new_obs"] = decode(t["new_obs"])
         t["next_ten_rewards"] = get_next_ten_rewards(data, i)
 
-    def render(raw_obs, config):
-        if args.car:
-            return resizer.observation(raw_obs)
-        else:
-            return render_frame(raw_obs, config)
-
     if args.car:
         data_out = []
         for t in data:
@@ -345,23 +338,7 @@ def train(config, reporter):
             data_out.append(t)
         data = data_out
     elif args.image:
-        frames = deque([], maxlen=k)
-        data_out = []
-        for t in data:
-            ok = len(frames) >= k
-            if len(frames) == 0:
-                frames.append(render(t["obs"], config["env_config"]))
-            if ok:
-                t["encoded_obs"] = np.concatenate(frames, axis=2)
-            frames.append(render(t["new_obs"], config["env_config"]))
-            if ok:
-                t["encoded_next_obs"] = np.concatenate(frames, axis=2)
-                data_out.append(t)
-            if t["done"]:
-                frames.clear()
-            if len(data_out) % 1000 == 0:
-                print("Loaded frames", len(data_out))
-        data = data_out
+        data = framestack_cartpole(data, k, config["env_config"], args)
     else:
         for t in data:
             t["encoded_obs"] = preprocessor.transform(t["obs"])
