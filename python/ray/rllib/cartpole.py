@@ -73,7 +73,7 @@ def load_images(data, args, env_config):
         for d in data:
             d["encoded_obs"] = d["obs"]
     else:
-        data = framestack_cartpole(data, 4, env_config, args, render_f)
+        data = framestack_cartpole(data, 4, env_config, args)
     return np.stack(x["encoded_obs"].flatten() for x in data)
 
 
