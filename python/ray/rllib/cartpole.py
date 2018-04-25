@@ -41,7 +41,7 @@ parser.add_argument("--experiment", default="cartpole-decode")
 parser.add_argument("--dataset", default=None)
 parser.add_argument("--pca", action="store_true")
 parser.add_argument("--h-size", default=32, type=int)
-
+parser.add_argument("--num-snow", default=30, type=int)
 
 def framestack_cartpole(data, k, env_config, args):
     frames = deque([], maxlen=k)
