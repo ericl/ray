@@ -174,7 +174,7 @@ class PCADecoder(Preprocessor):
         self.h_size = self._options["custom_options"].get("h_size")
         dataset = self._options["custom_options"].get("pca_train")
         env_config = self._options["custom_options"].get("env_config")
-        self.pca = PCA(0.95)
+        self.pca = PCA(self.h_size)
         scaler = StandardScaler()
         data = load_images(dataset, args, env_config)
         s = scaler.fit(data)
@@ -342,7 +342,7 @@ if __name__ == '__main__':
                         "env_config": env_config,
                         "devices": ["/gpu:0"],
                         "num_sgd_iter": 10,
-                        "num_workers": 2,
+                        "num_workers": 1,
                         "model": model_opts,
                     },
                 }
