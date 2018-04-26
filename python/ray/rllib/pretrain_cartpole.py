@@ -444,7 +444,7 @@ if __name__ == '__main__':
                     "data": os.path.expanduser(args.dataset),
                     "h_size": args.h_size,
                     "image": True,
-                    "mode": grid_search(["ivd", "ae1step", "prediction"]),
+                    "mode": grid_search(["ivd", "ae1step", "ae"]),
                 },
             }
         })
