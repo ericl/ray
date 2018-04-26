@@ -85,7 +85,7 @@ def build_racing_env(_):
     env = WarpFrame(env, 80)
     env = FrameStack(env, 4)
     # hack needed to fix rendering on CarRacing-v0
-    env = gym.wrappers.Monitor(env, "/tmp/rollouts", force=True)
+    env = gym.wrappers.Monitor(env, "/tmp/rollouts", resume=True)
     return env
 
 

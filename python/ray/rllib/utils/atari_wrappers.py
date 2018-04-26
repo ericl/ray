@@ -216,5 +216,5 @@ def wrap_deepmind(env, random_starts=True, dim=80):
     env = FrameStack(env, 4)
     env = ClampActions(env)
     # hack needed to fix rendering on CarRacing-v0
-    env = gym.wrappers.Monitor(env, "/tmp/rollouts", force=True)
+    env = gym.wrappers.Monitor(env, "/tmp/rollouts", resume=True)
     return env
