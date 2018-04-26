@@ -20,7 +20,7 @@ from ray.experimental.tfutils import TensorFlowVariables
 from ray.rllib.models.action_dist import Categorical, Deterministic
 from ray.rllib.models.fcnet import FullyConnectedNetwork
 from ray.rllib.models.visionnet import VisionNetwork
-from ray.rllib.cartpole import ImageCartPole, CartpoleEncoder, parser, framestack
+from ray.rllib.cartpole import ImageCartPole, CartpoleEncoder, parser, framestack_cartpole 
 from ray.rllib.models.misc import normc_initializer
 from ray.rllib.models.preprocessors import NoPreprocessor
 from ray.rllib.render_cartpole import render_frame
@@ -452,14 +452,21 @@ if __name__ == '__main__':
         run_experiments({
             "pretrain_{}".format(args.experiment): {
                 "run": "pretrain",
+                "trial_resources": {
+                    "cpu": 1,
+                    "gpu": 0,
+                    "extra_cpu": lambda spec: spec.config.num_workers,
+                },
                 "config": {
                     "env_config": {
                         "background": args.background,
+                        "num-snow": args.num_snow 
                     },
+                    "num_workers": 4,
                     "data": os.path.expanduser(args.dataset),
                     "h_size": args.h_size,
                     "image": True,
-                    "mode": grid_search(["ivd", "prediction"]),
+                    "mode": grid_search(["ae1step", "ae", "ivd"]),
                 },
             }
         })
