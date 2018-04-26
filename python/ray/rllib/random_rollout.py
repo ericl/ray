@@ -19,6 +19,8 @@ import ray
 from ray.rllib.agent import get_agent_class
 from ray.rllib.dqn.common.wrappers import wrap_dqn
 from ray.rllib.models import ModelCatalog
+from ray.rllib.cartpole import ImageDecoder
+from ray.tune.registry import register_env
 from ray.rllib.utils.atari_wrappers import wrap_deepmind
 from ray.rllib.utils.compression import pack
 from ray.tune.registry import get_registry
@@ -44,6 +46,10 @@ parser.add_argument(
     "--out", default=None, help="Output filename.")
 parser.add_argument(
     "--image-out", default=None, help="Output images to dir.")
+parser.add_argument(
+    "--restore", default="", help="Restore from checkpoint")
+parser.add_argument(
+    "--decode-model", default="", help="Decode using this model")
 
 
 def encode(obj):
@@ -79,16 +85,32 @@ if __name__ == "__main__":
     
     num_steps = int(args.steps)
     agent = None
-
-#    ray.init()
-#    cls = get_agent_class("PPO")
-#    agent = cls(env=args.env)
-#    agent.restore("/home/eric/ray_results/default/PPO_CartPole-v0_0_2018-04-21_19-20-34up8nkm35/checkpoint-10")
-
     if args.env == "car":
         env = env_test.build_racing_env(0) 
+        register_env("car", env_test.build_racing_env)
     else:
         env = gym.make(args.env)
+
+    if args.restore:
+        ray.init()
+        assert args.decode_model
+        cls = get_agent_class("A3C")
+        ModelCatalog.register_custom_preprocessor("img_decoder", ImageDecoder)
+        model_opts = {
+            "custom_preprocessor": "img_decoder",
+            "custom_options": {
+                "decode_model": args.decode_model,
+                "h_size": 32,
+            },
+        }
+        config = {
+                "num_workers": 1,
+                "model": model_opts,
+        }
+        agent = cls(config=config, env=args.env)
+        agent.restore(args.restore)
+        decoder = ImageDecoder(env.observation_space, model_opts)
+
     out = open(args.out, "w")
     steps = 0
     while steps < (num_steps or steps + 1):
@@ -108,7 +130,8 @@ if __name__ == "__main__":
                 if repeat > 0 or not agent:
                     action = env.action_space.sample()
                 else:
-                    action = int(agent.compute_action(state))
+                    decoded = decoder.transform(state)
+                    action = int(agent.compute_action(decoded))
             next_state, reward, done, _ = env.step(action)
             reward_total += reward
             out.write(json.dumps({

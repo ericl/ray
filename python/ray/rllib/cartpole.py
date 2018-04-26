@@ -310,13 +310,14 @@ if __name__ == '__main__':
                     "run": "A3C",
                     "env": "discrete-carracing-v0",
                     "repeat": 1,
+                    "checkpoint_freq": 10,
                     "trial_resources": {
                         "cpu": 1,
                         "gpu": 0,
                         "extra_cpu": lambda spec: spec.config.num_workers,
                     },
                     "config": {
-                        "num_workers": 7,
+                        "num_workers": 3,
                         "optimizer": {
                             "grads_per_step": 1000    
                         },
