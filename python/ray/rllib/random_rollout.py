@@ -70,7 +70,7 @@ def save_image(data, dest, i):
 
 def get_repeat(repeat_prob):
     if random.random() < repeat_prob:
-        return 20
+        return 50
     else:
         return 0
 
@@ -128,7 +128,10 @@ if __name__ == "__main__":
             else:
                 repeat = get_repeat(args.repeat_prob)
                 if repeat > 0 or not agent:
-                    action = env.action_space.sample()
+                    if args.env == "car":
+                        action = 2
+                    else:
+                        action = env.action_space.sample()
                 else:
                     decoded = decoder.transform(state)
                     action = int(agent.compute_action(decoded))
