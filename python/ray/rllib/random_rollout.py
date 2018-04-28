@@ -112,11 +112,11 @@ if __name__ == "__main__":
         decoder = ImageDecoder(env.observation_space, model_opts)
 
     out = open(args.out, "w")
+    out2 = open(args.out + "-repeat", "w")
     steps = 0
     while steps < (num_steps or steps + 1):
         rollout = []
         repeat = 0
-        state = env.reset()
         state = env.reset()
         done = False
         reward_total = 0.0
@@ -137,6 +137,16 @@ if __name__ == "__main__":
                     action = int(agent.compute_action(decoded))
             next_state, reward, done, _ = env.step(action)
             reward_total += reward
+            if repeat > 0:
+                out2.write(json.dumps({
+                    "obs": encode(state),
+                    "new_obs": encode(next_state),
+                    "action": encode(action),
+                    "done": done,
+                    "timestep": steps,
+                    "repeat": repeat,
+                    "reward": reward,
+                }))
             out.write(json.dumps({
                 "obs": encode(state),
                 "new_obs": encode(next_state),
