@@ -147,15 +147,16 @@ if __name__ == "__main__":
                     "repeat": repeat,
                     "reward": reward,
                 }))
-            out.write(json.dumps({
-                "obs": encode(state),
-                "new_obs": encode(next_state),
-                "action": encode(action),
-                "done": done,
-                "timestep": steps,
-                "repeat": repeat,
-                "reward": reward,
-            }))
+            if steps < 500000:
+                out.write(json.dumps({
+                    "obs": encode(state),
+                    "new_obs": encode(next_state),
+                    "action": encode(action),
+                    "done": done,
+                    "timestep": steps,
+                    "repeat": repeat,
+                    "reward": reward,
+                }))
             out.write("\n")
             steps += 1
             state = next_state
