@@ -28,6 +28,11 @@ from ray.rllib.utils.atari_wrappers import wrap_deepmind, WarpFrame
 from ray.rllib.utils.compression import unpack
 from ray.tune import run_experiments, register_trainable, grid_search
 
+
+PREDICTION_STEPS = 10
+PREDICTION_FRAMESKIP = 3
+
+
 # Fix Python 2.x.
 try:
     UNICODE_EXISTS = bool(type(unicode))
@@ -150,7 +155,7 @@ def train(config, reporter):
         pred_h0 = tf.concat([feature_layer, tf.one_hot(expert_actions, 4)], axis=1)
     else:
         pred_h0 = tf.concat([feature_layer, tf.one_hot(expert_actions, 2)], axis=1)
-    next_ten_rewards = tf.placeholder(tf.float32, [None, 10], name="next_10_rewards")
+    next_rewards = tf.placeholder(tf.float32, [None, 10], name="next_rewards")
     pred_h1 = slim.fully_connected(
         pred_h0, 64,
         weights_initializer=normc_initializer(1.0),
@@ -162,11 +167,11 @@ def train(config, reporter):
         activation_fn=None, scope="reward_prediction")
     repeat = tf.placeholder(tf.int32, [None], name="repeat")
     if prediction_loss_enabled:
-        # Only try to predict 10-step action repeats
+        # Only try to predict within repeat seqs
         can_predict = tf.expand_dims(
-            tf.cast(tf.greater(repeat, 10), tf.float32), 1)
+            tf.cast(tf.greater(repeat, PREDICTION_STEPS * PREDICTION_FRAMESKIP), tf.float32), 1)
         prediction_loss = tf.reduce_mean(
-            tf.squared_difference(can_predict * pred_out, can_predict * next_ten_rewards))
+            tf.squared_difference(can_predict * pred_out, can_predict * next_rewards))
     else:
         prediction_loss = tf.constant(0.0)
 
@@ -310,10 +315,10 @@ def train(config, reporter):
 
     vars = TensorFlowVariables(summed_loss, sess)
 
-    def get_next_ten_rewards(data, start_i):
-        sparsity = 3
-        rew = [0] * 10 * sparsity
-        for i in range(10 * sparsity):
+    def get_next_rewards(data, start_i):
+        PREDICTION_FRAMESKIP = 3
+        rew = [0] * PREDICTION_STEPS * PREDICTION_FRAMESKIP
+        for i in range(PREDICTION_STEPS * PREDICTION_FRAMESKIP):
             offset = start_i + i
             if offset < len(data):
                 if i > 0:
@@ -323,8 +328,8 @@ def train(config, reporter):
                 rew[i] = prev + data[offset]["reward"]
                 if data[offset]["done"]:
                     break
-        res = rew[sparsity-1::sparsity]
-        assert len(res) == 10
+        res = rew[PREDICTION_FRAMESKIP-1::PREDICTION_FRAMESKIP]
+        assert len(res) == PREDICTION_STEPS
         return res
 
     data = [json.loads(x) for x in open(data).readlines()]
@@ -332,7 +337,7 @@ def train(config, reporter):
     for i, t in enumerate(data):
         t["obs"] = decode(t["obs"])
         t["new_obs"] = decode(t["new_obs"])
-        t["next_ten_rewards"] = get_next_ten_rewards(data, i)
+        t["next_rewards"] = get_next_rewards(data, i)
 
     if args.car:
         data_out = []
@@ -379,7 +384,7 @@ def train(config, reporter):
                     expert_actions: [t["action"] for t in batch],
                     orig_obs: [t["obs"] for t in batch],
                     next_obs: [t["encoded_next_obs"] for t in batch],
-                    next_ten_rewards: [t["next_ten_rewards"] for t in batch],
+                    next_rewards: [t["next_rewards"] for t in batch],
                     repeat: [t.get("repeat", 0) for t in batch],
                 })
             for (name, _), value in zip(LOSSES, results):
@@ -396,7 +401,7 @@ def train(config, reporter):
                     expert_actions: [t["action"] for t in test_batch],
                     orig_obs: [t["obs"] for t in test_batch],
                     next_obs: [t["encoded_next_obs"] for t in test_batch],
-                    next_ten_rewards: [t["next_ten_rewards"] for t in test_batch],
+                    next_rewards: [t["next_rewards"] for t in test_batch],
                     repeat: [t.get("repeat", 0) for t in test_batch],
                 })
             for (name, _), value in zip(LOSSES, results):
