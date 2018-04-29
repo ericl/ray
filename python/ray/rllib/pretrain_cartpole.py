@@ -311,14 +311,21 @@ def train(config, reporter):
     vars = TensorFlowVariables(summed_loss, sess)
 
     def get_next_ten_rewards(data, start_i):
-        rew = [0] * 10
-        for i in range(10):
+        sparsity = 3
+        rew = [0] * 10 * sparsity
+        for i in range(10 * sparsity):
             offset = start_i + i
             if offset < len(data):
-                rew[i] = data[offset]["reward"]
+                if i > 0:
+                    prev = rew[i-1]
+                else:
+                    prev = 0
+                rew[i] = prev + data[offset]["reward"]
                 if data[offset]["done"]:
                     break
-        return rew
+        res = rew[sparsity-1::sparsity]
+        assert len(res) == 10
+        return res
 
     data = [json.loads(x) for x in open(data).readlines()]
     print("preprocessing data")
