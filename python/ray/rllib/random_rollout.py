@@ -147,6 +147,7 @@ if __name__ == "__main__":
                     "repeat": repeat,
                     "reward": reward,
                 }))
+                out.write("\n")
             if steps < 500000:
                 out.write(json.dumps({
                     "obs": encode(state),
@@ -157,7 +158,7 @@ if __name__ == "__main__":
                     "repeat": repeat,
                     "reward": reward,
                 }))
-            out.write("\n")
+                out.write("\n")
             steps += 1
             state = next_state
         print("Episode reward", reward_total)
