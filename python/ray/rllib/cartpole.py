@@ -71,7 +71,7 @@ def load_images(data, args, env_config):
         render_f = render_frame
     if args.car:
         for d in data:
-            d["encoded_obs"] = d["obs"]
+            d["encoded_obs"] = unpack(d["obs"])
     else:
         data = framestack_cartpole(data, 4, env_config, args)
     return np.stack(x["encoded_obs"].flatten() for x in data)
