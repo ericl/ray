@@ -75,6 +75,20 @@ def get_repeat(repeat_prob):
         return 0
 
 
+def choose_car_option():
+    opt = random.choice([1, 2, 3, 4, 5])
+    return opt
+
+
+OPTIONS = {
+    1: lambda _: 2,  # accelerate straight
+    2: lambda _: 100,  # neutral straight
+    3: lambda r: 100 if r < 30 else 0,  # turn left
+    4: lambda r: 100 if r < 30 else 1,  # turn right
+    5: lambda r: 100 if r < 40 else 3,  # brake
+}
+
+
 if __name__ == "__main__":
     args = parser.parse_args()
 
@@ -117,24 +131,33 @@ if __name__ == "__main__":
     while steps < (num_steps or steps + 1):
         rollout = []
         repeat = 0
+        option = None
         state = env.reset()
         done = False
         reward_total = 0.0
+        i = 0
         while not done and steps < (num_steps or steps + 1):
+            i += 1
             if args.image_out:
                 save_image(state[..., -1], args.image_out, steps)
             if repeat > 0:
                 repeat -= 1
             else:
+                option = None
                 repeat = get_repeat(args.repeat_prob)
-                if repeat > 0 or not agent:
+                if repeat > 0:
                     if args.env == "car":
-                        action = 2
+                        option = choose_car_option()
+                        print("Choose option", option, "at step", i)
                     else:
                         action = env.action_space.sample()
+                elif not agent:
+                    action = env.action_space.sample()
                 else:
                     decoded = decoder.transform(state)
                     action = int(agent.compute_action(decoded))
+            if option:
+                action = OPTIONS[option](repeat)
             next_state, reward, done, _ = env.step(action)
             reward_total += reward
             if repeat > 0:
@@ -142,23 +165,24 @@ if __name__ == "__main__":
                     "obs": encode(state),
                     "new_obs": encode(next_state),
                     "action": encode(action),
+                    "option": option,
                     "done": done,
                     "timestep": steps,
                     "repeat": repeat,
                     "reward": reward,
                 }))
-                out.write("\n")
-            if steps < 500000:
-                out.write(json.dumps({
-                    "obs": encode(state),
-                    "new_obs": encode(next_state),
-                    "action": encode(action),
-                    "done": done,
-                    "timestep": steps,
-                    "repeat": repeat,
-                    "reward": reward,
-                }))
-                out.write("\n")
+                out2.write("\n")
+#            if steps < 500000:
+#                out.write(json.dumps({
+#                    "obs": encode(state),
+#                    "new_obs": encode(next_state),
+#                    "action": encode(action),
+#                    "done": done,
+#                    "timestep": steps,
+#                    "repeat": repeat,
+#                    "reward": reward,
+#                }))
+#                out.write("\n")
             steps += 1
             state = next_state
         print("Episode reward", reward_total)
