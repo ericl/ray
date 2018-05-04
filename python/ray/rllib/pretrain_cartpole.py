@@ -139,6 +139,7 @@ def train(config, reporter):
     # Set up IL loss
     if args.car:
         expert_actions = tf.placeholder(tf.int32, [None], name="expert_actions")
+        expert_options = tf.placeholder(tf.int32, [None], name="expert_options")
         action_dist = action_dist_cls(action_layer)
     else:
         expert_actions = tf.placeholder(tf.int32, [None], name="expert_actions")
@@ -217,7 +218,9 @@ def train(config, reporter):
     # Set up forward loss
     if args.car:
         feature_and_action = tf.concat(
-            [feature_layer, tf.one_hot(expert_actions, 4)], axis=1)
+            [feature_layer, tf.one_hot(expert_options, 5)], axis=1)
+#        feature_and_action = tf.concat(
+#            [feature_layer, tf.one_hot(expert_actions, 4)], axis=1)
     else:
         feature_and_action = tf.concat(
             [feature_layer, tf.one_hot(expert_actions, 2)], axis=1)
@@ -345,6 +348,7 @@ def train(config, reporter):
             t["encoded_obs"] = t["obs"]
             t["encoded_next_obs"] = t["new_obs"]
             t["obs"] = [0, 0, 0, 0]  # "true" latent state not available
+            t["option"] = t["option"] - 1  # zero index it
             if len(data_out) % 1000 == 0:
                 print("Loaded frames", len(data_out))
             data_out.append(t)
@@ -382,6 +386,7 @@ def train(config, reporter):
                 feed_dict={
                     observations: [t["encoded_obs"] for t in batch],
                     expert_actions: [t["action"] for t in batch],
+                    expert_options: [t["option"] for t in batch],
                     orig_obs: [t["obs"] for t in batch],
                     next_obs: [t["encoded_next_obs"] for t in batch],
                     next_rewards: [t["next_rewards"] for t in batch],
@@ -399,6 +404,7 @@ def train(config, reporter):
                 feed_dict={
                     observations: [t["encoded_obs"] for t in test_batch],
                     expert_actions: [t["action"] for t in test_batch],
+                    expert_options: [t["option"] for t in test_batch],
                     orig_obs: [t["obs"] for t in test_batch],
                     next_obs: [t["encoded_next_obs"] for t in test_batch],
                     next_rewards: [t["next_rewards"] for t in test_batch],
