@@ -156,6 +156,8 @@ def train(config, reporter):
         pred_h0 = tf.concat([feature_layer, tf.one_hot(expert_actions, 4)], axis=1)
     else:
         pred_h0 = tf.concat([feature_layer, tf.one_hot(expert_actions, 2)], axis=1)
+    if not prediction_loss_enabled:
+        pred_h0 = tf.stop_gradient(pred_h0)
     next_rewards = tf.placeholder(tf.float32, [None, 10], name="next_rewards")
     pred_h1 = slim.fully_connected(
         pred_h0, 64,
@@ -167,14 +169,11 @@ def train(config, reporter):
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="reward_prediction")
     repeat = tf.placeholder(tf.int32, [None], name="repeat")
-    if prediction_loss_enabled:
-        # Only try to predict within repeat seqs
-        can_predict = tf.expand_dims(
-            tf.cast(tf.greater(repeat, PREDICTION_STEPS * PREDICTION_FRAMESKIP), tf.float32), 1)
-        prediction_loss = tf.reduce_mean(
-            tf.squared_difference(can_predict * pred_out, can_predict * next_rewards))
-    else:
-        prediction_loss = tf.constant(0.0)
+    # Only try to predict within repeat seqs
+    can_predict = tf.expand_dims(
+        tf.cast(tf.greater(repeat, PREDICTION_STEPS * PREDICTION_FRAMESKIP), tf.float32), 1)
+    prediction_loss = tf.reduce_mean(
+        tf.squared_difference(can_predict * pred_out, can_predict * next_rewards))
 
     # Set up oracle loss
     orig_obs = tf.placeholder(tf.float32, [None, 4], name="orig_obs")
@@ -198,21 +197,20 @@ def train(config, reporter):
         next_obs = tf.placeholder(tf.float32, [None, out_size], name="next_obs")
     feature_layer2, _ = make_net(next_obs, h_size, image, config)
     fused = tf.concat([feature_layer, feature_layer2], axis=1)
+    if not ivd_loss_enabled:
+        fused = tf.stop_gradient(fused)
     fused2 = slim.fully_connected(
         fused, 64,
         weights_initializer=normc_initializer(1.0),
         activation_fn=tf.nn.relu,
         scope="ivd_pred1")
     predicted_action = tf.squeeze(slim.fully_connected(
-        fused, 4 if args.car else 2,
+        fused2, 4 if args.car else 2,
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="ivd_pred_out"))
     ivd_action_dist = action_dist_cls(predicted_action)
-    if ivd_loss_enabled:
-        ivd_loss = -tf.reduce_mean(
-            ivd_action_dist.logp(expert_actions))
-    else:
-        ivd_loss = tf.constant(0.0)
+    ivd_loss = -tf.reduce_mean(
+        ivd_action_dist.logp(expert_actions))
     print("Inv Dynamics loss", ivd_loss)
 
     # Set up forward loss
