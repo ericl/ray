@@ -139,7 +139,6 @@ def train(config, reporter):
     action_dist_cls = Categorical
 
     # Set up IL loss
-    expert_options = tf.placeholder(tf.int32, [None], name="expert_options")
     action_dist = action_dist_cls(action_layer)
     if il_loss_enabled:
         il_loss = -tf.reduce_mean(action_dist.logp(expert_actions))
@@ -149,8 +148,9 @@ def train(config, reporter):
     print("IL loss", il_loss)
 
     # Set up prediction loss
+    expert_options = tf.placeholder(tf.int32, [None], name="expert_options")
     if args.car:
-        pred_h0 = tf.concat([feature_layer, tf.one_hot(expert_actions, 4)], axis=1)
+        pred_h0 = tf.concat([feature_layer, tf.one_hot(expert_options, 5)], axis=1)
     else:
         pred_h0 = tf.concat([feature_layer, tf.one_hot(expert_actions, 2)], axis=1)
     if not prediction_loss_enabled:
@@ -213,9 +213,7 @@ def train(config, reporter):
     # Set up forward loss
     if args.car:
         feature_and_action = tf.concat(
-            [feature_layer, tf.one_hot(expert_options, 5)], axis=1)
-#        feature_and_action = tf.concat(
-#            [feature_layer, tf.one_hot(expert_actions, 4)], axis=1)
+            [feature_layer, tf.one_hot(expert_actions, 4)], axis=1)
     else:
         feature_and_action = tf.concat(
             [feature_layer, tf.one_hot(expert_actions, 2)], axis=1)
