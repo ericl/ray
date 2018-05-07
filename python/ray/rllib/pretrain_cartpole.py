@@ -139,13 +139,8 @@ def train(config, reporter):
     action_dist_cls = Categorical
 
     # Set up IL loss
-    if args.car:
-        expert_actions = tf.placeholder(tf.int32, [None], name="expert_actions")
-        expert_options = tf.placeholder(tf.int32, [None], name="expert_options")
-        action_dist = action_dist_cls(action_layer)
-    else:
-        expert_actions = tf.placeholder(tf.int32, [None], name="expert_actions")
-        action_dist = action_dist_cls(action_layer)
+    expert_options = tf.placeholder(tf.int32, [None], name="expert_options")
+    action_dist = action_dist_cls(action_layer)
     if il_loss_enabled:
         il_loss = -tf.reduce_mean(action_dist.logp(expert_actions))
     else:
@@ -340,6 +335,8 @@ def train(config, reporter):
         t["obs"] = decode(t["obs"])
         t["new_obs"] = decode(t["new_obs"])
         t["next_rewards"] = get_next_rewards(data, i)
+        if "option" not in t:
+            t["option"] = 0
 
     if args.car:
         data_out = []
