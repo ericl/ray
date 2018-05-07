@@ -29,10 +29,6 @@ from ray.rllib.utils.compression import unpack
 from ray.tune import run_experiments, register_trainable, grid_search
 
 
-PREDICTION_STEPS = 10
-PREDICTION_FRAMESKIP = 3
-
-
 # Fix Python 2.x.
 try:
     UNICODE_EXISTS = bool(type(unicode))
@@ -108,6 +104,12 @@ def decode_image(feature_layer, k):
 
 def train(config, reporter):
     k = 4
+    if args.car:
+        PREDICTION_FRAMESKIP = 3
+        PREDICTION_STEPS = 10
+    else:
+        PREDICTION_FRAMESKIP = 1
+        PREDICTION_STEPS = 10
     h_size = config["h_size"]
     data = config["data"]
     mode = config["mode"]
@@ -317,7 +319,6 @@ def train(config, reporter):
     vars = TensorFlowVariables(summed_loss, sess)
 
     def get_next_rewards(data, start_i):
-        PREDICTION_FRAMESKIP = 3
         rew = [0] * PREDICTION_STEPS * PREDICTION_FRAMESKIP
         for i in range(PREDICTION_STEPS * PREDICTION_FRAMESKIP):
             offset = start_i + i
