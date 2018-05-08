@@ -150,6 +150,7 @@ def train(config, reporter):
 
     # Set up prediction loss
     expert_options = tf.placeholder(tf.int32, [None], name="expert_options")
+    expert_actions = tf.placeholder(tf.int32, [None], name="expert_options")
     if args.car:
         pred_h0 = tf.concat([feature_layer, tf.one_hot(expert_options, 5)], axis=1)
     else:
