@@ -25,7 +25,17 @@ BACKGROUND_4XWIDE = np.tile(
         np.arange(200, 0, -1),
         np.arange(0, 200, 1)]),
     (80, 1))
-
+def create_snow(size, quant, canvas, space):
+    for _ in range(quant):
+        xpos = np.random.randint(0+size, len(canvas[0])-size)
+        ypos = np.random.randint(0+size, len(canvas[0]) - (size + space))
+        print(xpos, ypos)
+        sliced = np.copy(canvas[xpos:xpos+size])
+        for sl in sliced:
+            for i in range(size):
+                sl[ypos+i] = 150
+        canvas[xpos:xpos+size] = sliced
+	return canvas
 def render_frame(obs, env_config):
     cart_pos = obs[0]
     cart_velocity = obs[1]
@@ -49,6 +59,9 @@ def render_frame(obs, env_config):
         if env_config["background"] == "fixed_noisy":
             canvas = np.maximum(canvas, np.random.randint(200, size=(w, w)))
         canvas = canvas.astype(np.uint8)
+	elif env_config["background"] == "snow":
+		num_snow = env_config["num-snow"] if "num-snow" in env_config else 20
+		canvas = create_snow(2, num_snow, canvas, 9)
     else:
         assert False, env_config
 
