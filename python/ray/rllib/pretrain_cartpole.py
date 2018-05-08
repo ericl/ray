@@ -326,7 +326,9 @@ def train(config, reporter):
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     print("CUDA: " + os.environ.get("CUDA_VISIBLE_DEVICES"))
     sess = tf.Session(config=tf_config)
+    print("Created session")
     sess.run(tf.global_variables_initializer())
+    print("Initialized variables")
 
     vars = TensorFlowVariables(summed_loss, sess)
 
@@ -346,6 +348,7 @@ def train(config, reporter):
         assert len(res) == PREDICTION_STEPS
         return res
 
+    print("Loading data")
     data = [json.loads(x) for x in open(data).readlines()]
     print("preprocessing data")
     for i, t in enumerate(data):
