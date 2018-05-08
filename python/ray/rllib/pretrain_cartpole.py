@@ -118,13 +118,14 @@ def train(config, reporter):
     out_size = config.get("out_size", 200)
     batch_size = config.get("batch_size", 128)
     il_loss_enabled = mode == "il"
-    ae_loss_enabled = mode in ["ae", "ae1step", "vae", "vae1step"]
+    ae_loss_enabled = mode in ["ae", "ae1step", "vae", "vae1step", "split_ae", "split_ae1step"]
+    split_ae = mode in ["split_ae", "split_ae1step"]
     variational = ae_loss_enabled and mode.startswith("vae")
     ae_1step = mode == "ae1step"
     oracle_loss_enabled = mode == "oracle"
     ivd_loss_enabled = mode in ["ivd", "ivd_fwd"]
     forward_loss_enabled = mode in ["fwd", "ivd_fwd"]
-    prediction_loss_enabled = mode in ["prediction"]
+    prediction_loss_enabled = split_ae or (mode in ["prediction"])
     assert il_loss_enabled or oracle_loss_enabled or \
         ivd_loss_enabled or forward_loss_enabled or ae_loss_enabled or \
         prediction_loss_enabled
@@ -249,15 +250,32 @@ def train(config, reporter):
             feature_and_action, h_size,
             weights_initializer=normc_initializer(1.0),
             activation_fn=tf.nn.relu, scope="vae_stddev")
-        latent_vector = mu + sigma * tf.random_normal(tf.shape(mu), 0, 1, dtype=tf.float32)
+        no_snow_latent_vector = mu + sigma * tf.random_normal(tf.shape(mu), 0, 1, dtype=tf.float32)
     else:
-        latent_vector = feature_and_action
+        no_snow_latent_vector = feature_and_action
+
+    if split_ae:
+        with tf.variable_scope("snow_net"):
+            snow_latent_vector, _ = make_net(observations, h_size, image, config)
+        latent_vector = tf.concat([no_snow_latent_vector, snow_latent_vector], axis=1)
+    else:
+        latent_vector = no_snow_latent_vector
 
     if ae_loss_enabled:
         autoencoder_out = decode_image(latent_vector, 1)
     else:
         # still try to reproduce the image, but don't optimize prior layers
         autoencoder_out = decode_image(tf.stop_gradient(latent_vector), 1)
+
+    if split_ae:
+        # reuse vars from autoencoder_out
+        ae_snow_out = decode_image(
+            tf.concat([no_snow_latent_vector * 0, snow_latent_vector], axis=1), 1)
+        ae_no_snow_out = decode_image(
+            tf.concat([no_snow_latent_vector, snow_latent_vector * 0], axis=1), 1)
+    else:
+        ae_snow_out = autoencoder_out
+        ae_no_snow_out = autoencoder_out
 
     if ae_1step:
         target = next_obs[..., -1:]
@@ -394,7 +412,7 @@ def train(config, reporter):
         for jx in range(max(1, len(test_data) // batch_size)):
             test_batch = np.random.choice(test_data, batch_size)
             results = sess.run(
-                [tensor for (_, tensor) in LOSSES] + [autoencoder_out],
+                [tensor for (_, tensor) in LOSSES] + [autoencoder_out, ae_snow_out, ae_no_snow_out],
                 feed_dict={
                     observations: [t["encoded_obs"] for t in test_batch],
                     expert_actions: [t["action"] for t in test_batch],
@@ -408,7 +426,9 @@ def train(config, reporter):
                 test_losses[name].append(value)
             if jx <= 5:
                 save_image(flatten(test_batch[0]["encoded_obs"]), "{}_{}_{}_in.png".format(mode, ix, jx))
-                save_image(results[-1][0].squeeze(), "{}_{}_{}_out.png".format(mode, ix, jx))
+                save_image(results[-3][0].squeeze(), "{}_{}_{}_out.png".format(mode, ix, jx))
+                save_image(results[-2][0].squeeze(), "{}_{}_{}_snow_out.png".format(mode, ix, jx))
+                save_image(results[-1][0].squeeze(), "{}_{}_{}_no_snow_out.png".format(mode, ix, jx))
 
         # Evaluate IL performance
         rewards = []

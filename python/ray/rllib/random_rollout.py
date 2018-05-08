@@ -68,9 +68,12 @@ def save_image(data, dest, i):
     imsave(os.path.join(dest, str(i) + ".png"), data)
 
 
-def get_repeat(repeat_prob):
+def get_repeat(repeat_prob, env):
     if random.random() < repeat_prob:
-        return 50
+        if env == "car":
+            return 50
+        else:
+            return 10
     else:
         return 0
 
@@ -144,7 +147,7 @@ if __name__ == "__main__":
                 repeat -= 1
             else:
                 option = None
-                repeat = get_repeat(args.repeat_prob)
+                repeat = get_repeat(args.repeat_prob, args.env)
                 if repeat > 0:
                     if args.env == "car":
                         option = choose_car_option()
