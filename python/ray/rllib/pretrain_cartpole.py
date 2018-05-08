@@ -66,20 +66,20 @@ def _minimize_and_clip(optimizer, objective, clip_val=10):
     return gradients
 
 
-def make_net(inputs, h_size, image, config):
+def make_net(inputs, h_size, image, config, num_actions):
     if image:
         network = VisionNetwork(inputs, h_size, config.get("model", {}))
         feature_layer = network.outputs
         action_layer = slim.fully_connected(
-            feature_layer, 2,
+            feature_layer, num_actions,
             weights_initializer=normc_initializer(0.01),
             activation_fn=None, scope="action_layer_out")
     else:
-        network = FullyConnectedNetwork(inputs, 2, config.get("model", {}))
+        network = FullyConnectedNetwork(inputs, num_actions, config.get("model", {}))
         feature_layer = network.last_layer
         action_layer = network.outputs
     assert feature_layer.shape[1:] == (h_size,), feature_layer
-    assert action_layer.shape[1:] == (2,), action_layer
+    assert action_layer.shape[1:] == (num_actions,), action_layer
     return feature_layer, action_layer
 
 
@@ -105,9 +105,11 @@ def decode_image(feature_layer, k):
 def train(config, reporter):
     k = 4
     if args.car:
+        NUM_ACTIONS = 4
         PREDICTION_FRAMESKIP = 3
         PREDICTION_STEPS = 10
     else:
+        NUM_ACTIONS = 2
         PREDICTION_FRAMESKIP = 1
         PREDICTION_STEPS = 10
     h_size = config["h_size"]
@@ -135,13 +137,13 @@ def train(config, reporter):
         observations = tf.placeholder(tf.float32, [None, 80, 80, k], name="observations")
     else:
         observations = tf.placeholder(tf.float32, [None, out_size], name="observations")
-    feature_layer, action_layer = make_net(observations, h_size, image, config)
+    feature_layer, action_layer = make_net(observations, h_size, image, config, NUM_ACTIONS)
 
     action_dist_cls = Categorical
 
     # Set up IL loss
     expert_options = tf.placeholder(tf.int32, [None], name="expert_options")
-    expert_actions = tf.placeholder(tf.int32, [None], name="expert_options")
+    expert_actions = tf.placeholder(tf.int32, [None], name="expert_actions")
     action_dist = action_dist_cls(action_layer)
     if il_loss_enabled:
         il_loss = -tf.reduce_mean(action_dist.logp(expert_actions))
@@ -194,7 +196,7 @@ def train(config, reporter):
         next_obs = tf.placeholder(tf.float32, [None, 80, 80, k], name="next_obs")
     else:
         next_obs = tf.placeholder(tf.float32, [None, out_size], name="next_obs")
-    feature_layer2, _ = make_net(next_obs, h_size, image, config)
+    feature_layer2, _ = make_net(next_obs, h_size, image, config, NUM_ACTIONS)
     fused = tf.concat([feature_layer, feature_layer2], axis=1)
     if not ivd_loss_enabled:
         fused = tf.stop_gradient(fused)
@@ -257,7 +259,7 @@ def train(config, reporter):
 
     if split_ae:
         with tf.variable_scope("snow_net"):
-            snow_latent_vector, _ = make_net(observations, h_size, image, config)
+            snow_latent_vector, _ = make_net(observations, h_size, image, config, NUM_ACTIONS)
         latent_vector = tf.concat([no_snow_latent_vector, snow_latent_vector], axis=1)
     else:
         latent_vector = no_snow_latent_vector
