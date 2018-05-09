@@ -345,7 +345,7 @@ if __name__ == '__main__':
                         "env_config": env_config,
                         "devices": ["/gpu:0"],
                         "num_sgd_iter": 10,
-                        "num_workers": 1,
+                        "num_workers": 3,
                         "model": model_opts,
                     },
                 }
