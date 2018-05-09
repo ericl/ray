@@ -488,21 +488,17 @@ if __name__ == '__main__':
         run_experiments({
             "pretrain_{}".format(args.experiment): {
                 "run": "pretrain",
-                "trial_resources": {
-                    "cpu": 1,
-                    "gpu": 0,
-                    "extra_cpu": lambda spec: spec.config.num_workers,
-                },
                 "config": {
                     "env_config": {
                         "background": args.background,
                         "num_snow": args.num_snow
                     },
-                    "num_workers": 4,
                     "data": os.path.expanduser(args.dataset),
                     "h_size": args.h_size,
                     "image": True,
-                    "mode": grid_search(["ae1step", "ae", "ivd", "prediction"]),
+                    "mode": grid_search(
+                        args.pretrain_mode.split(",")
+                        if args.pretrain_mode else ["il"]),
                 },
             }
         })
