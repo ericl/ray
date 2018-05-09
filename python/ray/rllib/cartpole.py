@@ -282,6 +282,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     env_config = {
         "background": args.background,
+        "num_snow": args.num_snow,
     }
 
     decode_model = args.decode_model and os.path.expanduser(args.decode_model)
