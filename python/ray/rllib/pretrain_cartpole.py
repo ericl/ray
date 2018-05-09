@@ -482,7 +482,9 @@ if __name__ == '__main__':
                     "data": os.path.expanduser(args.dataset),
                     "h_size": args.h_size,
                     "image": True,
-                    "mode": grid_search(["split_ae"]),
+                    "mode": grid_search(
+                        args.pretrain_mode.split(",")
+                        if args.pretrain_mode else ["il"]),
                 },
             }
         })
