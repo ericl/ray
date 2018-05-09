@@ -2,7 +2,7 @@ import json
 import numpy as np
 import random
 import os
-from skimage.draw import line_aa, polygon
+from skimage.draw import line_aa, polygon, circle
 from scipy.misc import imsave
 
 
@@ -25,17 +25,18 @@ BACKGROUND_4XWIDE = np.tile(
         np.arange(200, 0, -1),
         np.arange(0, 200, 1)]),
     (80, 1))
+
+
 def create_snow(size, quant, canvas, space):
     for _ in range(quant):
         xpos = np.random.randint(0+size, len(canvas[0])-size)
         ypos = np.random.randint(0+size, len(canvas[0]) - (size + space))
-        print(xpos, ypos)
-        sliced = np.copy(canvas[xpos:xpos+size])
-        for sl in sliced:
-            for i in range(size):
-                sl[ypos+i] = 150
-        canvas[xpos:xpos+size] = sliced
+        rr, cc = circle(xpos, ypos, 10, shape=(80, 80))
+        intensity = random.choice([50, 100, 150])
+        canvas[rr, cc] = intensity
     return canvas
+
+
 def render_frame(obs, env_config):
     cart_pos = obs[0]
     cart_velocity = obs[1]
@@ -60,7 +61,8 @@ def render_frame(obs, env_config):
             canvas = np.maximum(canvas, np.random.randint(200, size=(w, w)))
         canvas = canvas.astype(np.uint8)
     elif env_config["background"] == "snow":
-        num_snow = env_config["num-snow"] if "num-snow" in env_config else 20
+        num_snow = env_config.get("num_snow", 10)
+        canvas = np.zeros((w, w), dtype=np.uint8)
         canvas = create_snow(2, num_snow, canvas, 9)
     else:
         assert False, env_config
@@ -126,7 +128,7 @@ if __name__ == '__main__':
         if len(lines) > 1000:
             break
 
-    for bg in ["zeros", "fixed", "fixed_noisy", "noise"]:
+    for bg in ["zeros", "fixed", "fixed_noisy", "noise", "snow"]:
         print("testing", bg)
         for _ in range(10):
             render_frame([random.random() * 3] * 4, {"background": bg})
@@ -134,7 +136,7 @@ if __name__ == '__main__':
     prev = None
     ct = 0
     for i, line in enumerate(lines):
-        canvas = render_frame(line["obs"], {"background": "fixed_noisy"}).squeeze()
+        canvas = render_frame(line["obs"], {"background": "snow"}).squeeze()
         if prev == canvas.tolist():
             print("WARNING, similar obs", i)
             ct += 1

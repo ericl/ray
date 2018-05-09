@@ -496,13 +496,13 @@ if __name__ == '__main__':
                 "config": {
                     "env_config": {
                         "background": args.background,
-                        "num-snow": args.num_snow 
+                        "num_snow": args.num_snow
                     },
                     "num_workers": 4,
                     "data": os.path.expanduser(args.dataset),
                     "h_size": args.h_size,
                     "image": True,
-                    "mode": grid_search(["ae1step", "ae", "ivd"]),
+                    "mode": grid_search(["ae1step", "ae", "ivd", "prediction"]),
                 },
             }
         })
