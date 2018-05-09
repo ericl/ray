@@ -259,24 +259,20 @@ def train(config, reporter):
 
     if split_ae:
         with tf.variable_scope("snow_net"):
-            snow_latent_vector, _ = make_net(observations, h_size, image, config, NUM_ACTIONS)
-        latent_vector = tf.concat([no_snow_latent_vector, snow_latent_vector], axis=1)
-    else:
-        latent_vector = no_snow_latent_vector
+            snow_latent_vector, _ = make_net(
+                observations, h_size, image, config, NUM_ACTIONS)
 
     if ae_loss_enabled:
-        autoencoder_out = decode_image(latent_vector, 1)
+        ae_no_snow_out = decode_image(no_snow_latent_vector, 1)
+        if split_ae:
+            with tf.variable_scope("snow_out"):
+                ae_snow_out = decode_image(snow_latent_vector, 1)
+            autoencoder_out = tf.add(ae_snow_out, ae_no_snow_out)
+        else:
+            autoencoder_out = ae_snow_out = ae_no_snow_out
     else:
         # still try to reproduce the image, but don't optimize prior layers
-        autoencoder_out = decode_image(tf.stop_gradient(latent_vector), 1)
-
-    if split_ae:
-        # reuse vars from autoencoder_out
-        ae_snow_out = decode_image(
-            tf.concat([no_snow_latent_vector * 0, snow_latent_vector], axis=1), 1)
-        ae_no_snow_out = decode_image(
-            tf.concat([no_snow_latent_vector, snow_latent_vector * 0], axis=1), 1)
-    else:
+        autoencoder_out = decode_image(tf.stop_gradient(no_snow_latent_vector), 1)
         ae_snow_out = autoencoder_out
         ae_no_snow_out = autoencoder_out
 
