@@ -419,7 +419,11 @@ def train(config, reporter):
     # do this after the first pass to share the decoded arrays
     zero_obs = np.zeros_like(data[0]["obs"])
     for i, t in enumerate(data):
-        t["future_obs"] = get_future_obs(data, i) or zero_obs
+        fut = get_future_obs(data, i)
+        if fut is None:
+            t["future_obs"] = zero_obs
+        else:
+            t["future_obs"] = fut
 
     random.seed(0)
     random.shuffle(data)
