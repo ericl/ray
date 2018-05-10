@@ -230,7 +230,7 @@ def train(config, reporter):
         future_obs = tf.placeholder(tf.float32, [None, 80, 80, k], name="future_obs")
     else:
         future_obs = tf.placeholder(tf.float32, [None, out_size], name="future_obs")
-    fut_feature_layer, _ = make_net(future_obs, h_size, image, config, num_options)
+    fut_feature_layer, _ = make_net(future_obs, h_size, image, config, num_actions)
     opt_fused = tf.concat([feature_layer, fut_feature_layer], axis=1)
     if not option_pred_loss_enabled:
         opt_fused = tf.stop_gradient(opt_fused)
