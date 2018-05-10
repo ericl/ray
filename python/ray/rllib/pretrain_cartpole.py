@@ -23,7 +23,6 @@ from ray.rllib.models.visionnet import VisionNetwork
 from ray.rllib.cartpole import ImageCartPole, CartpoleEncoder, parser, framestack_cartpole 
 from ray.rllib.models.misc import normc_initializer
 from ray.rllib.models.preprocessors import NoPreprocessor
-from ray.rllib.render_cartpole import render_frame
 from ray.rllib.utils.atari_wrappers import wrap_deepmind, WarpFrame
 from ray.rllib.utils.compression import unpack
 from ray.tune import run_experiments, register_trainable, grid_search

@@ -27,12 +27,41 @@ BACKGROUND_4XWIDE = np.tile(
     (80, 1))
 
 
-def create_snow(size, quant, canvas, space):
+SNOW_INTENSITIES = [100, 200]
+pos_vector = []
+
+
+def create_snow_dynamic(quant, canvas, bottom_margin):
+
+    global pos_vector
+    if not pos_vector:
+        for _ in range(quant):
+            xpos = np.random.randint(0, len(canvas[0]))
+            ypos = np.random.randint(0, len(canvas[1]))
+            pos_vector.append([xpos, ypos])
+
+    # apply gravity dynamics
+    for i, pos in enumerate(pos_vector):
+        if pos[1] > len(canvas[1]):
+            xpos = np.random.randint(0, len(canvas[1]))
+            pos[0] = xpos
+            pos[1] = 0
+        pos[1] += 1
+
+    for i, [xpos, ypos] in enumerate(pos_vector):
+        rr, cc = circle(ypos, xpos, 10, shape=(80, 80))
+        intensity = SNOW_INTENSITIES[i % len(SNOW_INTENSITIES)]
+        canvas[rr, cc] = intensity
+
+    return canvas
+
+
+def create_snow_random(quant, canvas, bottom_margin):
     for _ in range(quant):
-        xpos = np.random.randint(0+size, len(canvas[0])-size)
-        ypos = np.random.randint(0+size, len(canvas[0]) - (size + space))
+        xpos = np.random.randint(0, len(canvas[0]))
+        ypos = np.random.randint(0, len(canvas[0]) - bottom_margin)
         rr, cc = circle(xpos, ypos, 10, shape=(80, 80))
-        intensity = random.choice([50, 100, 150])
+        intensity = random.choice(SNOW_INTENSITIES)
         canvas[rr, cc] = intensity
     return canvas
 
@@ -45,6 +74,7 @@ def render_frame(obs, env_config):
     angle_multiple = 3
     w = 80  # screen width
     xpos = cart_pos / 2.4 * w/2 + w/2
+    pole_intensity = 255
     if env_config["background"] == "noise":
         canvas = np.random.randint(200, size=(w, w), dtype=np.uint8)
     elif env_config["background"] == "zeros":
@@ -63,7 +93,13 @@ def render_frame(obs, env_config):
     elif env_config["background"] == "snow":
         num_snow = env_config.get("num_snow", 10)
         canvas = np.zeros((w, w), dtype=np.uint8)
-        canvas = create_snow(2, num_snow, canvas, 9)
+        canvas = create_snow_random(num_snow, canvas, 9)
+        pole_intensity = 150
+    elif env_config["background"] == "dynamic_snow":
+        num_snow = env_config.get("num_snow", 10)
+        canvas = np.zeros((w, w), dtype=np.uint8)
+        canvas = create_snow_dynamic(num_snow, canvas, 9)
+        pole_intensity = 150
     else:
         assert False, env_config
 
@@ -72,8 +108,8 @@ def render_frame(obs, env_config):
     canvas[w-1, :] = 100
     canvas[:, w-1] = 100
     c = 5  # cart width
-    left_aa_value = int((1 - xpos % 1) * 255)
-    right_aa_value = int(xpos % 1 * 255)
+    left_aa_value = int((1 - xpos % 1) * pole_intensity)
+    right_aa_value = int(xpos % 1 * pole_intensity)
 #    print(xpos, xpos % 1, left_aa_value, right_aa_value)
     xpos = int(np.clip(np.ceil(xpos), 0, w-1))
 
@@ -96,7 +132,7 @@ def render_frame(obs, env_config):
     rr, cc = polygon(
         (max(0, xpos - c), min(w-1, xpos + c), min(w-1, xpos + c), max(0, xpos - c)),
         (w-10, w-10, w-5, w-5))
-    canvas[cc, rr] = 255
+    canvas[cc, rr] = pole_intensity
 
     error = None
     for pole_length in [60, 30, 20, 10, 5, 0]:
@@ -105,7 +141,7 @@ def render_frame(obs, env_config):
             top_y = w-10 - int(pole_length * np.cos(angle_multiple * pole_angle))
             rr, cc, val = line_aa(
                 top_x, top_y, xpos, w-10)
-            canvas[cc, rr] = val * 255
+            canvas[cc, rr] = val * pole_intensity
             error = None
             break
         except Exception as e:
@@ -136,7 +172,7 @@ if __name__ == '__main__':
     prev = None
     ct = 0
     for i, line in enumerate(lines):
-        canvas = render_frame(line["obs"], {"background": "snow"}).squeeze()
+        canvas = render_frame(line["obs"], {"num_snow": 20, "background": "dynamic_snow"}).squeeze()
         if prev == canvas.tolist():
             print("WARNING, similar obs", i)
             ct += 1
