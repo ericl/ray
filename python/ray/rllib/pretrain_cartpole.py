@@ -451,6 +451,7 @@ def train(config, reporter):
                     expert_options: [t["option"] for t in batch],
                     orig_obs: [t["obs"] for t in batch],
                     next_obs: [t["encoded_next_obs"] for t in batch],
+                    future_obs: [t["future_obs"] for t in batch],
                     next_rewards: [t["next_rewards"] for t in batch],
                     repeat: [t.get("repeat", 0) for t in batch],
                 })
