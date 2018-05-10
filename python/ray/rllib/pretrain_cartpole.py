@@ -385,7 +385,7 @@ def train(config, reporter):
         for i in range(start_i, future_i + 1):
             if i >= len(data) or data[i]["done"]:
                 return None  # end of rollout
-        return data[future_i]["obs"]
+        return data[future_i]["encoded_obs"]
 
     print("Loading data")
     data = [json.loads(x) for x in open(data).readlines()]
