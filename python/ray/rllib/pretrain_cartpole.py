@@ -417,7 +417,7 @@ def train(config, reporter):
             t["encoded_next_obs"] = preprocessor.transform(t["new_obs"])
 
     # do this after the first pass to share the decoded arrays
-    zero_obs = np.zeros_like(data[0]["obs"])
+    zero_obs = np.zeros_like(data[0]["encoded_obs"])
     for i, t in enumerate(data):
         fut = get_future_obs(data, i)
         if fut is None:
