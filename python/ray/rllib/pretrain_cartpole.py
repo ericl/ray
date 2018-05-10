@@ -398,11 +398,6 @@ def train(config, reporter):
             t["option"] = 0
     print("num deduplicated", deduplicated)
 
-    # do this after the first pass to share the decoded arrays
-    zero_obs = np.zeros_like(data[0]["obs"])
-    for i, t in enumerate(data):
-        t["future_obs"] = get_future_obs(data, i) or zero_obs
-
     if args.car:
         data_out = []
         for t in data:
@@ -420,6 +415,12 @@ def train(config, reporter):
         for t in data:
             t["encoded_obs"] = preprocessor.transform(t["obs"])
             t["encoded_next_obs"] = preprocessor.transform(t["new_obs"])
+
+    # do this after the first pass to share the decoded arrays
+    zero_obs = np.zeros_like(data[0]["obs"])
+    for i, t in enumerate(data):
+        t["future_obs"] = get_future_obs(data, i) or zero_obs
+
     random.seed(0)
     random.shuffle(data)
     split_point = max(len(data) - 5000, int(len(data) * 0.9))
