@@ -405,7 +405,7 @@ def train(config, reporter):
             t["encoded_next_obs"] = t["new_obs"]
             t["obs"] = [0, 0, 0, 0]  # "true" latent state not available
             t["option"] = t["option"] - 1  # zero index it
-            if len(data_out) % 1000 == 0:
+            if len(data_out) % 10000 == 0:
                 print("Loaded frames", len(data_out))
             data_out.append(t)
         data = data_out
