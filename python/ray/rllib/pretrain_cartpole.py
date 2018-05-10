@@ -35,11 +35,20 @@ except NameError:
     unicode = lambda s: str(s)
 
 
-def decode(obj):
+last_ret = None
+deduplicated = 0
+def decode_and_deduplicate(obj):
+    global last_ret
+    global deduplicated
     if type(obj) in [str, unicode]:
-        return unpack(obj)
+        ret = unpack(obj)
     else:
-        return obj
+        ret = obj
+    if np.array_equal(last_ret, ret):
+        deduplicated += 1
+        return last_ret
+    last_ret = ret
+    return ret
 
 
 def save_image(data, name):
@@ -104,13 +113,15 @@ def decode_image(feature_layer, k):
 def train(config, reporter):
     k = 4
     if args.car:
-        NUM_ACTIONS = 4
-        PREDICTION_FRAMESKIP = 3
-        PREDICTION_STEPS = 10
+        num_actions = 4
+        num_options = 5
+        prediction_frameskip = 3
+        prediction_steps = 10
     else:
-        NUM_ACTIONS = 2
-        PREDICTION_FRAMESKIP = 1
-        PREDICTION_STEPS = 10
+        num_actions = 2
+        num_options = 2
+        prediction_frameskip = 1
+        prediction_steps = 10
     h_size = config["h_size"]
     data = config["data"]
     mode = config["mode"]
@@ -125,18 +136,19 @@ def train(config, reporter):
     ae_1step = mode == "ae1step"
     oracle_loss_enabled = mode == "oracle"
     ivd_loss_enabled = mode in ["ivd", "ivd_fwd"]
+    option_pred_loss_enabled = mode in ["option_prediction", "combined_prediction"]
     forward_loss_enabled = mode in ["fwd", "ivd_fwd"]
-    prediction_loss_enabled = split_ae or (mode in ["prediction"])
+    prediction_loss_enabled = split_ae or (mode in ["prediction", "combined_prediction"])
     assert il_loss_enabled or oracle_loss_enabled or \
         ivd_loss_enabled or forward_loss_enabled or ae_loss_enabled or \
-        prediction_loss_enabled
+        prediction_loss_enabled or option_pred_loss_enabled
 
     # Set up decoder network
     if image:
         observations = tf.placeholder(tf.float32, [None, 80, 80, k], name="observations")
     else:
         observations = tf.placeholder(tf.float32, [None, out_size], name="observations")
-    feature_layer, action_layer = make_net(observations, h_size, image, config, NUM_ACTIONS)
+    feature_layer, action_layer = make_net(observations, h_size, image, config, num_actions)
 
     action_dist_cls = Categorical
 
@@ -151,7 +163,7 @@ def train(config, reporter):
     act = action_dist.sample()
     print("IL loss", il_loss)
 
-    # Set up prediction loss
+    # Set up reward prediction loss
     if args.car:
         pred_h0 = tf.concat([feature_layer, tf.one_hot(expert_options, 5)], axis=1)
     else:
@@ -171,7 +183,7 @@ def train(config, reporter):
     repeat = tf.placeholder(tf.int32, [None], name="repeat")
     # Only try to predict within repeat seqs
     can_predict = tf.expand_dims(
-        tf.cast(tf.greater(repeat, PREDICTION_STEPS * PREDICTION_FRAMESKIP), tf.float32), 1)
+        tf.cast(tf.greater(repeat, prediction_steps * prediction_frameskip), tf.float32), 1)
     prediction_loss = tf.reduce_mean(
         tf.squared_difference(can_predict * pred_out, can_predict * next_rewards))
 
@@ -195,7 +207,7 @@ def train(config, reporter):
         next_obs = tf.placeholder(tf.float32, [None, 80, 80, k], name="next_obs")
     else:
         next_obs = tf.placeholder(tf.float32, [None, out_size], name="next_obs")
-    feature_layer2, _ = make_net(next_obs, h_size, image, config, NUM_ACTIONS)
+    feature_layer2, _ = make_net(next_obs, h_size, image, config, num_actions)
     fused = tf.concat([feature_layer, feature_layer2], axis=1)
     if not ivd_loss_enabled:
         fused = tf.stop_gradient(fused)
@@ -205,13 +217,36 @@ def train(config, reporter):
         activation_fn=tf.nn.relu,
         scope="ivd_pred1")
     predicted_action = tf.squeeze(slim.fully_connected(
-        fused2, 4 if args.car else 2,
+        fused2, num_actions,
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="ivd_pred_out"))
     ivd_action_dist = action_dist_cls(predicted_action)
     ivd_loss = -tf.reduce_mean(
         ivd_action_dist.logp(expert_actions))
     print("Inv Dynamics loss", ivd_loss)
+
+    # Setup option prediction loss
+    if image:
+        future_obs = tf.placeholder(tf.float32, [None, 80, 80, k], name="future_obs")
+    else:
+        future_obs = tf.placeholder(tf.float32, [None, out_size], name="future_obs")
+    fut_feature_layer, _ = make_net(future_obs, h_size, image, config, num_options)
+    opt_fused = tf.concat([feature_layer, fut_feature_layer], axis=1)
+    if not option_pred_loss_enabled:
+        opt_fused = tf.stop_gradient(opt_fused)
+    opt_fused2 = slim.fully_connected(
+        opt_fused, 64,
+        weights_initializer=normc_initializer(1.0),
+        activation_fn=tf.nn.relu,
+        scope="opt_pred1")
+    predicted_option = tf.squeeze(slim.fully_connected(
+        opt_fused2, num_options,
+        weights_initializer=normc_initializer(0.01),
+        activation_fn=None, scope="opt_pred_out"))
+    option_dist = action_dist_cls(predicted_option)
+    option_pred_loss = -tf.reduce_mean(
+        can_predict * option_dist.logp(expert_options))
+    print("Option Prediction loss", option_pred_loss)
 
     # Set up forward loss
     if args.car:
@@ -259,7 +294,7 @@ def train(config, reporter):
     if split_ae:
         with tf.variable_scope("snow_net"):
             snow_latent_vector, _ = make_net(
-                observations, h_size, image, config, NUM_ACTIONS)
+                observations, h_size, image, config, num_actions)
 
     if ae_loss_enabled:
         ae_no_snow_out = decode_image(no_snow_latent_vector, 1)
@@ -330,8 +365,8 @@ def train(config, reporter):
     vars = TensorFlowVariables(summed_loss, sess)
 
     def get_next_rewards(data, start_i):
-        rew = [0] * PREDICTION_STEPS * PREDICTION_FRAMESKIP
-        for i in range(PREDICTION_STEPS * PREDICTION_FRAMESKIP):
+        rew = [0] * prediction_steps * prediction_frameskip
+        for i in range(prediction_steps * prediction_frameskip):
             offset = start_i + i
             if offset < len(data):
                 if i > 0:
@@ -341,19 +376,32 @@ def train(config, reporter):
                 rew[i] = prev + data[offset]["reward"]
                 if data[offset]["done"]:
                     break
-        res = rew[PREDICTION_FRAMESKIP-1::PREDICTION_FRAMESKIP]
-        assert len(res) == PREDICTION_STEPS
+        res = rew[prediction_frameskip-1::prediction_frameskip]
+        assert len(res) == prediction_steps
         return res
+
+    def get_future_obs(data, start_i):
+        future_i = start_i + prediction_frameskip * prediction_steps
+        for i in range(start_i, future_i + 1):
+            if i >= len(data) or data[i]["done"]:
+                return None  # end of rollout
+        return data[future_i]["obs"]
 
     print("Loading data")
     data = [json.loads(x) for x in open(data).readlines()]
     print("preprocessing data")
     for i, t in enumerate(data):
-        t["obs"] = decode(t["obs"])
-        t["new_obs"] = decode(t["new_obs"])
+        t["obs"] = decode_and_deduplicate(t["obs"])
+        t["new_obs"] = decode_and_deduplicate(t["new_obs"])
         t["next_rewards"] = get_next_rewards(data, i)
         if "option" not in t:
             t["option"] = 0
+    print("num deduplicated", deduplicated)
+
+    # do this after the first pass to share the decoded arrays
+    zero_obs = np.zeros_like(data[0]["obs"])
+    for i, t in enumerate(data):
+        t["future_obs"] = get_future_obs(data, i) or zero_obs
 
     if args.car:
         data_out = []
@@ -387,6 +435,7 @@ def train(config, reporter):
         ("ivd", ivd_loss),
         ("oracle", oracle_loss),
         ("prediction", prediction_loss),
+        ("option_prediction", option_pred_loss),
     ]
 
     print("start training")
@@ -428,8 +477,9 @@ def train(config, reporter):
             if jx <= 5:
                 save_image(flatten(test_batch[0]["encoded_obs"]), "{}_{}_{}_in.png".format(mode, ix, jx))
                 save_image(results[-3][0].squeeze(), "{}_{}_{}_out.png".format(mode, ix, jx))
-                save_image(results[-2][0].squeeze(), "{}_{}_{}_snow_out.png".format(mode, ix, jx))
-                save_image(results[-1][0].squeeze(), "{}_{}_{}_no_snow_out.png".format(mode, ix, jx))
+                if split_ae:
+                    save_image(results[-2][0].squeeze(), "{}_{}_{}_snow_out.png".format(mode, ix, jx))
+                    save_image(results[-1][0].squeeze(), "{}_{}_{}_no_snow_out.png".format(mode, ix, jx))
 
         # Evaluate IL performance
         rewards = []
