@@ -398,7 +398,8 @@ def train(config, reporter):
             "per_process_gpu_memory_fraction": 0.3,
         },
     })
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["CUDA_VISIBLE_DEVICES"] = (
+        str(random.choice(range(ray.services._autodetect_num_gpus()))))
     print("CUDA: " + os.environ.get("CUDA_VISIBLE_DEVICES"))
     sess = tf.Session(config=tf_config)
     print("Created session")
@@ -577,7 +578,9 @@ if __name__ == '__main__':
                 "config": {
                     "env_config": {
                         "background": args.background,
-                        "num_snow": args.num_snow,
+                        "num_snow": grid_search(
+                            [int(x) for x in args.grid_snow.split(",")]
+                            if args.grid_snow else [args.num_snow])
                     },
                     "data": os.path.expanduser(args.dataset),
                     "h_size": args.h_size,
