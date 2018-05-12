@@ -21,6 +21,7 @@ from ray.rllib.carracing_discrete import env_test
 from ray.experimental.tfutils import TensorFlowVariables
 from ray.rllib.models.fcnet import FullyConnectedNetwork
 from ray.rllib.models.visionnet import VisionNetwork
+from ray.rllib.render_car import add_car_snow
 from ray.tune import run_experiments, grid_search, register_env
 from ray.rllib.models import ModelCatalog, Model
 from ray.rllib.models.preprocessors import Preprocessor
@@ -78,12 +79,14 @@ def load_images(data, args, env_config):
     return np.stack(x["encoded_obs"].flatten() for x in data)
 
 
-def build_racing_env(_):
+def build_racing_env(env_config):
     env = gym.make('CarRacing-v0')
     env = DiscreteCarRacing(env)
     env = NoopResetEnv(env)
     env.override_num_noops = 50
-    env = WarpFrame(env, 80)
+    env = WarpFrame(env, 80,
+        snow_fn=lambda obs: add_car_snow(
+            obs, env_config["num_snow"], env_config["background"] == "noise"))
     env = FrameStack(env, 4)
     # hack needed to fix rendering on CarRacing-v0
     env = gym.wrappers.Monitor(env, "/tmp/rollouts", resume=True)

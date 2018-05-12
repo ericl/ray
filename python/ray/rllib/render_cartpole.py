@@ -27,11 +27,10 @@ BACKGROUND_4XWIDE = np.tile(
     (80, 1))
 
 
-SNOW_INTENSITIES = [100, 200]
 pos_vector = []
 
 
-def create_snow_dynamic(quant, canvas, bottom_margin):
+def create_snow_dynamic(quant, canvas, bottom_margin, snow_size=10, intensities=[100, 200]):
 
     global pos_vector
     if not pos_vector:
@@ -49,19 +48,19 @@ def create_snow_dynamic(quant, canvas, bottom_margin):
         pos[1] += 1
 
     for i, [xpos, ypos] in enumerate(pos_vector):
-        rr, cc = circle(ypos, xpos, 10, shape=(80, 80))
-        intensity = SNOW_INTENSITIES[i % len(SNOW_INTENSITIES)]
+        rr, cc = circle(ypos, xpos, snow_size, shape=(80, 80))
+        intensity = intensities[i % len(intensities)]
         canvas[rr, cc] = intensity
 
     return canvas
 
 
-def create_snow_random(quant, canvas, bottom_margin):
+def create_snow_random(quant, canvas, bottom_margin, intensities=[100, 200]):
     for _ in range(quant):
         xpos = np.random.randint(0, len(canvas[0]))
         ypos = np.random.randint(0, len(canvas[0]) - bottom_margin)
         rr, cc = circle(xpos, ypos, 10, shape=(80, 80))
-        intensity = random.choice(SNOW_INTENSITIES)
+        intensity = random.choice(intensities)
         canvas[rr, cc] = intensity
     return canvas
 

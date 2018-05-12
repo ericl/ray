@@ -22,6 +22,7 @@ from ray.rllib.models.fcnet import FullyConnectedNetwork
 from ray.rllib.models.visionnet import VisionNetwork
 from ray.rllib.cartpole import ImageCartPole, CartpoleEncoder, parser, framestack_cartpole 
 from ray.rllib.models.misc import normc_initializer
+from ray.rllib.render_car import add_car_snow
 from ray.rllib.models.preprocessors import NoPreprocessor
 from ray.rllib.utils.atari_wrappers import wrap_deepmind, WarpFrame
 from ray.rllib.utils.compression import unpack
@@ -35,20 +36,59 @@ except NameError:
     unicode = lambda s: str(s)
 
 
-last_ret = None
+class LazyFrames(object):
+    def __init__(self, frames):
+        """This object ensures that common frames between the observations are only stored once.
+        It exists purely to optimize memory usage which can be huge for DQN's 1M frames replay
+        buffers.
+        This object should only be converted to numpy array before being passed to the model.
+        You'd not believe how complex the previous solution was."""
+        self._frames = frames
+        self._out = None
+
+    def _force(self):
+        if self._out is None:
+            self._out = np.concatenate(self._frames, axis=2)
+            self._frames = None
+        return self._out
+
+    def __array__(self, dtype=None):
+        out = self._force()
+        if dtype is not None:
+            out = out.astype(dtype)
+        return out
+
+    def __len__(self):
+        return len(self._force())
+
+    def __getitem__(self, i):
+        return self._force()[i]
+
+
+cached_frames = []
 deduplicated = 0
-def decode_and_deduplicate(obj):
-    global last_ret
+def decode_and_deduplicate(obj, snow_fn):
     global deduplicated
     if type(obj) in [str, unicode]:
         ret = unpack(obj)
     else:
         ret = obj
-    if np.array_equal(last_ret, ret):
-        deduplicated += 1
-        return last_ret
-    last_ret = ret
-    return ret
+    out = []
+    for i in range(4):
+        frame = ret[:, :, i:i+1]
+        hit = False
+        for original, rendered in cached_frames:
+            if np.array_equal(frame, original):
+                snowy_frame = rendered
+                hit = True
+                deduplicated += 1
+        if not hit:
+            snowy_frame = snow_fn(frame)
+            cached_frames.append((frame, snowy_frame))
+            if len(cached_frames) > 8:
+                cached_frames.pop(0)
+        out.append(snowy_frame)
+    return LazyFrames(out)
 
 
 def save_image(data, name):
@@ -335,8 +375,11 @@ def train(config, reporter):
         env = gym.make("CarRacing-v0")
     else:
         env = gym.make("CartPole-v0")
+    snow_fn = lambda obs: obs
     if args.car:
-        env = wrap_deepmind(env)
+        snow_fn = lambda obs: add_car_snow(
+            obs, env_config["num_snow"], env_config["background"] == "noise")
+        env = wrap_deepmind(env, snow_fn=snow_fn)
         preprocessor = NoPreprocessor(env.observation_space, {})
     elif args.image:
         env = ImageCartPole(env, k, env_config)
@@ -388,14 +431,18 @@ def train(config, reporter):
         return data[future_i]["encoded_obs"]
 
     print("Loading data")
-    data = [json.loads(x) for x in open(data).readlines()]
+    fdata = data
+    data = []
+    for i, x in enumerate(open(fdata).readlines()):
+        t = json.loads(x)
+        t["obs"] = decode_and_deduplicate(t["obs"], snow_fn)
+        t["new_obs"] = decode_and_deduplicate(t["new_obs"], snow_fn)
+        if "option" not in t:
+            t["option"] = 1
+        data.append(t)
     print("preprocessing data")
     for i, t in enumerate(data):
-        t["obs"] = decode_and_deduplicate(t["obs"])
-        t["new_obs"] = decode_and_deduplicate(t["new_obs"])
         t["next_rewards"] = get_next_rewards(data, i)
-        if "option" not in t:
-            t["option"] = 0
     print("num deduplicated", deduplicated)
 
     if args.car:
@@ -417,7 +464,7 @@ def train(config, reporter):
             t["encoded_next_obs"] = preprocessor.transform(t["new_obs"])
 
     # do this after the first pass to share the decoded arrays
-    zero_obs = np.zeros_like(data[0]["encoded_obs"])
+    zero_obs = np.zeros_like(np.array(data[0]["encoded_obs"]))
     for i, t in enumerate(data):
         fut = get_future_obs(data, i)
         if fut is None:
@@ -451,12 +498,12 @@ def train(config, reporter):
             results = sess.run(
                 [tensor for (_, tensor) in LOSSES] + [train_op],
                 feed_dict={
-                    observations: [t["encoded_obs"] for t in batch],
+                    observations: np.array([t["encoded_obs"] for t in batch]),
                     expert_actions: [t["action"] for t in batch],
                     expert_options: [t["option"] for t in batch],
                     orig_obs: [t["obs"] for t in batch],
-                    next_obs: [t["encoded_next_obs"] for t in batch],
-                    future_obs: [t["future_obs"] for t in batch],
+                    next_obs: np.array([t["encoded_next_obs"] for t in batch]),
+                    future_obs: np.array([t["future_obs"] for t in batch]),
                     next_rewards: [t["next_rewards"] for t in batch],
                     repeat: [t.get("repeat", 0) for t in batch],
                 })
@@ -470,19 +517,19 @@ def train(config, reporter):
             results = sess.run(
                 [tensor for (_, tensor) in LOSSES] + [autoencoder_out, ae_snow_out, ae_no_snow_out],
                 feed_dict={
-                    observations: [t["encoded_obs"] for t in test_batch],
+                    observations: np.array([t["encoded_obs"] for t in test_batch]),
                     expert_actions: [t["action"] for t in test_batch],
                     expert_options: [t["option"] for t in test_batch],
                     orig_obs: [t["obs"] for t in test_batch],
-                    next_obs: [t["encoded_next_obs"] for t in test_batch],
-                    future_obs: [t["future_obs"] for t in test_batch],
+                    next_obs: np.array([t["encoded_next_obs"] for t in test_batch]),
+                    future_obs: np.array([t["future_obs"] for t in test_batch]),
                     next_rewards: [t["next_rewards"] for t in test_batch],
                     repeat: [t.get("repeat", 0) for t in test_batch],
                 })
             for (name, _), value in zip(LOSSES, results):
                 test_losses[name].append(value)
             if jx <= 5:
-                save_image(flatten(test_batch[0]["encoded_obs"]), "{}_{}_{}_in.png".format(mode, ix, jx))
+                save_image(flatten(np.array(test_batch[0]["encoded_obs"])), "{}_{}_{}_in.png".format(mode, ix, jx))
                 save_image(results[-3][0].squeeze(), "{}_{}_{}_out.png".format(mode, ix, jx))
                 if split_ae:
                     save_image(results[-2][0].squeeze(), "{}_{}_{}_snow_out.png".format(mode, ix, jx))
@@ -530,6 +577,7 @@ if __name__ == '__main__':
                 "config": {
                     "env_config": {
                         "background": args.background,
+                        "num_snow": args.num_snow,
                     },
                     "data": os.path.expanduser(args.dataset),
                     "h_size": args.h_size,

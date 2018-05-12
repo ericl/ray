@@ -135,19 +135,23 @@ class MaxAndSkipEnv(gym.Wrapper):
 
 
 class WarpFrame(gym.ObservationWrapper):
-    def __init__(self, env, dim):
+    def __init__(self, env, dim, snow_fn):
         """Warp frames to the specified size (dim x dim)."""
         gym.ObservationWrapper.__init__(self, env)
         self.width = dim  # in rllib we use 80
         self.height = dim
         self.observation_space = spaces.Box(
             low=0, high=255, shape=(self.height, self.width, 1))
+        self.snow_fn = snow_fn
 
     def observation(self, frame):
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
         frame = cv2.resize(
             frame, (self.width, self.height), interpolation=cv2.INTER_AREA)
-        return frame[:, :, None]
+        frame = frame[:, :, None]
+        if self.snow_fn:
+            frame = self.snow_fn(frame)
+        return frame
 
 
 class ClampActions(gym.Wrapper):
@@ -196,7 +200,7 @@ class FrameStack(gym.Wrapper):
         return np.concatenate(self.frames, axis=2)
 
 
-def wrap_deepmind(env, random_starts=True, dim=80):
+def wrap_deepmind(env, random_starts=True, dim=80, snow_fn=None):
     """Configure environment for DeepMind-style Atari.
 
     Note that we assume reward clipping is done outside the wrapper.
@@ -211,7 +215,7 @@ def wrap_deepmind(env, random_starts=True, dim=80):
 #    env = EpisodicLifeEnv(env)
 #    if 'FIRE' in env.unwrapped.get_action_meanings():
 #        env = FireResetEnv(env)
-    env = WarpFrame(env, dim)
+    env = WarpFrame(env, dim, snow_fn)
     # env = ClipRewardEnv(env)  # reward clipping is handled by DQN replay
     env = FrameStack(env, 4)
     env = ClampActions(env)
