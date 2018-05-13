@@ -431,7 +431,7 @@ def train(config, reporter):
                 return None  # end of rollout
         return data[future_i]["encoded_obs"]
 
-    print("Loading data")
+    print("Loading data", env_config)
     fdata = data
     data = []
     for i, x in enumerate(open(fdata).readlines()):
