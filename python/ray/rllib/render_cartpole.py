@@ -32,6 +32,7 @@ pos_vector = []
 
 def create_snow_dynamic(quant, canvas, bottom_margin, snow_size=10, intensities=[100, 200]):
 
+    canvas = np.copy(canvas)
     global pos_vector
     if not pos_vector:
         for _ in range(quant):
