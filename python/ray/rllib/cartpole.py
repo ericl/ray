@@ -323,10 +323,11 @@ if __name__ == '__main__':
                         "extra_cpu": lambda spec: spec.config.num_workers,
                     },
                     "config": {
-                        "num_workers": 12,
+                        "num_workers": 8,
                         "optimizer": {
                             "grads_per_step": 1000    
                         },
+                        "env_config": env_config,
                         "model": model_opts,
                     },
                 }
