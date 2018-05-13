@@ -73,6 +73,8 @@ def decode_and_deduplicate(obj, snow_fn):
         ret = unpack(obj)
     else:
         ret = obj
+    if type(ret) is list:
+        return ret  # not a framestacked image
     out = []
     for i in range(4):
         frame = ret[:, :, i:i+1]
@@ -178,7 +180,7 @@ def train(config, reporter):
     ivd_loss_enabled = mode in ["ivd", "ivd_fwd"]
     option_pred_loss_enabled = mode in ["option_prediction", "combined_prediction"]
     forward_loss_enabled = mode in ["fwd", "ivd_fwd"]
-    prediction_loss_enabled = split_ae or (mode in ["prediction", "combined_prediction"])
+    prediction_loss_enabled = mode in ["prediction", "combined_prediction", "split_ae", "split_ae1step"]
     assert il_loss_enabled or oracle_loss_enabled or \
         ivd_loss_enabled or forward_loss_enabled or ae_loss_enabled or \
         prediction_loss_enabled or option_pred_loss_enabled
@@ -337,13 +339,22 @@ def train(config, reporter):
                 observations, h_size, image, config, num_actions)
 
     if ae_loss_enabled:
-        ae_no_snow_out = decode_image(no_snow_latent_vector, 1)
         if split_ae:
+            ae_no_snow_out = decode_image(
+                tf.stop_gradient(no_snow_latent_vector), 1)
             with tf.variable_scope("snow_out"):
                 ae_snow_out = decode_image(snow_latent_vector, 1)
-            autoencoder_out = tf.add(ae_snow_out, ae_no_snow_out)
+#            with tf.variable_scope("snow_out_regressor"):
+#                _, regressor_out = make_net(ae_snow_out, h_size, image, config, 10)
+#            regressor_loss = tf.reduce_mean(
+#                tf.squared_difference(can_predict * regressor_out, can_predict * next_rewards))
+#            break_regressor_loss = - tf.stop_gradient(regressor_loss)
+#            # TODO(ekl) set up gan style training on regressor
+            autoencoder_out = tf.maximum(ae_snow_out, ae_no_snow_out)
         else:
-            autoencoder_out = ae_snow_out = ae_no_snow_out
+            autoencoder_out = decode_image(no_snow_latent_vector, 1)
+            ae_snow_out = autoencoder_out
+            ae_no_snow_out = autoencoder_out
     else:
         # still try to reproduce the image, but don't optimize prior layers
         autoencoder_out = decode_image(tf.stop_gradient(no_snow_latent_vector), 1)
@@ -398,8 +409,10 @@ def train(config, reporter):
             "per_process_gpu_memory_fraction": 0.3,
         },
     })
-    os.environ["CUDA_VISIBLE_DEVICES"] = (
-        str(random.choice(range(ray.services._autodetect_num_gpus()))))
+    detected_gpus = ray.services._autodetect_num_gpus()
+    if detected_gpus:
+        os.environ["CUDA_VISIBLE_DEVICES"] = (
+            str(random.choice(range(detected_gpus))))
     print("CUDA: " + os.environ.get("CUDA_VISIBLE_DEVICES"))
     sess = tf.Session(config=tf_config)
     print("Created session")
@@ -533,8 +546,8 @@ def train(config, reporter):
                 save_image(flatten(np.array(test_batch[0]["encoded_obs"])), "{}_{}_{}_in.png".format(mode, ix, jx))
                 save_image(results[-3][0].squeeze(), "{}_{}_{}_out.png".format(mode, ix, jx))
                 if split_ae:
-                    save_image(results[-2][0].squeeze(), "{}_{}_{}_snow_out.png".format(mode, ix, jx))
-                    save_image(results[-1][0].squeeze(), "{}_{}_{}_no_snow_out.png".format(mode, ix, jx))
+                    save_image(results[-1][0].squeeze(), "{}_{}_{}_out_feat.png".format(mode, ix, jx))
+                    save_image(results[-2][0].squeeze(), "{}_{}_{}_out_noise.png".format(mode, ix, jx))
 
         # Evaluate IL performance
         rewards = []
