@@ -27,8 +27,8 @@ def add_car_snow(obs, num_snow=20, noise=True):
         obs = obs + noise_vec
     if num_snow:
         obs = create_snow_dynamic(num_snow, obs, 9, snow_size=7, intensities=[0, 200])
-        if random.random() < .005:
-            imsave("/tmp/snow_sample.png", obs.squeeze())
+        if random.random() < .001:
+            imsave("/tmp/snow_sample-{}.png".format(num_rendered), obs.squeeze())
     return obs
 
 if __name__ == '__main__':
