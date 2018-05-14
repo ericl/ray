@@ -505,73 +505,81 @@ def train(config, reporter):
     ]
 
     print("start training")
+    miniepoch_size = min(100000, len(data))
+    num_miniepochs = int(np.ceil(len(data) / 100000.0))
     for ix in range(1000):
-        train_losses = collections.defaultdict(list)
-        for _ in range(len(data) // batch_size):
-            batch = np.random.choice(data, batch_size)
-            results = sess.run(
-                [tensor for (_, tensor) in LOSSES] + [train_op],
-                feed_dict={
-                    observations: np.array([t["encoded_obs"] for t in batch]),
-                    expert_actions: [t["action"] for t in batch],
-                    expert_options: [t["option"] for t in batch],
-                    orig_obs: [t["obs"] for t in batch],
-                    next_obs: np.array([t["encoded_next_obs"] for t in batch]),
-                    future_obs: np.array([t["future_obs"] for t in batch]),
-                    next_rewards: [t["next_rewards"] for t in batch],
-                    repeat: [t.get("repeat", 0) for t in batch],
-                })
-            for (name, _), value in zip(LOSSES, results):
-                train_losses[name].append(value)
+        print("start epoch", ix)
+        for i2x in range(num_miniepochs):
+            print("start miniepoch", i2x)
+            train_losses = collections.defaultdict(list)
+            for _ in range(miniepoch_size // batch_size):
+                batch = np.random.choice(data, batch_size)
+                results = sess.run(
+                    [tensor for (_, tensor) in LOSSES] + [train_op],
+                    feed_dict={
+                        observations: np.array([t["encoded_obs"] for t in batch]),
+                        expert_actions: [t["action"] for t in batch],
+                        expert_options: [t["option"] for t in batch],
+                        orig_obs: [t["obs"] for t in batch],
+                        next_obs: np.array([t["encoded_next_obs"] for t in batch]),
+                        future_obs: np.array([t["future_obs"] for t in batch]),
+                        next_rewards: [t["next_rewards"] for t in batch],
+                        repeat: [t.get("repeat", 0) for t in batch],
+                    })
+                for (name, _), value in zip(LOSSES, results):
+                    train_losses[name].append(value)
 
-        print("testing")
-        test_losses = collections.defaultdict(list)
-        for jx in range(max(1, len(test_data) // batch_size)):
-            test_batch = np.random.choice(test_data, batch_size)
-            results = sess.run(
-                [tensor for (_, tensor) in LOSSES] + [autoencoder_out, ae_snow_out, ae_no_snow_out],
-                feed_dict={
-                    observations: np.array([t["encoded_obs"] for t in test_batch]),
-                    expert_actions: [t["action"] for t in test_batch],
-                    expert_options: [t["option"] for t in test_batch],
-                    orig_obs: [t["obs"] for t in test_batch],
-                    next_obs: np.array([t["encoded_next_obs"] for t in test_batch]),
-                    future_obs: np.array([t["future_obs"] for t in test_batch]),
-                    next_rewards: [t["next_rewards"] for t in test_batch],
-                    repeat: [t.get("repeat", 0) for t in test_batch],
-                })
-            for (name, _), value in zip(LOSSES, results):
-                test_losses[name].append(value)
-            if jx <= 5:
-                save_image(flatten(np.array(test_batch[0]["encoded_obs"])), "{}_{}_{}_in.png".format(mode, ix, jx))
-                save_image(results[-3][0].squeeze(), "{}_{}_{}_out.png".format(mode, ix, jx))
-                if split_ae:
-                    save_image(results[-1][0].squeeze(), "{}_{}_{}_out_feat.png".format(mode, ix, jx))
-                    save_image(results[-2][0].squeeze(), "{}_{}_{}_out_noise.png".format(mode, ix, jx))
+            print("testing miniepoch", i2x)
+            test_losses = collections.defaultdict(list)
+            for jx in range(max(1, len(test_data) // batch_size)):
+                test_batch = np.random.choice(test_data, batch_size)
+                results = sess.run(
+                    [tensor for (_, tensor) in LOSSES] + [autoencoder_out, ae_snow_out, ae_no_snow_out],
+                    feed_dict={
+                        observations: np.array([t["encoded_obs"] for t in test_batch]),
+                        expert_actions: [t["action"] for t in test_batch],
+                        expert_options: [t["option"] for t in test_batch],
+                        orig_obs: [t["obs"] for t in test_batch],
+                        next_obs: np.array([t["encoded_next_obs"] for t in test_batch]),
+                        future_obs: np.array([t["future_obs"] for t in test_batch]),
+                        next_rewards: [t["next_rewards"] for t in test_batch],
+                        repeat: [t.get("repeat", 0) for t in test_batch],
+                    })
+                for (name, _), value in zip(LOSSES, results):
+                    test_losses[name].append(value)
+                if jx <= 5:
+                    save_image(flatten(np.array(test_batch[0]["encoded_obs"])), "{}_{}_{}_in.png".format(mode, ix, jx))
+                    save_image(results[-3][0].squeeze(), "{}_{}_{}_out.png".format(mode, ix, jx))
+                    if split_ae:
+                        save_image(results[-1][0].squeeze(), "{}_{}_{}_out_feat.png".format(mode, ix, jx))
+                        save_image(results[-2][0].squeeze(), "{}_{}_{}_out_noise.png".format(mode, ix, jx))
 
-        # Evaluate IL performance
-        rewards = []
-        if not args.car:  # TODO
-            for _ in range(100):
-                obs = env.reset()
-                reward = 0
-                done = False
-                while not done:
-                    action = sess.run(act, feed_dict={observations: [preprocessor.transform(obs)]})[0]
-                    obs, rew, done, _ = env.step(action)
-                    reward += rew
-                rewards.append(reward)
+            # Evaluate IL performance
+            rewards = []
+            if not args.car:  # TODO
+                for _ in range(100):
+                    obs = env.reset()
+                    reward = 0
+                    done = False
+                    while not done:
+                        action = sess.run(act, feed_dict={observations: [preprocessor.transform(obs)]})[0]
+                        obs, rew, done, _ = env.step(action)
+                        reward += rew
+                    rewards.append(reward)
 
-        loss_info = {}
-        mean_train_loss = 0.0
-        for name, values in train_losses.items():
-            mean_train_loss += np.mean(values)
-            loss_info["train_{}_loss".format(name)] = np.mean(values)
-        for name, values in test_losses.items():
-            loss_info["test_{}_loss".format(name)] = np.mean(values)
+            loss_info = {
+                "epoch": ix,
+                "miniepoch": i2x,
+            }
+            mean_train_loss = 0.0
+            for name, values in train_losses.items():
+                mean_train_loss += np.mean(values)
+                loss_info["train_{}_loss".format(name)] = np.mean(values)
+            for name, values in test_losses.items():
+                loss_info["test_{}_loss".format(name)] = np.mean(values)
 
-        reporter(
-            timesteps_total=ix, mean_loss=mean_train_loss, info=loss_info)
+            reporter(
+                timesteps_total=ix * num_miniepochs + i2x, mean_loss=mean_train_loss, info=loss_info)
 
         if ix % 1 == 0:
             fname = "weights_{}".format(ix)
