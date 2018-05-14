@@ -510,7 +510,7 @@ def train(config, reporter):
     for ix in range(1000):
         print("start epoch", ix)
         for i2x in range(num_miniepochs):
-            print("start miniepoch", i2x)
+            print("start miniepoch", ix * num_miniepochs + i2x)
             train_losses = collections.defaultdict(list)
             for _ in range(miniepoch_size // batch_size):
                 batch = np.random.choice(data, batch_size)
@@ -529,7 +529,7 @@ def train(config, reporter):
                 for (name, _), value in zip(LOSSES, results):
                     train_losses[name].append(value)
 
-            print("testing miniepoch", i2x)
+            print("testing miniepoch", ix * num_miniepochs + i2x)
             test_losses = collections.defaultdict(list)
             for jx in range(max(1, len(test_data) // batch_size)):
                 test_batch = np.random.choice(test_data, batch_size)
@@ -569,7 +569,7 @@ def train(config, reporter):
 
             loss_info = {
                 "epoch": ix,
-                "miniepoch": i2x,
+                "miniepoch": ix * num_miniepochs + i2x,
             }
             mean_train_loss = 0.0
             for name, values in train_losses.items():
