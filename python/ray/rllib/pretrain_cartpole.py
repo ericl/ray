@@ -514,8 +514,13 @@ def train(config, reporter):
         for i2x in range(num_miniepochs):
             print("start miniepoch", ix * num_miniepochs + i2x)
             train_losses = collections.defaultdict(list)
+            sample_time = 0.0
+            run_time = 0.0
             for _ in range(miniepoch_size // batch_size):
+                start = time.time()
                 batch = random.sample(data, batch_size)
+                sample_time += time.time() - start
+                start = time.time()
                 results = sess.run(
                     [tensor for (_, tensor) in LOSSES] + [train_op],
                     feed_dict={
@@ -528,13 +533,15 @@ def train(config, reporter):
                         next_rewards: [t["next_rewards"] for t in batch],
                         repeat: [t.get("repeat", 0) for t in batch],
                     })
+                run_time += time.time() - start
                 for (name, _), value in zip(LOSSES, results):
                     train_losses[name].append(value)
+            print("sample time", sample_time, "run time", run_time)
 
             print("testing miniepoch", ix * num_miniepochs + i2x)
             test_losses = collections.defaultdict(list)
             for jx in range(max(1, len(test_data) // batch_size)):
-                test_batch = random.sample(test_data, batch_size)
+                test_batch = np.random.choice(test_data, batch_size)
                 results = sess.run(
                     [tensor for (_, tensor) in LOSSES] + [autoencoder_out, ae_snow_out, ae_no_snow_out],
                     feed_dict={
