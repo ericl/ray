@@ -9,6 +9,7 @@ import json
 import random
 
 import pickle
+import time
 import numpy as np
 import gym
 from scipy.misc import imsave
