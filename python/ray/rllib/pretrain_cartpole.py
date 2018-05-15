@@ -448,6 +448,8 @@ def train(config, reporter):
     fdata = data
     data = []
     for i, x in enumerate(open(fdata).readlines()):
+        if i % 10000 == 0:
+            print("Loading data tuple", i)
         t = json.loads(x)
         t["obs"] = decode_and_deduplicate(t["obs"], snow_fn)
         t["new_obs"] = decode_and_deduplicate(t["new_obs"], snow_fn)
