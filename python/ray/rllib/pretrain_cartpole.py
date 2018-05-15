@@ -85,7 +85,7 @@ def decode_and_deduplicate(obj, snow_fn):
                 hit = True
                 deduplicated += 1
         if not hit:
-            snowy_frame = snow_fn(frame)
+            snowy_frame = snow_fn(frame).astype("uint8")
             cached_frames.append((frame, snowy_frame))
             if len(cached_frames) > 8:
                 cached_frames.pop(0)
