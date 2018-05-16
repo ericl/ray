@@ -347,9 +347,8 @@ def train(config, reporter):
                 ae_snow_out = decode_image(snow_latent_vector, 1)
             with tf.variable_scope("snow_out_regressor"):
                 _, regressor_out = make_net(ae_snow_out, h_size, image, config, 10)
-                _, regressor_frozen_out = make_net(tf.stop_gradient(ae_snow_out), h_size, image, config, 10)
-            frozen_pos_regressor_loss = tf.reduce_mean(
-                tf.squared_difference(can_predict * regressor_frozen_out, can_predict * next_rewards))
+            pos_regressor_loss = tf.reduce_mean(
+                tf.squared_difference(can_predict * regressor_out, can_predict * next_rewards))
             neg_regressor_loss = - pos_regressor_loss
             # TODO(ekl) set up gan style training on regressor
             autoencoder_out = tf.maximum(ae_snow_out, ae_no_snow_out)
@@ -378,14 +377,17 @@ def train(config, reporter):
 
     # Set up optimizer
     optimizer = tf.train.AdamOptimizer()
+    regressor_optimizer = tf.train.AdamOptimizer()
+    variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+    regressor_vars = [v for v in variables if "regressor" in v.name]
+    non_regressor_vars = [v for v in variables if "regressor" not in v.name]
     summed_loss = (
         oracle_loss + il_loss + ivd_loss + ae_loss + prediction_loss +
         neg_regressor_loss +
         fwd_loss * config.get("fwd_weight", 0.0))
-    variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-    print(variables)
-    grads = _minimize_and_clip(optimizer, summed_loss, variables)
+    grads = _minimize_and_clip(optimizer, summed_loss, non_regressor_vars)
     train_op = optimizer.apply_gradients(grads)
+    regressor_train_op = regressor_optimizer.minimize(pos_regressor_loss, var_list=regressor_vars)
 
     if args.car:
         env = gym.make("CarRacing-v0")
@@ -524,6 +526,7 @@ def train(config, reporter):
             train_losses = collections.defaultdict(list)
             sample_time = 0.0
             run_time = 0.0
+            regressor_time = 0.0
             for _ in range(miniepoch_size // batch_size):
                 start = time.time()
                 batch = random.sample(data, batch_size)
@@ -544,7 +547,22 @@ def train(config, reporter):
                 run_time += time.time() - start
                 for (name, _), value in zip(LOSSES, results):
                     train_losses[name].append(value)
-            print("sample time", sample_time, "run time", run_time)
+                start = time.time()
+                if split_ae:
+                    sess.run(
+                        regressor_train_op,
+                        feed_dict={
+                            observations: np.array([t["encoded_obs"] for t in batch]),
+                            expert_actions: [t["action"] for t in batch],
+                            expert_options: [t["option"] for t in batch],
+                            orig_obs: [t["obs"] for t in batch],
+                            next_obs: np.array([t["encoded_next_obs"] for t in batch]),
+                            future_obs: np.array([t["future_obs"] for t in batch]),
+                            next_rewards: [t["next_rewards"] for t in batch],
+                            repeat: [t.get("repeat", 0) for t in batch],
+                        })
+                regressor_time += time.time() - start
+            print("sample time", sample_time, "run time", run_time, "regressor time", regressor_time)
 
             print("testing miniepoch", ix * num_miniepochs + i2x)
             test_losses = collections.defaultdict(list)
