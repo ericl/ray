@@ -37,6 +37,9 @@ except NameError:
     unicode = lambda s: str(s)
 
 
+GAN_STARTUP_ITERS = 3
+
+
 class LazyFrames(object):
     def __init__(self, frames):
         """This object ensures that common frames between the observations are only stored once.
@@ -185,6 +188,7 @@ def train(config, reporter):
     assert il_loss_enabled or oracle_loss_enabled or \
         ivd_loss_enabled or forward_loss_enabled or ae_loss_enabled or \
         prediction_loss_enabled or option_pred_loss_enabled
+    gan_enabled = tf.placeholder(tf.float32, shape=())
 
     # Set up decoder network
     if image:
@@ -348,10 +352,10 @@ def train(config, reporter):
             with tf.variable_scope("snow_out_regressor"):
                 _, regressor_out = make_net(ae_snow_out, h_size, image, config, 10)
             pos_regressor_loss = tf.reduce_mean(
-                tf.squared_difference(can_predict * regressor_out, can_predict * next_rewards))
+                tf.squared_difference(can_predict * regressor_out, can_predict * next_rewards)) * gan_enabled
             neg_regressor_loss = - pos_regressor_loss
             # TODO(ekl) set up gan style training on regressor
-            autoencoder_out = tf.maximum(ae_snow_out, ae_no_snow_out)
+            autoencoder_out = tf.maximum(ae_snow_out, ae_no_snow_out * gan_enabled)
         else:
             autoencoder_out = decode_image(no_snow_latent_vector, 1)
             ae_snow_out = autoencoder_out
@@ -522,7 +526,8 @@ def train(config, reporter):
     for ix in range(1000):
         print("start epoch", ix)
         for i2x in range(num_miniepochs):
-            print("start miniepoch", ix * num_miniepochs + i2x)
+            it = ix * num_miniepochs + i2x
+            print("start miniepoch", it)
             train_losses = collections.defaultdict(list)
             sample_time = 0.0
             run_time = 0.0
@@ -543,6 +548,7 @@ def train(config, reporter):
                         future_obs: np.array([t["future_obs"] for t in batch]),
                         next_rewards: [t["next_rewards"] for t in batch],
                         repeat: [t.get("repeat", 0) for t in batch],
+                        gan_enabled: it > GAN_STARTUP_ITERS,
                     })
                 run_time += time.time() - start
                 for (name, _), value in zip(LOSSES, results):
@@ -560,11 +566,12 @@ def train(config, reporter):
                             future_obs: np.array([t["future_obs"] for t in batch]),
                             next_rewards: [t["next_rewards"] for t in batch],
                             repeat: [t.get("repeat", 0) for t in batch],
+                            gan_enabled: it > GAN_STARTUP_ITERS,
                         })
                 regressor_time += time.time() - start
             print("sample time", sample_time, "run time", run_time, "regressor time", regressor_time)
 
-            print("testing miniepoch", ix * num_miniepochs + i2x)
+            print("testing miniepoch", it)
             test_losses = collections.defaultdict(list)
             for jx in range(max(1, len(test_data) // batch_size)):
                 test_batch = np.random.choice(test_data, batch_size)
@@ -579,6 +586,7 @@ def train(config, reporter):
                         future_obs: np.array([t["future_obs"] for t in test_batch]),
                         next_rewards: [t["next_rewards"] for t in test_batch],
                         repeat: [t.get("repeat", 0) for t in test_batch],
+                        gan_enabled: 1,
                     })
                 for (name, _), value in zip(LOSSES, results):
                     test_losses[name].append(value)
@@ -604,7 +612,7 @@ def train(config, reporter):
 
             loss_info = {
                 "epoch": ix,
-                "miniepoch": ix * num_miniepochs + i2x,
+                "miniepoch": it,
             }
             mean_train_loss = 0.0
             for name, values in train_losses.items():
@@ -614,7 +622,7 @@ def train(config, reporter):
                 loss_info["test_{}_loss".format(name)] = np.mean(values)
 
             reporter(
-                timesteps_total=ix * num_miniepochs + i2x, mean_loss=mean_train_loss, info=loss_info)
+                timesteps_total=it, mean_loss=mean_train_loss, info=loss_info)
 
         if ix % 1 == 0:
             fname = "weights_{}".format(ix)
