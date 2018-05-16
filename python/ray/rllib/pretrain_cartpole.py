@@ -105,12 +105,12 @@ def flatten(stacked_img):
     return stacked_img[:, :, -3:]
 
 
-def _minimize_and_clip(optimizer, objective, clip_val=10):
+def _minimize_and_clip(optimizer, objective, variables, clip_val=10):
     """Minimized `objective` using `optimizer` w.r.t. variables in
     `var_list` while ensure the norm of the gradients for each
     variable is clipped to `clip_val`
     """
-    gradients = optimizer.compute_gradients(objective)
+    gradients = optimizer.compute_gradients(objective, variables)
     for i, (grad, var) in enumerate(gradients):
         if grad is not None:
             gradients[i] = (tf.clip_by_norm(grad, clip_val), var)
@@ -339,18 +339,19 @@ def train(config, reporter):
             snow_latent_vector, _ = make_net(
                 observations, h_size, image, config, num_actions)
 
+    neg_regressor_loss = tf.constant(0.0)
     if ae_loss_enabled:
         if split_ae:
-            ae_no_snow_out = decode_image(
-                tf.stop_gradient(no_snow_latent_vector), 1)
+            ae_no_snow_out = decode_image(no_snow_latent_vector, 1)
             with tf.variable_scope("snow_out"):
                 ae_snow_out = decode_image(snow_latent_vector, 1)
-#            with tf.variable_scope("snow_out_regressor"):
-#                _, regressor_out = make_net(ae_snow_out, h_size, image, config, 10)
-#            regressor_loss = tf.reduce_mean(
-#                tf.squared_difference(can_predict * regressor_out, can_predict * next_rewards))
-#            break_regressor_loss = - tf.stop_gradient(regressor_loss)
-#            # TODO(ekl) set up gan style training on regressor
+            with tf.variable_scope("snow_out_regressor"):
+                _, regressor_out = make_net(ae_snow_out, h_size, image, config, 10)
+                _, regressor_frozen_out = make_net(tf.stop_gradient(ae_snow_out), h_size, image, config, 10)
+            frozen_pos_regressor_loss = tf.reduce_mean(
+                tf.squared_difference(can_predict * regressor_frozen_out, can_predict * next_rewards))
+            neg_regressor_loss = - pos_regressor_loss
+            # TODO(ekl) set up gan style training on regressor
             autoencoder_out = tf.maximum(ae_snow_out, ae_no_snow_out)
         else:
             autoencoder_out = decode_image(no_snow_latent_vector, 1)
@@ -379,8 +380,11 @@ def train(config, reporter):
     optimizer = tf.train.AdamOptimizer()
     summed_loss = (
         oracle_loss + il_loss + ivd_loss + ae_loss + prediction_loss +
+        neg_regressor_loss +
         fwd_loss * config.get("fwd_weight", 0.0))
-    grads = _minimize_and_clip(optimizer, summed_loss)
+    variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+    print(variables)
+    grads = _minimize_and_clip(optimizer, summed_loss, variables)
     train_op = optimizer.apply_gradients(grads)
 
     if args.car:
@@ -507,6 +511,7 @@ def train(config, reporter):
         ("oracle", oracle_loss),
         ("prediction", prediction_loss),
         ("option_prediction", option_pred_loss),
+        ("neg_regressor_loss", neg_regressor_loss),
     ]
 
     print("start training")
