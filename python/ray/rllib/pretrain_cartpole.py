@@ -344,6 +344,7 @@ def train(config, reporter):
                 observations, 512, image, config, num_actions)
 
     neg_regressor_loss = tf.constant(0.0)
+    pos_regressor_loss = tf.constant(0.0)
     if ae_loss_enabled:
         if split_ae:
             ae_no_snow_out = decode_image(no_snow_latent_vector, 1)
