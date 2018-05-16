@@ -156,7 +156,7 @@ def decode_image(feature_layer, k):
 def train(config, reporter):
     k = 4
     if args.car:
-        num_actions = 4
+        num_actions = 5
         num_options = 5
         prediction_frameskip = 3
         prediction_steps = 10
