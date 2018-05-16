@@ -179,7 +179,7 @@ def train(config, reporter):
     ae_loss_enabled = mode in ["ae", "ae1step", "vae", "vae1step", "split_ae", "split_ae1step"]
     split_ae = mode in ["split_ae", "split_ae1step"]
     variational = ae_loss_enabled and mode.startswith("vae")
-    ae_1step = mode == "ae1step"
+    ae_1step = mode in ["split_ae1step", "ae1step"]
     oracle_loss_enabled = mode == "oracle"
     ivd_loss_enabled = mode in ["ivd", "ivd_fwd"]
     option_pred_loss_enabled = mode in ["option_prediction", "combined_prediction"]
