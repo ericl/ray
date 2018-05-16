@@ -184,7 +184,7 @@ def train(config, reporter):
     ivd_loss_enabled = mode in ["ivd", "ivd_fwd"]
     option_pred_loss_enabled = mode in ["option_prediction", "combined_prediction"]
     forward_loss_enabled = mode in ["fwd", "ivd_fwd"]
-    prediction_loss_enabled = mode in ["prediction", "combined_prediction"] #, "split_ae", "split_ae1step"]
+    prediction_loss_enabled = mode in ["prediction", "combined_prediction", "split_ae", "split_ae1step"]
     assert il_loss_enabled or oracle_loss_enabled or \
         ivd_loss_enabled or forward_loss_enabled or ae_loss_enabled or \
         prediction_loss_enabled or option_pred_loss_enabled
