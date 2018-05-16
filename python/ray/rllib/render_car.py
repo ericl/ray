@@ -14,7 +14,7 @@ except NameError:
 
 num_rendered = 0
 
-def add_car_snow(obs, num_snow=20, noise=True):
+def add_car_snow(obs, num_snow=10, noise=False):
     global num_rendered
     num_rendered += 1
     if num_rendered % 10000 == 0:
@@ -26,7 +26,8 @@ def add_car_snow(obs, num_snow=20, noise=True):
         obs = obs / 2
         obs = obs + noise_vec
     if num_snow:
-        obs = create_snow_dynamic(num_snow, obs, 9, snow_size=7, intensities=[100, 200])
+        obs = obs / 2
+        obs = create_snow_dynamic(num_snow, obs, 9, snow_size=8, intensities=[100, 200])
         if random.random() < .001:
             imsave("/tmp/snow_sample-{}-{}-{}.png".format(num_snow, noise, num_rendered), obs.squeeze())
     return obs
