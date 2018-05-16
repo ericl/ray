@@ -341,7 +341,7 @@ def train(config, reporter):
     if split_ae:
         with tf.variable_scope("snow_net"):
             snow_latent_vector, _ = make_net(
-                observations, h_size, image, config, num_actions)
+                observations, 512, image, config, num_actions)
 
     neg_regressor_loss = tf.constant(0.0)
     if ae_loss_enabled:
