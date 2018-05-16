@@ -392,7 +392,10 @@ def train(config, reporter):
         fwd_loss * config.get("fwd_weight", 0.0))
     grads = _minimize_and_clip(optimizer, summed_loss, non_regressor_vars)
     train_op = optimizer.apply_gradients(grads)
-    regressor_train_op = regressor_optimizer.minimize(pos_regressor_loss, var_list=regressor_vars)
+    if split_ae:
+        regressor_train_op = regressor_optimizer.minimize(pos_regressor_loss, var_list=regressor_vars)
+    else:
+        regressor_train_op = tf.constant(0.0)
 
     if args.car:
         env = gym.make("CarRacing-v0")
