@@ -559,19 +559,20 @@ def train(config, reporter):
                     train_losses[name].append(value)
                 start = time.time()
                 if split_ae:
-                    sess.run(
-                        regressor_train_op,
-                        feed_dict={
-                            observations: np.array([t["encoded_obs"] for t in batch]),
-                            expert_actions: [t["action"] for t in batch],
-                            expert_options: [t["option"] for t in batch],
-                            orig_obs: [t["obs"] for t in batch],
-                            next_obs: np.array([t["encoded_next_obs"] for t in batch]),
-                            future_obs: np.array([t["future_obs"] for t in batch]),
-                            next_rewards: [t["next_rewards"] for t in batch],
-                            repeat: [t.get("repeat", 0) for t in batch],
-                            gan_enabled: it > GAN_STARTUP_ITERS,
-                        })
+                    for _ in range(10):
+                        sess.run(
+                            regressor_train_op,
+                            feed_dict={
+                                observations: np.array([t["encoded_obs"] for t in batch]),
+                                expert_actions: [t["action"] for t in batch],
+                                expert_options: [t["option"] for t in batch],
+                                orig_obs: [t["obs"] for t in batch],
+                                next_obs: np.array([t["encoded_next_obs"] for t in batch]),
+                                future_obs: np.array([t["future_obs"] for t in batch]),
+                                next_rewards: [t["next_rewards"] for t in batch],
+                                repeat: [t.get("repeat", 0) for t in batch],
+                                gan_enabled: True,
+                            })
                 regressor_time += time.time() - start
             print("sample time", sample_time, "run time", run_time, "regressor time", regressor_time)
 
