@@ -22,14 +22,14 @@ def add_car_snow(obs, num_snow=30, noise=False):
     if type(obs) in [str, unicode]:
         obs = unpack(obs)
     if noise:
-        noise_vec = np.random.randint(100, size=(80, 80, 1), dtype=np.uint8)
-        obs = obs / 2
+        noise_vec = np.random.randint(50, size=(80, 80, 1), dtype=np.uint8)
+        obs = obs
         obs = obs + noise_vec
     if num_snow:
 #        obs = 255 - obs
         obs = create_snow_dynamic(num_snow, obs, 9, snow_size=8, intensities=[50, 100])
-        if random.random() < .01:
-            imsave("/tmp/snow_sample-{}-{}-{}.png".format(num_snow, noise, num_rendered), obs.squeeze())
+    if random.random() < .001:
+        imsave("/tmp/snow_sample-{}-{}-{}.png".format(num_snow, noise, num_rendered), obs.squeeze())
     return obs
 
 if __name__ == '__main__':
