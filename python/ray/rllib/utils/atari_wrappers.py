@@ -13,7 +13,7 @@ class NoopResetEnv(gym.Wrapper):
         """
         gym.Wrapper.__init__(self, env)
         self.noop_max = noop_max
-        self.override_num_noops = 50
+        self.override_num_noops = None
         self.noop_action = 0
         self.random_starts = random_starts
 #        assert env.unwrapped.get_action_meanings()[0] == 'NOOP'
@@ -21,12 +21,23 @@ class NoopResetEnv(gym.Wrapper):
     def reset(self, **kwargs):
         """ Do no-op action for a number of steps in [1, noop_max]."""
         self.env.reset(**kwargs)
-        noops = self.override_num_noops
+        if self.override_num_noops is not None:
+            noops = self.override_num_noops
+        else:
+            noops = self.unwrapped.np_random.randint(
+                1, self.noop_max + 1)
+        assert noops > 0
         obs = None
         for _ in range(noops):
-            action = np.zeros_like(self.env.action_space.sample())
+            if self.override_num_noops:
+                action = np.zeros_like(self.env.action_space.sample())
+            elif self.random_starts:
+                action = np.random.randint(self.env.action_space.n)
+            else:
+                action = self.noop_action
             obs, _, done, _ = self.env.step(action)
-        obs, _, done, _ = self.env.step(self.env.action_space.sample())
+            if done:
+                obs = self.env.reset(**kwargs)
         return obs
 
     def step(self, ac):
