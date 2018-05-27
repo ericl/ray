@@ -5,6 +5,8 @@ import cv2
 import numpy as np
 import gym
 
+from ray.rllib.render_car import add_car_snow
+
 ATARI_OBS_SHAPE = (210, 160, 3)
 ATARI_RAM_OBS_SHAPE = (128,)
 
@@ -32,7 +34,8 @@ class Preprocessor(object):
 
 class AtariPixelPreprocessor(Preprocessor):
     def _init(self):
-        self._grayscale = self._options.get("grayscale", False)
+        self._snow = self._options["snow"]
+        self._grayscale = self._options.get("grayscale", True)
         self._zero_mean = self._options.get("zero_mean", True)
         self._dim = self._options.get("dim", 80)
         self._channel_major = self._options.get("channel_major", False)
@@ -56,15 +59,23 @@ class AtariPixelPreprocessor(Preprocessor):
         scaled = cv2.resize(scaled, (self._dim, self._dim))
         if self._grayscale:
             scaled = scaled.mean(2)
-            scaled = scaled.astype(np.float32)
+            scaled = scaled.astype(np.uint8)
             # Rescale needed for maintaining 1 channel
             scaled = np.reshape(scaled, [self._dim, self._dim, 1])
-        if self._zero_mean:
-            scaled = (scaled - 128) / 128
-        else:
-            scaled *= 1.0 / 255.0
-        if self._channel_major:
-            scaled = np.reshape(scaled, self.shape)
+        if self._snow == "none":
+            pass
+        elif self._snow == "light":
+            scaled = add_car_snow(scaled, num_snow=10, noise=False)
+        elif self._snow == "heavy":
+            scaled = add_car_snow(scaled, num_snow=30, noise=False)
+        elif self._snow == "noise":
+            scaled = add_car_snow(scaled, num_snow=0, noise=True)
+#        if self._zero_mean:
+#            scaled = (scaled - 128) / 128
+#        else:
+#            scaled *= 1.0 / 255.0
+#        if self._channel_major:
+#            scaled = np.reshape(scaled, self.shape)
         return scaled
 
 

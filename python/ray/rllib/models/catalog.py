@@ -29,6 +29,7 @@ MODEL_CONFIGS = [
     "fcnet_hiddens",  # Number of hidden layers for fully connected net
     "free_log_std",  # Documented in ray.rllib.models.Model
     "channel_major",  # Pytorch conv requires images to be channel-major
+    "snow",  # Pytorch conv requires images to be channel-major
 
     # === Options for custom models ===
     "custom_preprocessor",  # Name of a custom preprocessor to use
