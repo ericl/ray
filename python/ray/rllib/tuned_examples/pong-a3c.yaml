@@ -2,7 +2,7 @@ pong-a3c:
     env: PongDeterministic-v4
     run: A3C
     config:
-        num_workers: 16
+        num_workers: 14
         batch_size: 20
         use_lstm: true
         use_pytorch: false
@@ -16,8 +16,9 @@ pong-a3c:
         reward_filter: NoFilter
         model:
             channel_major: false
-            dim: 42
+            dim: 80
             grayscale: true
             zero_mean: false
+            snow: none
         optimizer:
             grads_per_step: 1000
