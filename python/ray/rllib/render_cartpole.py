@@ -48,10 +48,12 @@ def create_snow_dynamic(quant, canvas, bottom_margin, snow_size=10, intensities=
             pos[1] = 0
         pos[1] += 1
 
+    painted = np.zeros_like(canvas)
     for i, [xpos, ypos] in enumerate(pos_vector):
         rr, cc = circle(ypos, xpos, snow_size, shape=(80, 80))
         intensity = intensities[i % len(intensities)]
-        canvas[rr, cc] = intensity
+        painted[rr, cc] = intensity
+    canvas = np.add(canvas, painted)
 
     return canvas
 

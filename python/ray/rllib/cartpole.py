@@ -323,11 +323,41 @@ if __name__ == '__main__':
             }
         else:
             model_opts = {}
-        if args.car or args.pong:
+        if args.pong:
             run_experiments({
                 args.experiment: {
                     "run": "A3C",
-                    "env": args.car and "discrete-carracing-v0" or "snowy-pong-v0",
+                    "env": "snowy-pong-v0",
+                    "repeat": 1,
+                    "checkpoint_freq": 10,
+                    "trial_resources": {
+                        "cpu": 1,
+                        "gpu": 0,
+                        "extra_cpu": lambda spec: spec.config.num_workers,
+                    },
+                    "config": {
+                        "num_workers": args.num_workers,
+                        "env_config": env_config,
+                        "model": model_opts,
+                        "batch_size": 20,
+                        "use_lstm": True,
+                        "vf_loss_coeff": 0.5,
+                        "entropy_coeff": -0.01,
+                        "gamma": 0.99,
+                        "grad_clip": 40.0,
+                        "lambda": 1.0,
+                        "lr": 0.0001,
+                        "optimizer": {
+                            "grads_per_step": 1000,
+                        },
+                    },
+                }
+            })
+        elif args.car:
+            run_experiments({
+                args.experiment: {
+                    "run": "A3C",
+                    "env": "discrete-carracing-v0",
                     "repeat": 1,
                     "checkpoint_freq": 10,
                     "trial_resources": {
