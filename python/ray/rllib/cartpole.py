@@ -35,6 +35,7 @@ from ray.rllib.utils.compression import unpack
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--car", action="store_true")
+parser.add_argument("--pong", action="store_true")
 parser.add_argument("--image", action="store_true")
 parser.add_argument("--decode-model", default=None)
 parser.add_argument("--background", default="zeros")
@@ -42,6 +43,7 @@ parser.add_argument("--experiment", default="cartpole-decode")
 parser.add_argument("--dataset", default=None)
 parser.add_argument("--pretrain-mode", default="")
 parser.add_argument("--pca", action="store_true")
+parser.add_argument("--num-workers", default=8, type=int)
 parser.add_argument("--h-size", default=32, type=int)
 parser.add_argument("--num-snow", default=0, type=int)
 parser.add_argument("--grid-snow", default="", type=str)
@@ -93,6 +95,15 @@ def build_racing_env(env_config):
     env = gym.wrappers.Monitor(env, "/tmp/rollouts", resume=True)
     return env
 
+
+def build_pong(env_config):
+    env = gym.make('PongDeterministic-v4')
+    env = NoopResetEnv(env)
+    env = WarpFrame(env, 80,
+        snow_fn=lambda obs: add_car_snow(
+            obs, env_config["num_snow"], env_config["background"] == "noise"))
+    env = FrameStack(env, 4)
+    return env
 
 
 def load_image_model(weights_file, obs_ph, sess, h_size):
@@ -282,6 +293,8 @@ if __name__ == '__main__':
     env_creator_name = "discrete-carracing-v0"
     register_env(env_creator_name, build_racing_env)
 
+    register_env("snowy-pong-v0", build_pong)
+
     ray.init()
     args = parser.parse_args()
     env_config = {
@@ -290,7 +303,7 @@ if __name__ == '__main__':
     }
 
     decode_model = args.decode_model and os.path.expanduser(args.decode_model)
-    if args.image or args.car:
+    if args.image or args.car or args.pong:
         if args.pca:
             model_opts = {
                 "custom_preprocessor": "pca_decoder",
@@ -310,11 +323,11 @@ if __name__ == '__main__':
             }
         else:
             model_opts = {}
-        if args.car:
+        if args.car or args.pong:
             run_experiments({
                 args.experiment: {
                     "run": "A3C",
-                    "env": "discrete-carracing-v0",
+                    "env": args.car and "discrete-carracing-v0" or "snowy-pong-v0",
                     "repeat": 1,
                     "checkpoint_freq": 10,
                     "trial_resources": {
@@ -323,7 +336,7 @@ if __name__ == '__main__':
                         "extra_cpu": lambda spec: spec.config.num_workers,
                     },
                     "config": {
-                        "num_workers": 8,
+                        "num_workers": args.num_workers,
                         "optimizer": {
                             "grads_per_step": 1000    
                         },
