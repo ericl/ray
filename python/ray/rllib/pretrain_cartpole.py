@@ -337,6 +337,8 @@ def train(config, reporter):
     update_target_expr = []
     embed_vars = _scope_vars("embed_net")
     target_embed_vars = _scope_vars("target_net")
+    print("Embed vars", embed_vars)
+    print("Target embed vars", target_embed_vars)
     for var, var_target in zip(
         sorted(embed_vars, key=lambda v: v.name),
             sorted(target_embed_vars, key=lambda v: v.name)):
@@ -549,21 +551,21 @@ def train(config, reporter):
     zero_obs = np.zeros_like(np.array(data[0]["encoded_obs"]))
     for i, t in enumerate(data):
         # Successor obs
-        succ1 = get_future_obs(data, i, 1)
-        succ2 = get_future_obs(data, i, (prediction_frameskip * prediction_steps) // 5)
-        succ3 = get_future_obs(data, i, (prediction_frameskip * prediction_steps) // 2)
-        if succ1 is None:
+        succ1_obs = get_future_obs(data, i, 1)
+        succ2_obs = get_future_obs(data, i, (prediction_frameskip * prediction_steps) // 5)
+        succ3_obs = get_future_obs(data, i, (prediction_frameskip * prediction_steps) // 2)
+        if succ1_obs is None:
             t["succ1"] = zero_obs
         else:
-            t["succ1"] = succ1
-        if succ2 is None:
+            t["succ1"] = succ1_obs
+        if succ2_obs is None:
             t["succ2"] = zero_obs
         else:
-            t["succ2"] = succ2
-        if succ3 is None:
+            t["succ2"] = succ2_obs
+        if succ3_obs is None:
             t["succ3"] = zero_obs
         else:
-            t["succ3"] = succ3
+            t["succ3"] = succ3_obs
 
     random.seed(0)
     random.shuffle(data)
