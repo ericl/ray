@@ -38,7 +38,7 @@ except NameError:
 
 
 GAN_STARTUP_ITERS = 3
-SUCCESSOR_LOSS_WEIGHT = 0.0001
+SUCCESSOR_LOSS_WEIGHT = 0.01
 
 
 def _scope_vars(scope, trainable_only=False):
@@ -325,11 +325,11 @@ def train(config, reporter):
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="pred_succ3")
     successor_loss1 = SUCCESSOR_LOSS_WEIGHT * tf.reduce_mean(
-        tf.squared_difference(pred_succ1, succ1_target))
+        tf.squared_difference(pred_succ1, succ1_target) / (1e-6 + tf.square(succ1_target)))
     successor_loss2 = SUCCESSOR_LOSS_WEIGHT * tf.reduce_mean(
-        tf.squared_difference(pred_succ2, succ2_target))
+        tf.squared_difference(pred_succ2, succ2_target) / (1e-6 + tf.square(succ2_target)))
     successor_loss3 = SUCCESSOR_LOSS_WEIGHT * tf.reduce_mean(
-        tf.squared_difference(pred_succ3, succ3_target))
+        tf.squared_difference(pred_succ3, succ3_target) / (1e-6 + tf.square(succ3_target)))
     if not successor_loss_enabled:
         successor_loss1 = tf.stop_gradient(successor_loss1)
         successor_loss2 = tf.stop_gradient(successor_loss2)
@@ -687,8 +687,8 @@ def train(config, reporter):
             reporter(
                 timesteps_total=it, mean_loss=mean_train_loss, info=loss_info)
 
-        print("updating target network")
-        sess.run(update_target_expr)
+            print("updating target network")
+            sess.run(update_target_expr)
 
         fname = "weights_{}".format(ix)
         with open(fname, "wb") as f:
