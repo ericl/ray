@@ -312,16 +312,20 @@ def train(config, reporter):
         succ1_target, _ = make_net(succ1, h_size, image, config, num_actions)
         succ2_target, _ = make_net(succ2, h_size, image, config, num_actions)
         succ3_target, _ = make_net(succ3, h_size, image, config, num_actions)
+    if successor_loss_enabled:
+        f_in = feature_layer
+    else:
+        f_in = tf.stop_gradient(feature_layer)
     pred_succ1 = slim.fully_connected(
-        feature_layer, h_size,
+        f_in, h_size,
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="pred_succ1")
     pred_succ2 = slim.fully_connected(
-        feature_layer, h_size,
+        f_in, h_size,
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="pred_succ2")
     pred_succ3 = slim.fully_connected(
-        feature_layer, h_size,
+        f_in, h_size,
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="pred_succ3")
     mean_val = tf.reduce_mean(tf.square(succ1_target))
@@ -331,10 +335,6 @@ def train(config, reporter):
         tf.squared_difference(pred_succ2, succ2_target) / mean_val)
     successor_loss3 = SUCCESSOR_LOSS_WEIGHT * tf.reduce_mean(
         tf.squared_difference(pred_succ3, succ3_target) / mean_val)
-    if not successor_loss_enabled:
-        successor_loss1 = tf.stop_gradient(successor_loss1)
-        successor_loss2 = tf.stop_gradient(successor_loss2)
-        successor_loss3 = tf.stop_gradient(successor_loss3)
 
     update_target_expr = []
     embed_vars = _scope_vars("embed_net")
