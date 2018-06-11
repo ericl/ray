@@ -182,12 +182,12 @@ def train(config, reporter):
     ae_1step = mode in ["split_ae1step", "ae1step"]
     oracle_loss_enabled = mode == "oracle"
     ivd_loss_enabled = mode in ["ivd", "ivd_fwd"]
-    option_pred_loss_enabled = mode in ["option_prediction", "combined_prediction"]
     forward_loss_enabled = mode in ["fwd", "ivd_fwd"]
-    prediction_loss_enabled = mode in ["prediction", "combined_prediction", "split_ae", "split_ae1step"]
+    prediction_loss_enabled = mode in ["prediction", "split_ae", "split_ae1step", "successor_prediction"]
+    successor_loss_enabled = mode in ["successor_prediction"]
     assert il_loss_enabled or oracle_loss_enabled or \
         ivd_loss_enabled or forward_loss_enabled or ae_loss_enabled or \
-        prediction_loss_enabled or option_pred_loss_enabled
+        prediction_loss_enabled
     gan_enabled = tf.placeholder(tf.float32, shape=())
 
     # Set up decoder network
@@ -272,28 +272,41 @@ def train(config, reporter):
         ivd_action_dist.logp(expert_actions))
     print("Inv Dynamics loss", ivd_loss)
 
-    # Setup option prediction loss
+    # Setup successor loss
     if image:
-        future_obs = tf.placeholder(tf.float32, [None, 80, 80, k], name="future_obs")
+        succ1 = tf.placeholder(tf.float32, [None, 80, 80, k], name="succ_obs1")
+        succ2 = tf.placeholder(tf.float32, [None, 80, 80, k], name="succ_obs2")
+        succ3 = tf.placeholder(tf.float32, [None, 80, 80, k], name="succ_obs3")
     else:
-        future_obs = tf.placeholder(tf.float32, [None, out_size], name="future_obs")
-    fut_feature_layer, _ = make_net(future_obs, h_size, image, config, num_actions)
-    opt_fused = tf.concat([feature_layer, fut_feature_layer], axis=1)
-    if not option_pred_loss_enabled:
-        opt_fused = tf.stop_gradient(opt_fused)
-    opt_fused2 = slim.fully_connected(
-        opt_fused, 64,
-        weights_initializer=normc_initializer(1.0),
-        activation_fn=tf.nn.relu,
-        scope="opt_pred1")
-    predicted_option = tf.squeeze(slim.fully_connected(
-        opt_fused2, num_options,
+        succ1 = tf.placeholder(tf.float32, [None, out_size], name="succ_obs1")
+        succ2 = tf.placeholder(tf.float32, [None, out_size], name="succ_obs2")
+        succ3 = tf.placeholder(tf.float32, [None, out_size], name="succ_obs3")
+    with tf.variable_scope("target_net"):
+        succ1_target, _ = make_net(succ1, h_size, image, config, num_actions)
+        succ2_target, _ = make_net(succ2, h_size, image, config, num_actions)
+        succ3_target, _ = make_net(succ3, h_size, image, config, num_actions)
+    pred_succ1 = slim.fully_connected(
+        feature_layer, h_size,
         weights_initializer=normc_initializer(0.01),
-        activation_fn=None, scope="opt_pred_out"))
-    option_dist = action_dist_cls(predicted_option)
-    option_pred_loss = -tf.reduce_mean(
-        can_predict * option_dist.logp(expert_options))
-    print("Option Prediction loss", option_pred_loss)
+        activation_fn=None, scope="pred_succ1")
+    pred_succ2 = slim.fully_connected(
+        feature_layer, h_size,
+        weights_initializer=normc_initializer(0.01),
+        activation_fn=None, scope="pred_succ2")
+    pred_succ3 = slim.fully_connected(
+        feature_layer, h_size,
+        weights_initializer=normc_initializer(0.01),
+        activation_fn=None, scope="pred_succ3")
+    successor_loss1 = tf.reduce_mean(
+        tf.squared_difference(pred_succ1, succ1_target))
+    successor_loss2 = tf.reduce_mean(
+        tf.squared_difference(pred_succ2, succ2_target))
+    successor_loss3 = tf.reduce_mean(
+        tf.squared_difference(pred_succ3, succ3_target))
+    if not successor_loss_enabled:
+        successor_loss1 = tf.stop_gradient(successor_loss1)
+        successor_loss2 = tf.stop_gradient(successor_loss2)
+        successor_loss3 = tf.stop_gradient(successor_loss3)
 
     # Set up forward loss
     if args.car:
@@ -388,7 +401,7 @@ def train(config, reporter):
     non_regressor_vars = [v for v in variables if "regressor" not in v.name]
     summed_loss = (
         oracle_loss + il_loss + ivd_loss + ae_loss + prediction_loss +
-        neg_regressor_loss +
+        neg_regressor_loss + successor_loss1 + successor_loss2 + successor_loss3 +
         fwd_loss * config.get("fwd_weight", 0.0))
     grads = _minimize_and_clip(optimizer, summed_loss, non_regressor_vars)
     train_op = optimizer.apply_gradients(grads)
@@ -452,8 +465,8 @@ def train(config, reporter):
         assert len(res) == prediction_steps
         return res
 
-    def get_future_obs(data, start_i):
-        future_i = start_i + prediction_frameskip * prediction_steps
+    def get_future_obs(data, start_i, offset):
+        future_i = start_i
         for i in range(start_i, future_i + 1):
             if i >= len(data) or data[i]["done"]:
                 return None  # end of rollout
@@ -499,11 +512,22 @@ def train(config, reporter):
     # do this after the first pass to share the decoded arrays
     zero_obs = np.zeros_like(np.array(data[0]["encoded_obs"]))
     for i, t in enumerate(data):
-        fut = get_future_obs(data, i)
-        if fut is None:
-            t["future_obs"] = zero_obs
+        # Successor obs
+        succ1 = get_future_obs(data, i, 1)
+        succ2 = get_future_obs(data, i, (prediction_frameskip * prediction_steps) // 5)
+        succ3 = get_future_obs(data, i, (prediction_frameskip * prediction_steps) // 2)
+        if succ1 is None:
+            t["succ1"] = zero_obs
         else:
-            t["future_obs"] = fut
+            t["succ1"] = succ1
+        if succ2 is None:
+            t["succ2"] = zero_obs
+        else:
+            t["succ2"] = succ2
+        if succ3 is None:
+            t["succ3"] = zero_obs
+        else:
+            t["succ3"] = succ3
 
     random.seed(0)
     random.shuffle(data)
@@ -520,8 +544,10 @@ def train(config, reporter):
         ("ivd", ivd_loss),
         ("oracle", oracle_loss),
         ("prediction", prediction_loss),
-        ("option_prediction", option_pred_loss),
         ("neg_regressor_loss", neg_regressor_loss),
+        ("succ_loss1", successor_loss1),
+        ("succ_loss2", successor_loss2),
+        ("succ_loss3", successor_loss3),
     ]
 
     print("start training")
@@ -549,7 +575,9 @@ def train(config, reporter):
                         expert_options: [t["option"] for t in batch],
                         orig_obs: [t["obs"] for t in batch],
                         next_obs: np.array([t["encoded_next_obs"] for t in batch]),
-                        future_obs: np.array([t["future_obs"] for t in batch]),
+                        succ1: np.array([t["succ1"] for t in batch]),
+                        succ2: np.array([t["succ2"] for t in batch]),
+                        succ3: np.array([t["succ3"] for t in batch]),
                         next_rewards: [t["next_rewards"] for t in batch],
                         repeat: [t.get("repeat", 0) for t in batch],
                         gan_enabled: it > GAN_STARTUP_ITERS,
@@ -568,7 +596,9 @@ def train(config, reporter):
                                 expert_options: [t["option"] for t in batch],
                                 orig_obs: [t["obs"] for t in batch],
                                 next_obs: np.array([t["encoded_next_obs"] for t in batch]),
-                                future_obs: np.array([t["future_obs"] for t in batch]),
+                                succ1: np.array([t["succ1"] for t in batch]),
+                                succ2: np.array([t["succ2"] for t in batch]),
+                                succ3: np.array([t["succ3"] for t in batch]),
                                 next_rewards: [t["next_rewards"] for t in batch],
                                 repeat: [t.get("repeat", 0) for t in batch],
                                 gan_enabled: True,
@@ -588,7 +618,9 @@ def train(config, reporter):
                         expert_options: [t["option"] for t in test_batch],
                         orig_obs: [t["obs"] for t in test_batch],
                         next_obs: np.array([t["encoded_next_obs"] for t in test_batch]),
-                        future_obs: np.array([t["future_obs"] for t in test_batch]),
+                        succ1: np.array([t["succ1"] for t in test_batch]),
+                        succ2: np.array([t["succ2"] for t in test_batch]),
+                        succ3: np.array([t["succ3"] for t in test_batch]),
                         next_rewards: [t["next_rewards"] for t in test_batch],
                         repeat: [t.get("repeat", 0) for t in test_batch],
                         gan_enabled: 1,
