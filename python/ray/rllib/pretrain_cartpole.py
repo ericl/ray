@@ -40,6 +40,30 @@ except NameError:
 GAN_STARTUP_ITERS = 3
 
 
+def _scope_vars(scope, trainable_only=False):
+    """
+    Get variables inside a scope
+    The scope can be specified as a string
+
+    Parameters
+    ----------
+    scope: str or VariableScope
+      scope in which the variables reside.
+    trainable_only: bool
+      whether or not to return only the variables that were marked as
+      trainable.
+
+    Returns
+    -------
+    vars: [tf.Variable]
+      list of variables in `scope`.
+    """
+    return tf.get_collection(
+        tf.GraphKeys.TRAINABLE_VARIABLES
+        if trainable_only else tf.GraphKeys.VARIABLES,
+        scope=scope if isinstance(scope, str) else scope.name)
+
+
 class LazyFrames(object):
     def __init__(self, frames):
         """This object ensures that common frames between the observations are only stored once.
@@ -195,7 +219,8 @@ def train(config, reporter):
         observations = tf.placeholder(tf.float32, [None, 80, 80, k], name="observations")
     else:
         observations = tf.placeholder(tf.float32, [None, out_size], name="observations")
-    feature_layer, action_layer = make_net(observations, h_size, image, config, num_actions)
+    with tf.variable_scope("embed_net"):
+        feature_layer, action_layer = make_net(observations, h_size, image, config, num_actions)
 
     action_dist_cls = Categorical
 
@@ -254,7 +279,8 @@ def train(config, reporter):
         next_obs = tf.placeholder(tf.float32, [None, 80, 80, k], name="next_obs")
     else:
         next_obs = tf.placeholder(tf.float32, [None, out_size], name="next_obs")
-    feature_layer2, _ = make_net(next_obs, h_size, image, config, num_actions)
+    with tf.variable_scope("embed_net"):
+        feature_layer2, _ = make_net(next_obs, h_size, image, config, num_actions)
     fused = tf.concat([feature_layer, feature_layer2], axis=1)
     if not ivd_loss_enabled:
         fused = tf.stop_gradient(fused)
@@ -307,6 +333,16 @@ def train(config, reporter):
         successor_loss1 = tf.stop_gradient(successor_loss1)
         successor_loss2 = tf.stop_gradient(successor_loss2)
         successor_loss3 = tf.stop_gradient(successor_loss3)
+
+    update_target_expr = []
+    embed_vars = _scope_vars("embed_net")
+    target_embed_vars = _scope_vars("target_net")
+    for var, var_target in zip(
+        sorted(embed_vars, key=lambda v: v.name),
+            sorted(target_embed_vars, key=lambda v: v.name)):
+        update_target_expr.append(var_target.assign(var))
+    print("Update target ops", update_target_expr)
+    update_target_expr = tf.group(*update_target_expr)
 
     # Set up forward loss
     if args.car:
@@ -605,6 +641,9 @@ def train(config, reporter):
                             })
                 regressor_time += time.time() - start
             print("sample time", sample_time, "run time", run_time, "regressor time", regressor_time)
+
+            print("updating target network")
+            sess.run(update_target_expr)
 
             print("testing miniepoch", it)
             test_losses = collections.defaultdict(list)
