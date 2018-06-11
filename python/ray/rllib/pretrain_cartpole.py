@@ -38,7 +38,7 @@ except NameError:
 
 
 GAN_STARTUP_ITERS = 3
-SUCCESSOR_LOSS_WEIGHT = 0.01
+SUCCESSOR_LOSS_WEIGHT = 0.1
 
 
 def _scope_vars(scope, trainable_only=False):
