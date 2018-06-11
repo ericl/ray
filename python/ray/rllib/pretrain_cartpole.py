@@ -312,16 +312,31 @@ def train(config, reporter):
         succ1_target, _ = make_net(succ1, h_size, image, config, num_actions)
         succ2_target, _ = make_net(succ2, h_size, image, config, num_actions)
         succ3_target, _ = make_net(succ3, h_size, image, config, num_actions)
+    psh1 = slim.fully_connected(
+        feature_layer, 64,
+        weights_initializer=normc_initializer(1.0),
+        activation_fn=tf.nn.relu,
+        scope="psh1")
+    psh2 = slim.fully_connected(
+        feature_layer, 64,
+        weights_initializer=normc_initializer(1.0),
+        activation_fn=tf.nn.relu,
+        scope="psh2")
+    psh3 = slim.fully_connected(
+        feature_layer, 64,
+        weights_initializer=normc_initializer(1.0),
+        activation_fn=tf.nn.relu,
+        scope="psh3")
     pred_succ1 = slim.fully_connected(
-        feature_layer, h_size,
+        psh1, h_size,
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="pred_succ1")
     pred_succ2 = slim.fully_connected(
-        feature_layer, h_size,
+        psh2, h_size,
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="pred_succ2")
     pred_succ3 = slim.fully_connected(
-        feature_layer, h_size,
+        psh3, h_size,
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="pred_succ3")
     successor_loss1 = SUCCESSOR_LOSS_WEIGHT * tf.reduce_mean(
