@@ -108,7 +108,8 @@ def build_pong(env_config):
 
 def load_image_model(weights_file, obs_ph, sess, h_size):
     model_config = {}
-    network = VisionNetwork(obs_ph, h_size, model_config)
+    with tf.variable_scope("embed_net"):
+        network = VisionNetwork(obs_ph, h_size, model_config)
     vars = TensorFlowVariables(network.outputs, sess)
     sess.run(tf.global_variables_initializer())
     with open(weights_file, "rb") as f:
