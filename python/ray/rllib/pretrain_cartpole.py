@@ -38,6 +38,7 @@ except NameError:
 
 
 GAN_STARTUP_ITERS = 3
+SUCCESSOR_LOSS_WEIGHT = 0.0001
 
 
 def _scope_vars(scope, trainable_only=False):
@@ -323,11 +324,11 @@ def train(config, reporter):
         feature_layer, h_size,
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="pred_succ3")
-    successor_loss1 = tf.reduce_mean(
+    successor_loss1 = SUCCESSOR_LOSS_WEIGHT * tf.reduce_mean(
         tf.squared_difference(pred_succ1, succ1_target))
-    successor_loss2 = tf.reduce_mean(
+    successor_loss2 = SUCCESSOR_LOSS_WEIGHT * tf.reduce_mean(
         tf.squared_difference(pred_succ2, succ2_target))
-    successor_loss3 = tf.reduce_mean(
+    successor_loss3 = SUCCESSOR_LOSS_WEIGHT * tf.reduce_mean(
         tf.squared_difference(pred_succ3, succ3_target))
     if not successor_loss_enabled:
         successor_loss1 = tf.stop_gradient(successor_loss1)
@@ -583,9 +584,9 @@ def train(config, reporter):
         ("oracle", oracle_loss),
         ("prediction", prediction_loss),
         ("neg_regressor_loss", neg_regressor_loss),
-        ("succ_loss1", successor_loss1),
-        ("succ_loss2", successor_loss2),
-        ("succ_loss3", successor_loss3),
+        ("succ1", successor_loss1),
+        ("succ2", successor_loss2),
+        ("succ3", successor_loss3),
     ]
 
     print("start training")
@@ -644,9 +645,6 @@ def train(config, reporter):
                 regressor_time += time.time() - start
             print("sample time", sample_time, "run time", run_time, "regressor time", regressor_time)
 
-            print("updating target network")
-            sess.run(update_target_expr)
-
             print("testing miniepoch", it)
             test_losses = collections.defaultdict(list)
             for jx in range(max(1, len(test_data) // batch_size)):
@@ -675,19 +673,6 @@ def train(config, reporter):
                         save_image(results[-1][0].squeeze(), "{}_{}_{}_out_feat.png".format(mode, ix, jx))
                         save_image(results[-2][0].squeeze(), "{}_{}_{}_out_noise.png".format(mode, ix, jx))
 
-            # Evaluate IL performance
-            rewards = []
-            if not args.car:  # TODO
-                for _ in range(100):
-                    obs = env.reset()
-                    reward = 0
-                    done = False
-                    while not done:
-                        action = sess.run(act, feed_dict={observations: [preprocessor.transform(obs)]})[0]
-                        obs, rew, done, _ = env.step(action)
-                        reward += rew
-                    rewards.append(reward)
-
             loss_info = {
                 "epoch": ix,
                 "miniepoch": it,
@@ -702,11 +687,13 @@ def train(config, reporter):
             reporter(
                 timesteps_total=it, mean_loss=mean_train_loss, info=loss_info)
 
-        if ix % 1 == 0:
-            fname = "weights_{}".format(ix)
-            with open(fname, "wb") as f:
-                f.write(pickle.dumps(vars.get_weights()))
-                print("Saved weights to " + fname)
+        print("updating target network")
+        sess.run(update_target_expr)
+
+        fname = "weights_{}".format(ix)
+        with open(fname, "wb") as f:
+            f.write(pickle.dumps(vars.get_weights()))
+            print("Saved weights to " + fname)
 
 
 if __name__ == '__main__':
