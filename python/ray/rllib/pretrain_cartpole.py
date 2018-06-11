@@ -312,39 +312,25 @@ def train(config, reporter):
         succ1_target, _ = make_net(succ1, h_size, image, config, num_actions)
         succ2_target, _ = make_net(succ2, h_size, image, config, num_actions)
         succ3_target, _ = make_net(succ3, h_size, image, config, num_actions)
-    psh1 = slim.fully_connected(
-        feature_layer, 64,
-        weights_initializer=normc_initializer(1.0),
-        activation_fn=tf.nn.relu,
-        scope="psh1")
-    psh2 = slim.fully_connected(
-        feature_layer, 64,
-        weights_initializer=normc_initializer(1.0),
-        activation_fn=tf.nn.relu,
-        scope="psh2")
-    psh3 = slim.fully_connected(
-        feature_layer, 64,
-        weights_initializer=normc_initializer(1.0),
-        activation_fn=tf.nn.relu,
-        scope="psh3")
     pred_succ1 = slim.fully_connected(
-        psh1, h_size,
+        feature_layer, h_size,
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="pred_succ1")
     pred_succ2 = slim.fully_connected(
-        psh2, h_size,
+        feature_layer, h_size,
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="pred_succ2")
     pred_succ3 = slim.fully_connected(
-        psh3, h_size,
+        feature_layer, h_size,
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="pred_succ3")
+    mean_val = tf.reduce_mean(tf.square(succ1_target))
     successor_loss1 = SUCCESSOR_LOSS_WEIGHT * tf.reduce_mean(
-        tf.squared_difference(pred_succ1, succ1_target) / (1e-6 + tf.square(succ1_target)))
+        tf.squared_difference(pred_succ1, succ1_target) / mean_val)
     successor_loss2 = SUCCESSOR_LOSS_WEIGHT * tf.reduce_mean(
-        tf.squared_difference(pred_succ2, succ2_target) / (1e-6 + tf.square(succ2_target)))
+        tf.squared_difference(pred_succ2, succ2_target) / mean_val)
     successor_loss3 = SUCCESSOR_LOSS_WEIGHT * tf.reduce_mean(
-        tf.squared_difference(pred_succ3, succ3_target) / (1e-6 + tf.square(succ3_target)))
+        tf.squared_difference(pred_succ3, succ3_target) / mean_val)
     if not successor_loss_enabled:
         successor_loss1 = tf.stop_gradient(successor_loss1)
         successor_loss2 = tf.stop_gradient(successor_loss2)
