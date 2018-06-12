@@ -313,9 +313,9 @@ def train(config, reporter):
         succ2_target, _ = make_net(succ2, h_size, image, config, num_actions)
         succ3_target, _ = make_net(succ3, h_size, image, config, num_actions)
     if successor_loss_enabled:
-        f_in = feature_layer
+        f_in = pred_h0
     else:
-        f_in = tf.stop_gradient(feature_layer)
+        f_in = tf.stop_gradient(pred_h0)
     pred_succ1 = slim.fully_connected(
         f_in, h_size,
         weights_initializer=normc_initializer(0.01),
