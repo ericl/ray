@@ -186,8 +186,8 @@ def train(config, reporter):
     if args.car:
         num_actions = 5
         num_options = 5
-        prediction_frameskip = 3
-        prediction_steps = 10
+        prediction_frameskip = 1
+        prediction_steps = 30
     else:
         num_actions = 2
         num_options = 2
@@ -243,14 +243,14 @@ def train(config, reporter):
         pred_h0 = tf.concat([feature_layer, tf.one_hot(expert_actions, 2)], axis=1)
     if not prediction_loss_enabled:
         pred_h0 = tf.stop_gradient(pred_h0)
-    next_rewards = tf.placeholder(tf.float32, [None, 10], name="next_rewards")
+    next_rewards = tf.placeholder(tf.float32, [None, prediction_steps], name="next_rewards")
     pred_h1 = slim.fully_connected(
         pred_h0, 64,
         weights_initializer=normc_initializer(1.0),
         activation_fn=tf.nn.relu,
         scope="pred_h1")
     pred_out = slim.fully_connected(
-        pred_h1, 10,
+        pred_h1, prediction_steps,
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="reward_prediction")
     repeat = tf.placeholder(tf.int32, [None], name="repeat")
@@ -404,7 +404,7 @@ def train(config, reporter):
             with tf.variable_scope("snow_out"):
                 ae_snow_out = decode_image(snow_latent_vector, 1)
             with tf.variable_scope("snow_out_regressor"):
-                _, regressor_out = make_net(ae_snow_out, h_size, image, config, 10)
+                _, regressor_out = make_net(ae_snow_out, h_size, image, config, prediction_steps)
             pos_regressor_loss = tf.reduce_mean(
                 tf.squared_difference(can_predict * regressor_out, can_predict * next_rewards)) * gan_enabled
             neg_regressor_loss = - pos_regressor_loss
