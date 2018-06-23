@@ -11,7 +11,7 @@ def build_racing_env(_):
     env = DiscreteCarRacing(env)
     env = NoopResetEnv(env)
     env.override_num_noops = 50
-    env = WarpFrame(env, 80)
+    env = WarpFrame(env, 80, snow_fn=None)
     env = FrameStack(env, 4)
     # hack needed to fix rendering on CarRacing-v0
     env = gym.wrappers.Monitor(env, "/tmp/rollouts", resume=True)

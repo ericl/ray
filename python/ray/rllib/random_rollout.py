@@ -79,16 +79,31 @@ def get_repeat(repeat_prob, env):
 
 
 def choose_car_option():
-    opt = random.choice([1, 2, 3, 4, 5])
+    opt = random.choice(list(OPTIONS.keys()))
     return opt
 
 
 OPTIONS = {
     1: lambda _: 2,  # accelerate straight
-    2: lambda _: 100,  # neutral straight
-    3: lambda r: 100 if r < 30 else 0,  # turn left
-    4: lambda r: 100 if r < 30 else 1,  # turn right
-    5: lambda r: 100 if r < 40 else 3,  # brake
+    2: lambda _: 4,  # neutral straight
+    3: lambda r: 4 if r < 30 else 0,  # turn left
+    4: lambda r: 4 if r < 30 else 1,  # turn right
+    5: lambda r: 4 if r < 45 else 3,  # brake
+    6: lambda r: 4 if r < 35 else 0 if r < 45 else 3,  # brake, then turn left
+    7: lambda r: 4 if r < 35 else 1 if r < 45 else 3,  # brake, then turn right
+    8: lambda r: 0 if r % 5 == 0 else 4,  # gentle left
+    9: lambda r: 1 if r % 5 == 0 else 4,  # gentle right
+    10: lambda r: 0 if r % 3 == 0 else 4,  # gentle left 2
+    11: lambda r: 1 if r % 3 == 0 else 4,  # gentle right 2
+    12: lambda r: 0 if r % 10 < 4 else 4,  # gentle left 3
+    13: lambda r: 1 if r % 10 < 4 else 4,  # gentle right 3
+    14: lambda r: 3 if r > 40 else 0 if r % 20 < 10 else 2,  # stop, go left
+    15: lambda r: 3 if r > 40 else 1 if r % 20 < 10 else 2,  # stop, go right
+    16: lambda r: 3 if r > 40 else 2 if r % 2 == 0 else 4,  # stop, go straight
+    17: lambda r: 3 if r > 40 else 0 if r % 20 < 15 else 2,  # stop, go left 2
+    18: lambda r: 3 if r > 40 else 1 if r % 20 < 15 else 2,  # stop, go right 2
+    19: lambda r: 3 if r > 40 else 0 if r % 20 < 5 else 2,  # stop, go left 3
+    20: lambda r: 3 if r > 40 else 1 if r % 20 < 5 else 2,  # stop, go right 3
 }
 
 
@@ -155,7 +170,7 @@ if __name__ == "__main__":
                     else:
                         action = env.action_space.sample()
                 elif not agent:
-                    action = env.action_space.sample()
+                    action = OPTIONS[1](0)
                 else:
                     decoded = decoder.transform(state)
                     action = int(agent.compute_action(decoded))
