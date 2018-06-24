@@ -239,9 +239,9 @@ def train(config, reporter):
 
     # Set up reward prediction loss
     if args.car:
-        pred_h0 = tf.concat([feature_layer, tf.one_hot(expert_options, 5)], axis=1)
+        pred_h0 = tf.concat([feature_layer, tf.one_hot(expert_options, num_options)], axis=1)
     else:
-        pred_h0 = tf.concat([feature_layer, tf.one_hot(expert_actions, 2)], axis=1)
+        pred_h0 = tf.concat([feature_layer, tf.one_hot(expert_actions, num_options)], axis=1)
     if not prediction_loss_enabled:
         pred_h0 = tf.stop_gradient(pred_h0)
     next_rewards = tf.placeholder(tf.float32, [None, prediction_steps], name="next_rewards")
