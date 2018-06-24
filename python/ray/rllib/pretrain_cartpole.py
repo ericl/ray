@@ -186,7 +186,7 @@ def train(config, reporter):
     k = 4
     if args.car:
         num_actions = 5
-        num_options = 5
+        num_options = 20
         prediction_frameskip = 1
         prediction_steps = 30
     else:
