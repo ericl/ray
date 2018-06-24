@@ -3,6 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import os
+import glob
 import collections
 from collections import deque
 import json
@@ -513,18 +514,22 @@ def train(config, reporter):
         return data[future_i]["encoded_obs"]
 
     print("Loading data", env_config)
-    fdata = data
+    matches = glob.glob(data)
     data = []
-    for i, x in enumerate(open(fdata).readlines()):
-        if i % 10000 == 0:
-            print("Loading data tuple", i)
-        t = json.loads(x)
-        t["obs"] = decode_and_deduplicate(t["obs"], snow_fn)
-        t["new_obs"] = decode_and_deduplicate(t["new_obs"], snow_fn)
-        if "option" not in t:
-            t["option"] = 1
-        data.append(t)
-    print("preprocessing data")
+    for fdata in matches:
+        for i, x in enumerate(open(fdata).readlines()):
+            if i % 10000 == 0:
+                print("Loading data tuple", i)
+            try:
+                t = json.loads(x)
+                t["obs"] = decode_and_deduplicate(t["obs"], snow_fn)
+                t["new_obs"] = decode_and_deduplicate(t["new_obs"], snow_fn)
+                if "option" not in t:
+                    t["option"] = 1
+                data.append(t)
+            except Exception as e:
+                print(e)
+    print("preprocessing data", len(data))
     for i, t in enumerate(data):
         t["next_rewards"] = get_next_rewards(data, i)
     print("num deduplicated", deduplicated)
