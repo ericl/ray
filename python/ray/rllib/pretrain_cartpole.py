@@ -239,7 +239,9 @@ def train(config, reporter):
 
     # Set up reward prediction loss
     if args.car:
-        pred_h0 = tf.concat([feature_layer, tf.one_hot(expert_options, num_options)], axis=1)
+        base = prediction_steps * prediction_frameskip
+        pred_h0 = tf.concat([feature_layer, tf.one_hot(expert_options, num_options),
+                             tf.one_hot(repeat, 50)], axis=1)
     else:
         pred_h0 = tf.concat([feature_layer, tf.one_hot(expert_actions, num_options)], axis=1)
     if not prediction_loss_enabled:
@@ -537,6 +539,8 @@ def train(config, reporter):
     if args.car:
         data_out = []
         for t in data:
+            if t["repeat"] <= prediction_steps * prediction_frameskip:
+                continue
             t["encoded_obs"] = t["obs"]
             t["encoded_next_obs"] = t["new_obs"]
             t["obs"] = [0, 0, 0, 0]  # "true" latent state not available
@@ -656,7 +660,7 @@ def train(config, reporter):
             for jx in range(max(1, len(test_data) // batch_size)):
                 test_batch = np.random.choice(test_data, batch_size)
                 results = sess.run(
-                    [tensor for (_, tensor) in LOSSES] + [autoencoder_out, ae_snow_out, ae_no_snow_out],
+                    [tensor for (_, tensor) in LOSSES] + [feature_layer, can_predict, pred_out, autoencoder_out, ae_snow_out, ae_no_snow_out],
                     feed_dict={
                         observations: np.array([t["encoded_obs"] for t in test_batch]),
                         expert_actions: [t["action"] for t in test_batch],
@@ -678,6 +682,14 @@ def train(config, reporter):
                     if split_ae:
                         save_image(results[-1][0].squeeze(), "{}_{}_{}_out_feat.png".format(mode, ix, jx))
                         save_image(results[-2][0].squeeze(), "{}_{}_{}_out_noise.png".format(mode, ix, jx))
+                for qx in range(5):
+                    print("== Example:", qx)
+                    print("Option", test_batch[qx]["option"])
+                    print("Actual", test_batch[qx]["next_rewards"])
+                    print("Predicted", results[-4][qx])
+                    print("Mask", results[-5][qx])
+                    print("Features", results[-6][qx])
+                    print()
 
             loss_info = {
                 "epoch": ix,
