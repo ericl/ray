@@ -242,7 +242,7 @@ def train(config, reporter):
     if args.car:
         base = prediction_steps * prediction_frameskip
         pred_h0 = tf.concat([feature_layer, tf.one_hot(expert_options, num_options),
-                             tf.one_hot(repeat, 50)], axis=1)
+                             tf.one_hot((repeat - 30) // 2, 10)], axis=1)
     else:
         pred_h0 = tf.concat([feature_layer, tf.one_hot(expert_actions, num_options)], axis=1)
     if not prediction_loss_enabled:
