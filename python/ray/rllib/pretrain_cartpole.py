@@ -537,9 +537,14 @@ def train(config, reporter):
     print("num deduplicated", deduplicated)
 
     if args.car:
+        skip_oend, skip_end = 0, 0
         data_out = []
         for t in data:
             if t["repeat"] <= prediction_steps * prediction_frameskip:
+                skip_oend += 1
+                continue
+            if 0 in t["next_rewards"]:
+                skip_end += 1
                 continue
             t["encoded_obs"] = t["obs"]
             t["encoded_next_obs"] = t["new_obs"]
@@ -551,6 +556,7 @@ def train(config, reporter):
                 print("Loaded frames", len(data_out))
             data_out.append(t)
         data = data_out
+        print("Skipped", skip_end, skip_oend)
     elif args.image:
         data = framestack_cartpole(data, k, config["env_config"], args)
     else:
