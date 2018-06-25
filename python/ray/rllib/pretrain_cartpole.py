@@ -248,13 +248,13 @@ def train(config, reporter):
     if not prediction_loss_enabled:
         pred_h0 = tf.stop_gradient(pred_h0)
     next_rewards = tf.placeholder(tf.float32, [None, prediction_steps], name="next_rewards")
-    pred_h1 = slim.fully_connected(
-        pred_h0, 64,
-        weights_initializer=normc_initializer(1.0),
-        activation_fn=tf.nn.relu,
-        scope="pred_h1")
+#    pred_h1 = slim.fully_connected(
+#        pred_h0, 64,
+#        weights_initializer=normc_initializer(1.0),
+#        activation_fn=tf.nn.relu,
+#        scope="pred_h1")
     pred_out = slim.fully_connected(
-        pred_h1, prediction_steps,
+        pred_h0, prediction_steps,
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="reward_prediction")
     # Only try to predict within repeat seqs
