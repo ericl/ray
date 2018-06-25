@@ -237,6 +237,7 @@ def train(config, reporter):
     act = action_dist.sample()
     print("IL loss", il_loss)
 
+    repeat = tf.placeholder(tf.int32, [None], name="repeat")
     # Set up reward prediction loss
     if args.car:
         base = prediction_steps * prediction_frameskip
@@ -256,7 +257,6 @@ def train(config, reporter):
         pred_h1, prediction_steps,
         weights_initializer=normc_initializer(0.01),
         activation_fn=None, scope="reward_prediction")
-    repeat = tf.placeholder(tf.int32, [None], name="repeat")
     # Only try to predict within repeat seqs
     can_predict = tf.expand_dims(
         tf.cast(tf.greater(repeat, prediction_steps * prediction_frameskip), tf.float32), 1)
