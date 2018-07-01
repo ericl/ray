@@ -45,7 +45,6 @@ if __name__ == "__main__":
     def gen_policy():
         config = {
             "gamma": random.choice([0.5, 0.8, 0.9, 0.95, 0.99]),
-            "n_step": random.choice([1, 2, 3, 4, 5]),
         }
         return (PGPolicyGraph, obs_space, act_space, config)
 
