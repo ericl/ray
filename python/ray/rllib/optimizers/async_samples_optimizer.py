@@ -211,6 +211,7 @@ class AsyncSamplesOptimizer(PolicyOptimizer):
         start = time.time()
         sample_timesteps, train_timesteps = self._step()
         time_delta = time.time() - start
+        print("sample", time_delta, sample_timesteps)
         self.timers["sample"].push(time_delta)
         self.timers["sample"].push_units_processed(sample_timesteps)
         if train_timesteps > 0:
@@ -218,6 +219,7 @@ class AsyncSamplesOptimizer(PolicyOptimizer):
         if self.learning_started:
             self.timers["train"].push(time_delta)
             self.timers["train"].push_units_processed(train_timesteps)
+            print("train", time_delta, train_timesteps)
         self.num_steps_sampled += sample_timesteps
         self.num_steps_trained += train_timesteps
 
@@ -277,10 +279,13 @@ class AsyncSamplesOptimizer(PolicyOptimizer):
             1000 * self.learner.grad_timer.mean, 3)
         timing["learner_dequeue_time_ms"] = round(
             1000 * self.learner.queue_timer.mean, 3)
+        print("get sample throughput")
+        st = round(self.timers["sample"].mean_throughput, 3)
+        print("get train throughput")
+        tt = round(self.timers["train"].mean_throughput, 3)
         stats = {
-            "sample_throughput": round(self.timers["sample"].mean_throughput,
-                                       3),
-            "train_throughput": round(self.timers["train"].mean_throughput, 3),
+            "sample_throughput": st,
+            "train_throughput": tt,
             "num_weight_syncs": self.num_weight_syncs,
         }
         debug_stats = {
