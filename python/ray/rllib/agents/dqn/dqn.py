@@ -6,6 +6,7 @@ import pickle
 import os
 
 import ray
+import time
 from ray.rllib import optimizers
 from ray.rllib.agents.agent import Agent, with_common_config
 from ray.rllib.agents.dqn.dqn_policy_graph import DQNPolicyGraph
@@ -181,6 +182,7 @@ class DQNAgent(Agent):
             self.update_target_if_needed()
             print("actual step time", time.time() - start)
 
+        start = time.time()
         exp_vals = [self.exploration0.value(self.global_timestep)]
         self.local_evaluator.foreach_trainable_policy(
             lambda p, _: p.set_epsilon(exp_vals[0]))
@@ -198,6 +200,7 @@ class DQNAgent(Agent):
         else:
             result = collect_metrics(self.local_evaluator,
                                      self.remote_evaluators)
+        print("metrics time", time.time() - start)
 
         return result._replace(
             timesteps_this_iter=self.global_timestep - start_timestep,
