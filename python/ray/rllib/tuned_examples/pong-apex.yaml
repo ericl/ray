@@ -12,5 +12,3 @@ pong-apex:
         sample_batch_size: 198
         lr: .0001
         gamma: 0.99
-        optimizer:
-            debug: true

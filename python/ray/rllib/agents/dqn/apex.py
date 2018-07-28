@@ -14,7 +14,7 @@ APEX_DEFAULT_CONFIG = merge_dicts(
             DQN_CONFIG["optimizer"], {
                 "max_weight_sync_delay": 400,
                 "num_replay_buffer_shards": 4,
-                "debug": False
+                "debug": True
             }),
         "n_step": 3,
         "gpu": True,
