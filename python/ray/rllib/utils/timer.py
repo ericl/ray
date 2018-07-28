@@ -58,6 +58,7 @@ class TimerStat(object):
 
     @property
     def mean_throughput(self):
+        print("timer", self._samples, self._units_processed)
         time_total = sum(self._samples)
         if not time_total:
             return 0.0
