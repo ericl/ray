@@ -176,8 +176,10 @@ class DQNAgent(Agent):
 
         while (self.global_timestep - start_timestep <
                self.config["timesteps_per_iteration"]):
+            start = time.time()
             self.optimizer.step()
             self.update_target_if_needed()
+            print("actual step time", time.time() - start)
 
         exp_vals = [self.exploration0.value(self.global_timestep)]
         self.local_evaluator.foreach_trainable_policy(
