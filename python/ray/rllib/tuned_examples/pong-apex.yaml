@@ -7,7 +7,7 @@ pong-apex:
     config:
         target_network_update_freq: 50000
         timesteps_per_iteration: 500000
-        num_workers: 256
+        num_workers: 128
         num_envs_per_worker: 4
         sample_batch_size: 198
         lr: .0001
