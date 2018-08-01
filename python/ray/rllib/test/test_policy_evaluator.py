@@ -136,7 +136,7 @@ class TestPolicyEvaluator(unittest.TestCase):
             self.assertIn(key, batch)
         self.assertGreater(batch["advantages"][0], 1)
 
-    def testAutoConcat(self):
+    def testBatchSize(self):
         ev = PolicyEvaluator(
             env_creator=lambda _: MockEnv(episode_length=40),
             policy_graph=MockPolicyGraph,
@@ -146,7 +146,7 @@ class TestPolicyEvaluator(unittest.TestCase):
             observation_filter="ConcurrentMeanStdFilter")
         time.sleep(2)
         batch = ev.sample()
-        self.assertEqual(batch.count, 40)  # auto-concat up to 5 episodes
+        self.assertEqual(batch.count, 10)
 
     def testAutoVectorization(self):
         ev = PolicyEvaluator(
