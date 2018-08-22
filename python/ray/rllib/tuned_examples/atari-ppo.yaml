@@ -8,10 +8,13 @@ atari-ppo:
             - SpaceInvadersNoFrameskip-v4
     run: PPO
     config:
+        lambda: 0.95
+        kl_coeff: 0.5
+        clip_param: 0.1
+        entropy_coeff: 0.01
         timesteps_per_batch: 5000
         sample_batch_size: 500
         sgd_batchsize: 500
-        entropy_coeff: 0.01
         num_sgd_iter: 10
         num_workers: 10
         num_envs_per_worker: 5
@@ -19,7 +22,8 @@ atari-ppo:
         observation_filter: NoFilter
         vf_share_layers: true
         num_gpus: 1
-        lr_schedule: [
-            [0, 0.0007],
-            [20000000, 0.000000000001],
-        ]
+        lr: 0.0007
+#        lr_schedule: [
+#            [0, 0.0007],
+#            [20000000, 0.000000000001],
+#        ]
