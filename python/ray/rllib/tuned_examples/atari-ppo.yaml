@@ -22,8 +22,7 @@ atari-ppo:
         observation_filter: NoFilter
         vf_share_layers: true
         num_gpus: 1
-        sgd_stepsize: 0.0007
-#        lr_schedule: [
-#            [0, 0.0007],
-#            [20000000, 0.000000000001],
-#        ]
+        lr_schedule: [
+            [0, 0.0007],
+            [20000000, 0.000000000001],
+        ]
