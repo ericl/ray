@@ -21,7 +21,6 @@ atari-rainbow:
         schedule_max_timesteps: 2000000
         exploration_final_eps: 0.0
         exploration_fraction: .000001
-        target_network_update_freq: 500
         prioritized_replay: True
         prioritized_replay_alpha: 0.5
         beta_annealing_fraction: 1.0
