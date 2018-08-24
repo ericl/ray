@@ -230,8 +230,7 @@ class DQNAgent(Agent):
                 self.local_evaluator,
                 self.remote_evaluators[-len(self.remote_evaluators) // 3:])
         else:
-            result = collect_metrics(self.local_evaluator,
-                                     self.remote_evaluators)
+            result = self.optimizer.collect_metrics()
 
         result.update(
             timesteps_this_iter=self.global_timestep - start_timestep,
