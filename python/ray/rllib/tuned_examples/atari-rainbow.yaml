@@ -13,6 +13,7 @@ atari-rainbow:
         noisy: true
         target_network_update_freq: 8000
         lr: .0000625
+        adam_epsilon: .00015
         hiddens: [512]
         learning_starts: 20000
         buffer_size: 1000000
