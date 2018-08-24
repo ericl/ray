@@ -1,6 +1,6 @@
 # Runs on a single g3.16xl node
 # See https://github.com/ray-project/rl-experiments for results
-atari-a2c:
+atari-rainbow:
     env:
         grid_search:
             - BreakoutNoFrameskip-v4
