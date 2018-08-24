@@ -1,6 +1,6 @@
 # Runs on a single g3.16xl node
 # See https://github.com/ray-project/rl-experiments for results
-atari-rainbow:
+atari-dqn:
     env:
         grid_search:
             - BreakoutNoFrameskip-v4
@@ -9,6 +9,12 @@ atari-rainbow:
             - SpaceInvadersNoFrameskip-v4
     run: DQN
     config:
+        double_q: false
+        dueling: false
+        n_step: 1
+        noisy: false
+        num_atoms: 1
+        prioritized_replay: false
         target_network_update_freq: 8000
         lr: .0000625
         hiddens: [512]
