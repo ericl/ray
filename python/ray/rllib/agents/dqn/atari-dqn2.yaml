@@ -1,0 +1,23 @@
+# Runs on a single g3.16xl node
+# See https://github.com/ray-project/rl-experiments for results
+atari-dqn2:
+    env:
+        grid_search:
+            - BreakoutNoFrameskip-v4
+            - BeamRiderNoFrameskip-v4
+            - QbertNoFrameskip-v4
+            - SpaceInvadersNoFrameskip-v4
+    run: DQN
+    config:
+        n_step: 3
+        target_network_update_freq: 8000
+        lr: .00025
+        hiddens: [512]
+        learning_starts: 50000
+        buffer_size: 1000000
+        sample_batch_size: 4
+        train_batch_size: 32
+        schedule_max_timesteps: 2000000
+        exploration_final_eps: .01
+        exploration_fraction: .1
+        gpu: true
