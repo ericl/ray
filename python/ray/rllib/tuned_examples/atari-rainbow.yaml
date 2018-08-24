@@ -9,6 +9,7 @@ atari-rainbow:
             - SpaceInvadersNoFrameskip-v4
     run: DQN
     config:
+        num_atoms: 51
         noisy: true
         lr: .0001
         hiddens: [512]
