@@ -11,9 +11,9 @@ atari-rainbow:
     config:
         num_atoms: 51
         noisy: true
-        lr: .0001
+        lr: .0000625
         hiddens: [512]
-        learning_starts: 50000
+        learning_starts: 80000
         buffer_size: 1000000
         sample_batch_size: 4
         train_batch_size: 32
