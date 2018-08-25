@@ -28,3 +28,4 @@ atari-rainbow:
         final_prioritized_replay_beta: 1.0
         n_step: 3
         gpu: true
+        timesteps_per_iteration: 10000

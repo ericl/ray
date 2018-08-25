@@ -21,3 +21,4 @@ atari-dqn2:
         exploration_final_eps: .01
         exploration_fraction: .1
         gpu: true
+        timesteps_per_iteration: 10000
