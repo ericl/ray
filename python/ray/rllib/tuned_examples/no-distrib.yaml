@@ -1,4 +1,4 @@
-atari-rainbow:
+no-distrib:
     env:
         grid_search:
             - BreakoutNoFrameskip-v4

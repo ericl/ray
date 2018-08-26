@@ -1,4 +1,4 @@
-atari-rainbow:
+no-double:
     env:
         grid_search:
             - BreakoutNoFrameskip-v4
@@ -8,6 +8,7 @@ atari-rainbow:
     run: DQN
     config:
         double_q: false
+        dueling: false
         num_atoms: 51
         noisy: true
         target_network_update_freq: 8000
