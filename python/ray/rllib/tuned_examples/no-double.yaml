@@ -8,7 +8,7 @@ no-double:
     run: DQN
     config:
         double_q: false
-        dueling: false
+        dueling: true
         num_atoms: 51
         noisy: true
         target_network_update_freq: 8000
@@ -29,3 +29,4 @@ no-double:
         n_step: 3
         gpu: true
         timesteps_per_iteration: 10000
+
