@@ -1,4 +1,4 @@
-no-noisy:
+just-double:
     env:
         grid_search:
             - BreakoutNoFrameskip-v4
@@ -7,8 +7,12 @@ no-noisy:
             - SpaceInvadersNoFrameskip-v4
     run: DQN
     config:
-        num_atoms: 51
+        double_q: true
+        dueling: false
+        num_atoms: 1
         noisy: false
+        prioritized_replay: false
+        n_step: 1
         target_network_update_freq: 8000
         lr: .0000625
         adam_epsilon: .00015
@@ -20,10 +24,11 @@ no-noisy:
         schedule_max_timesteps: 2000000
         exploration_final_eps: 0.01
         exploration_fraction: .1
-        prioritized_replay: True
         prioritized_replay_alpha: 0.5
         beta_annealing_fraction: 1.0
         final_prioritized_replay_beta: 1.0
-        n_step: 3
         gpu: true
         timesteps_per_iteration: 10000
+
+
+
