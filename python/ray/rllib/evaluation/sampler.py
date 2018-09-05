@@ -54,6 +54,14 @@ class SyncSampler(object):
         self.metrics_queue = queue.Queue()
 
     def get_data(self):
+        if not self.warmed:
+            import time
+            start = time.time()
+            print("Entering warmup")
+            while time.time() - start < 30:
+                next(rollout_provider)
+            print("Warmup done")
+
         while True:
             item = next(self.rollout_provider)
             if isinstance(item, RolloutMetrics):
