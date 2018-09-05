@@ -21,6 +21,9 @@ PolicyEvalData = namedtuple("PolicyEvalData",
                             ["env_id", "agent_id", "obs", "rnn_state"])
 
 
+WARMUP_PERIOD = 120
+
+
 class SyncSampler(object):
     """This class interacts with the environment and tells it what to do.
 
@@ -59,7 +62,7 @@ class SyncSampler(object):
             import time
             start = time.time()
             print("Entering warmup")
-            while time.time() - start < 30:
+            while time.time() - start < WARMUP_PERIOD:
                 next(self.rollout_provider)
             print("Warmup done")
             self.warmed = True
@@ -142,7 +145,7 @@ class AsyncSampler(threading.Thread):
             import time
             start = time.time()
             print("Entering warmup")
-            while time.time() - start < 30:
+            while time.time() - start < WARMUP_PERIOD:
                 next(rollout_provider)
             print("Warmup done")
             self.warmed = True
