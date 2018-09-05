@@ -126,6 +126,15 @@ class AsyncSampler(threading.Thread):
             self.async_vector_env, self.extra_batches.put, self.policies,
             self.policy_mapping_fn, self.num_local_steps, self.horizon,
             self._obs_filters, self.clip_rewards, self.pack, self.tf_sess)
+
+        if not self.warmed:
+            import time
+            start = time.time()
+            print("Entering warmup")
+            while time.time() - start < 30:
+                next(rollout_provider)
+            print("Warmup done")
+
         while True:
             # The timeout variable exists because apparently, if one worker
             # dies, the other workers won't die with it, unless the timeout is
