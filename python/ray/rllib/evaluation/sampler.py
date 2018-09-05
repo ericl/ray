@@ -52,6 +52,7 @@ class SyncSampler(object):
             self.policy_mapping_fn, self.num_local_steps, self.horizon,
             self._obs_filters, clip_rewards, pack, tf_sess)
         self.metrics_queue = queue.Queue()
+        self.warmed = False
 
     def get_data(self):
         if not self.warmed:
@@ -59,8 +60,9 @@ class SyncSampler(object):
             start = time.time()
             print("Entering warmup")
             while time.time() - start < 30:
-                next(rollout_provider)
+                next(self.rollout_provider)
             print("Warmup done")
+            self.warmed = True
 
         while True:
             item = next(self.rollout_provider)
@@ -121,6 +123,7 @@ class AsyncSampler(threading.Thread):
         self.daemon = True
         self.pack = pack
         self.tf_sess = tf_sess
+        self.warmed = False
 
     def run(self):
         try:
@@ -142,6 +145,7 @@ class AsyncSampler(threading.Thread):
             while time.time() - start < 30:
                 next(rollout_provider)
             print("Warmup done")
+            self.warmed = True
 
         while True:
             # The timeout variable exists because apparently, if one worker
