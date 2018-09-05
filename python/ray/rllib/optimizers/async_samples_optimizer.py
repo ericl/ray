@@ -86,18 +86,21 @@ class AsyncSamplesOptimizer(PolicyOptimizer):
         }
         self.num_weight_syncs = 0
         self.learning_started = False
-
-        # Kick off async background sampling
+        self.sampling_started = False
         self.sample_tasks = TaskPool()
-        weights = self.local_evaluator.get_weights()
-        for ev in self.remote_evaluators:
-            ev.set_weights.remote(weights)
-            for _ in range(SAMPLE_QUEUE_DEPTH):
-                self.sample_tasks.add(ev, ev.sample.remote())
-
         self.batch_buffer = []
 
     def step(self):
+        if not self.sampling_started:
+            # Kick off async background sampling. We defer this until the first
+            # step so that we include weights from any recent restore().
+            weights = self.local_evaluator.get_weights()
+            for ev in self.remote_evaluators:
+                ev.set_weights.remote(weights)
+                for _ in range(SAMPLE_QUEUE_DEPTH):
+                    self.sample_tasks.add(ev, ev.sample.remote())
+            self.sampling_started = True
+
         assert self.learner.is_alive()
         start = time.time()
         sample_timesteps, train_timesteps = self._step()

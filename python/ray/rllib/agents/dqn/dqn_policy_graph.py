@@ -456,10 +456,13 @@ def adjust_nstep(n_step, gamma, obs, actions, rewards, new_obs, dones):
     If the episode finishes, the reward will be truncated. After this rewrite,
     all the arrays will be shortened by (n_step - 1).
     """
-    for i in range(len(rewards) - n_step + 1):
+    for i in range(len(rewards)):
         if dones[i]:
+            assert i == len(rewards) - 1
             return  # episode end, don't truncate
         for j in range(1, n_step):
+            if i + j >= len(rewards):
+                break
             new_obs[i] = new_obs[i + j]
             rewards[i] += gamma**j * rewards[i + j]
             if dones[i + j]:
