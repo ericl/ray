@@ -111,10 +111,7 @@ class ImpalaAgent(Agent):
     def _save(self, checkpoint_dir):
         checkpoint_path = os.path.join(checkpoint_dir,
                                        "checkpoint-{}".format(self.iteration))
-        agent_state = ray.get(
-            [a.save.remote() for a in self.remote_evaluators])
         extra_data = {
-            "remote_state": agent_state,
             "local_state": self.local_evaluator.save()
         }
         pickle.dump(extra_data, open(checkpoint_path + ".extra_data", "wb"))
@@ -122,8 +119,7 @@ class ImpalaAgent(Agent):
 
     def _restore(self, checkpoint_path):
         extra_data = pickle.load(open(checkpoint_path + ".extra_data", "rb"))
-        ray.get([
-            a.restore.remote(o)
-            for a, o in zip(self.remote_evaluators, extra_data["remote_state"])
-        ])
+        s = ray.put(extra_data["local_state"])
+        for r in self.remote_evaluators:
+            r.restore.remote(s)
         self.local_evaluator.restore(extra_data["local_state"])
