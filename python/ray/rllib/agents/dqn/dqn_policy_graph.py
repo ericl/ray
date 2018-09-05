@@ -458,7 +458,7 @@ def adjust_nstep(n_step, gamma, obs, actions, rewards, new_obs, dones):
     """
     for i in range(len(rewards) - n_step + 1):
         if dones[i]:
-            continue  # episode end
+            return  # episode end, don't truncate
         for j in range(1, n_step):
             new_obs[i] = new_obs[i + j]
             rewards[i] += gamma**j * rewards[i + j]
