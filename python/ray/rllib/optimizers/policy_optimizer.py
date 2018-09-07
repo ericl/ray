@@ -100,6 +100,8 @@ class PolicyOptimizer(object):
         self.episode_history = self.episode_history[-min_history:]
         res = summarize_episodes(episodes, orig_episodes)
         res.update(info=self.stats())
+        if len(episodes) < min_history:
+            res["episode_reward_mean"] = float("nan")
         return res
 
     def save(self):
