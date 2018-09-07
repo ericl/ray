@@ -164,6 +164,7 @@ class AsyncSamplesOptimizer(PolicyOptimizer):
                                        3),
             "train_throughput": round(self.timers["train"].mean_throughput, 3),
             "num_weight_syncs": self.num_weight_syncs,
+            "cur_train_batch_size": self.train_batch_size,
         }
         debug_stats = {
             "timing_breakdown": timing,
@@ -175,3 +176,13 @@ class AsyncSamplesOptimizer(PolicyOptimizer):
         if self.learner.stats:
             stats["learner"] = self.learner.stats
         return dict(PolicyOptimizer.stats(self), **stats)
+
+    def on_global_var_update(self, global_vars):
+        """Called on an update to global vars.
+
+        Arguments:
+            global_vars (dict): Global variables broadcast from the driver.
+        """
+        for k, v in global_vars["schedule_values"].items():
+            if k == "train_batch_size":
+                self.train_batch_size = v

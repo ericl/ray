@@ -12,6 +12,7 @@ import tensorflow as tf
 from ray.rllib.evaluation.policy_evaluator import PolicyEvaluator
 from ray.rllib.optimizers.policy_optimizer import PolicyOptimizer
 from ray.rllib.utils import FilterManager, deep_update, merge_dicts
+from ray.rllib.utils.schedules import PiecewiseSchedule, no_interpolation
 from ray.tune.registry import ENV_CREATOR, _global_registry
 from ray.tune.trainable import Trainable
 
@@ -79,6 +80,11 @@ COMMON_CONFIG = {
         # Optional whitelist of policies to train, or None for all policies.
         "policies_to_train": None,
     },
+
+    # === Custom schedules ===
+    "custom_schedule_attr": "episode_reward_mean",
+    "custom_schedules": {
+    },
 }
 
 
@@ -104,7 +110,8 @@ class Agent(Trainable):
 
     _allow_unknown_configs = False
     _allow_unknown_subkeys = [
-        "tf_session_args", "env_config", "model", "optimizer", "multiagent"
+        "tf_session_args", "env_config", "model", "optimizer", "multiagent",
+        "custom_schedules"
     ]
 
     def make_local_evaluator(self, env_creator, policy_graph):
@@ -183,21 +190,34 @@ class Agent(Trainable):
         config = config or {}
 
         # Vars to synchronize to evaluators on each train call
-        self.global_vars = {"timestep": 0}
+        self.global_vars = {"timestep": 0, "episode_reward_mean": float("nan")}
 
         # Agents allow env ids to be passed directly to the constructor.
         self._env_id = env or config.get("env")
         Trainable.__init__(self, config, logger_creator)
+
+        self.schedules = {}
+        for k, v in self.config["custom_schedules"].items():
+            self.schedules[k] = PiecewiseSchedule(
+                v, outside_value=v[-1][-1], interpolation=no_interpolation)
 
     def train(self):
         """Overrides super.train to synchronize global vars."""
 
         if hasattr(self, "optimizer") and isinstance(self.optimizer,
                                                      PolicyOptimizer):
+            t = self.global_vars[self.config["custom_schedule_attr"]]
+            if np.isnan(t):
+                t = 0
+            schedule_values = {}
+            for k, v in self.schedules.items():
+                schedule_values[k] = v.value(t)
+            self.global_vars["schedule_values"] = schedule_values
             self.global_vars["timestep"] = self.optimizer.num_steps_sampled
             self.optimizer.local_evaluator.set_global_vars(self.global_vars)
             for ev in self.optimizer.remote_evaluators:
                 ev.set_global_vars.remote(self.global_vars)
+            self.optimizer.on_global_var_update(self.global_vars)
 
         if (self.config.get("observation_filter", "NoFilter") != "NoFilter"
                 and hasattr(self, "local_evaluator")):
@@ -206,7 +226,9 @@ class Agent(Trainable):
                 self.remote_evaluators,
                 update_remote=self.config["synchronize_filters"])
 
-        return Trainable.train(self)
+        res = Trainable.train(self)
+        self.global_vars["episode_reward_mean"] = res["episode_reward_mean"]
+        return res
 
     def _setup(self):
         env = self._env_id
