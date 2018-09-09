@@ -21,7 +21,7 @@ PolicyEvalData = namedtuple("PolicyEvalData",
                             ["env_id", "agent_id", "obs", "rnn_state"])
 
 
-WARMUP_PERIOD = 120
+WARMUP_PERIOD = 0
 
 
 class SyncSampler(object):
