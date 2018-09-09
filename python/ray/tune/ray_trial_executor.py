@@ -194,7 +194,7 @@ class RayTrialExecutor(TrialExecutor):
         clients = ray.global_state.client_table()
         if ray.worker.global_worker.use_raylet:
             # TODO(rliaw): Remove once raylet flag is swapped
-            num_cpus = sum(cl['Resources']['CPU'] for cl in clients)
+            num_cpus = sum(cl['Resources'].get('CPU', 0) for cl in clients)
             num_gpus = sum(cl['Resources'].get('GPU', 0) for cl in clients)
         else:
             local_schedulers = [
