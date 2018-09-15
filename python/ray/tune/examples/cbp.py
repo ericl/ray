@@ -4,7 +4,7 @@ import os
 import ray
 from ray.tune import Trainable, run_experiments
 from ray.tune.suggest import HyperOptSearch
-from ray.tune.schedulers.trial_scheduler import CheckpointBasedPruning
+from ray.tune.schedulers import CheckpointBasedPruning
 from hyperopt import hp
 
 
@@ -49,20 +49,21 @@ if __name__ == "__main__":
         time_attr="training_iteration",
         reltime_attr="iterations_since_restore",
         reward_attr="episode_reward_mean",
-        bootstrap_checkpoint=os.path.abspath("checkpoint.txt"),
-        reduction_factor=5)
+        checkpoint_eval_t=2,
+        bootstrap_checkpoint=os.path.abspath("state-70"),
+        reduction_factor=10)
 
     run_experiments({
-        "easy": {
+        "random": {
             "run": EasyModel,
-            "num_samples": 10,
+            "num_samples": 12,
             "stop": {
                 "training_iteration": 100,
             },
             "config": {
-                "a_0": lambda _: np.random.uniform(0, 1),
-                "a_1": lambda _: np.random.uniform(0, 1),
-                "a_2": lambda _: np.random.uniform(0, 1),
+                "a_0": lambda _: np.random.uniform(0.0, 1),
+                "a_1": lambda _: np.random.uniform(0.0, 1),
+                "a_2": lambda _: np.random.uniform(0.0, 1),
             },
         }
-    }, scheduler=cbp)
+    }) #, scheduler=cbp)

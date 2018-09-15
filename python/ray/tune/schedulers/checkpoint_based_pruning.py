@@ -3,8 +3,14 @@ from __future__ import division
 from __future__ import print_function
 
 import numpy as np
+import os
 
+from ray.tune.logger import pretty_print
 from ray.tune.schedulers.trial_scheduler import FIFOScheduler, TrialScheduler
+from ray.tune.trial import Trial
+
+
+CBP_SUFFIX = "_CHECKPOINT_EVAL"
 
 
 class CheckpointBasedPruning(FIFOScheduler):
@@ -58,6 +64,7 @@ class CheckpointBasedPruning(FIFOScheduler):
 
         # map of eval trials to the original requested trial
         self._eval_trials = {}
+        self._waiting_for_eval = set()
         self._eval_time = 0.0
 
         # set of trials we are running for real
@@ -65,15 +72,17 @@ class CheckpointBasedPruning(FIFOScheduler):
         self._run_time = 0.0
 
         # map from score to original requested trial
-        self._eval_scores = {}
+        self._eval_scores = []
         self._num_eval = 0
         self._num_run = 0
 
     def choose_trial_to_run(self, trial_runner):
         # Don't have a checkpoint yet, so behave like the default scheduler
         if not self._current_checkpoint:
-            self._num_run += 1
-            return FIFOScheduler.choose_trial_to_run(self)
+            trial = FIFOScheduler.choose_trial_to_run(self, trial_runner)
+            if trial:
+                self._num_run += 1
+            return trial
 
         # Have some admissable trials ready to run
         admissable = self._get_admissable_trials()
@@ -83,17 +92,20 @@ class CheckpointBasedPruning(FIFOScheduler):
                     self._admitted_trials.add(trial)
                     self._num_run += 1
                     return trial
-            return None
 
         # Launch filtering tasks based on the checkpoint
         for trial in trial_runner.get_trials():
-            if (trial.status = Trial.PENDING and
+            if (trial.status == Trial.PENDING and
+                    trial not in self._waiting_for_eval and
                     trial_runner.has_resources(trial.resources)):
+                print("Launch eval", trial.config)
                 eval_trial = Trial(
                     trial.trainable_name,
                     config=trial.config,
-                    local_dir=trial.local_dir,
-                    experiment_tag="cbp_eval_{}".format(trial.experiment_tag),
+                    local_dir=os.path.join(
+                        os.path.dirname(trial.local_dir),
+                        os.path.basename(trial.local_dir) + CBP_SUFFIX),
+                    experiment_tag="{}_{}".format(CBP_SUFFIX, self._num_eval),
                     resources=trial.resources,
                     stopping_criterion={
                         self._reltime_attr: self._checkpoint_eval_t,
@@ -102,40 +114,51 @@ class CheckpointBasedPruning(FIFOScheduler):
                     upload_dir=trial.upload_dir)
                 trial_runner.add_trial(eval_trial)
                 self._eval_trials[eval_trial] = trial
+                self._waiting_for_eval.add(trial)
                 self._num_eval += 1
                 return eval_trial
-        return None
+
+        # Nothing to do, fall back to running remaining trials
+        trial = FIFOScheduler.choose_trial_to_run(self, trial_runner)
+        if trial:
+            self._num_run += 1
+        return trial
 
     def on_trial_complete(self, trial_runner, trial, result):
         if trial in self._eval_trials:
-            self._eval_time += result["time_since_restore"]
+            self._eval_time += result[self._reltime_attr]
             orig_trial = self._eval_trials[trial]
             del self._eval_trials[trial]
             self._record_eval_result(result, orig_trial)
+        else:
+            self._run_time += result[self._time_attr]
 
     def _record_eval_result(self, eval_result, orig_trial):
         score = eval_result[self._reward_attr]
-        self._eval_scores[score] = orig_trial
+        self._eval_scores.append((score, orig_trial))
 
-    def _admissable_trials(self):
-        if len(self._eval_scores) < 4:
+    def _get_admissable_trials(self):
+        if len(self._eval_scores) < self._reduction_factor:
             return []
         threshold = np.percentile(
-            list(self._eval_scores.keys()),
+            [t[0] for t in self._eval_scores],
             q=100 * (1 - 1.0 / self._reduction_factor))
         res = []
-        for score, orig_trial in self._eval_scores():
+        for score, orig_trial in self._eval_scores:
             if score > threshold and orig_trial not in self._admitted_trials:
                 res.append(orig_trial)
         return res
 
     def debug_string(self):
+        scores = [t[0] for t in self._eval_scores]
         info = {
             "eval_time": self._eval_time,
             "eval_count": self._num_eval,
-            "eval_scores": sorted(list(self._eval_scores.keys())),
+            "eval_scores_mean": np.mean(scores),
+            "eval_scores_max": np.max(scores) if scores else float("nan"),
+            "eval_scores_min": np.min(scores) if scores else float("nan"),
             "run_time": self._run_time,
             "run_count": self._num_run,
         }
         info = "  {}".format(pretty_print(info).replace("\n", "\n  "))
-        return "CheckpointBasedPruning: {}".format(info)
+        return "CheckpointBasedPruning:\n{}".format(info).strip()
