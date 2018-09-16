@@ -4,7 +4,7 @@ import os
 import ray
 from ray.tune import Trainable, run_experiments
 from ray.tune.suggest import HyperOptSearch
-from ray.tune.schedulers import CheckpointBasedPruning
+from ray.tune.schedulers import CheckpointBasedPruning, AsyncHyperBandScheduler
 from hyperopt import hp
 
 
@@ -52,11 +52,19 @@ if __name__ == "__main__":
         checkpoint_eval_t=2,
         bootstrap_checkpoint=os.path.abspath("state-70"),
         reduction_factor=10)
+    
+    hb = AsyncHyperBandScheduler(
+       time_attr="training_iteration",
+       reward_attr="episode_reward_mean",
+       max_t=100,
+       grace_period=10,
+       reduction_factor=3,
+       brackets=3)
 
     run_experiments({
-        "random": {
+        "easy2": {
             "run": EasyModel,
-            "num_samples": 12,
+            "num_samples": 100,
             "stop": {
                 "training_iteration": 100,
             },
@@ -66,4 +74,4 @@ if __name__ == "__main__":
                 "a_2": lambda _: np.random.uniform(0.0, 1),
             },
         }
-    }) #, scheduler=cbp)
+    }, scheduler=hb) #search_alg=algo) #scheduler=cbp)
