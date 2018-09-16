@@ -33,7 +33,7 @@ class EasyModel(Trainable):
 
 
 if __name__ == "__main__":
-    ray.init()
+    ray.init(num_cpus=1)
 
     space = {
         "a_0": hp.uniform("a_0", 0, 1),
@@ -50,8 +50,9 @@ if __name__ == "__main__":
         reltime_attr="iterations_since_restore",
         reward_attr="episode_reward_mean",
         checkpoint_eval_t=2,
-        bootstrap_checkpoint=os.path.abspath("state-70"),
-        reduction_factor=10)
+        checkpoint_min_reward=20,
+#        bootstrap_checkpoint=os.path.abspath("state-70"),
+        reduction_factor=25)
     
     hb = AsyncHyperBandScheduler(
        time_attr="training_iteration",
@@ -74,4 +75,4 @@ if __name__ == "__main__":
                 "a_2": lambda _: np.random.uniform(0.0, 1),
             },
         }
-    }, scheduler=hb) #search_alg=algo) #scheduler=cbp)
+    }, scheduler=cbp) #search_alg=algo) #scheduler=cbp)

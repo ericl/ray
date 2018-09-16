@@ -47,10 +47,9 @@ class CheckpointBasedPruning(FIFOScheduler):
                  reltime_attr="iterations_since_restore",
                  reward_attr="episode_reward_mean",
                  bootstrap_checkpoint=None,
-                 checkpoint_min_reward=50,
+                 checkpoint_min_reward=0,
                  checkpoint_eval_t=1,
                  reduction_factor=5):
-        assert bootstrap_checkpoint, "TODO: auto generate these"
         assert reduction_factor > 1, "Reduction Factor not valid!"
         FIFOScheduler.__init__(self)
         self._time_attr = time_attr
@@ -124,14 +123,27 @@ class CheckpointBasedPruning(FIFOScheduler):
             self._num_run += 1
         return trial
 
+    def on_trial_result(self, trial_runner, trial, result):
+        score = result[self._reward_attr]
+        if score > self._current_reward * 1.1:
+            print("Resetting checkpoint due to new high score", score)
+            self._current_checkpoint = trial_runner.trial_executor.save(trial)
+            self._current_reward = score
+            self._waiting_for_eval.clear()
+            self._eval_trials.clear()
+            self._eval_scores.clear()
+        return TrialScheduler.CONTINUE
+
     def on_trial_complete(self, trial_runner, trial, result):
         if trial in self._eval_trials:
             self._eval_time += result[self._reltime_attr]
             orig_trial = self._eval_trials[trial]
             del self._eval_trials[trial]
             self._record_eval_result(result, orig_trial)
-        else:
+        elif trial in self._admitted_trials:
             self._run_time += result[self._time_attr]
+        else:
+            print("WARN: Ignoring stale eval result from", trial, result)
 
     def _record_eval_result(self, eval_result, orig_trial):
         score = eval_result[self._reward_attr]
