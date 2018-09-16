@@ -4,13 +4,11 @@ from __future__ import print_function
 
 import numpy as np
 import os
+import random
 
 from ray.tune.logger import pretty_print
 from ray.tune.schedulers.trial_scheduler import FIFOScheduler, TrialScheduler
 from ray.tune.trial import Trial
-
-
-CBP_SUFFIX = "_CHECKPOINT_EVAL"
 
 
 class CheckpointBasedPruning(FIFOScheduler):
@@ -78,13 +76,11 @@ class CheckpointBasedPruning(FIFOScheduler):
     def choose_trial_to_run(self, trial_runner):
         # Don't have a checkpoint yet, so behave like the default scheduler
         if not self._current_checkpoint:
-            trial = FIFOScheduler.choose_trial_to_run(self, trial_runner)
-            if trial:
-                self._num_run += 1
-            return trial
+            return self._choose_random_trial(trial_runner)
 
         # Have some admissable trials ready to run
         admissable = self._get_admissable_trials()
+        random.shuffle(admissable)
         if admissable:
             for trial in admissable:
                 if trial_runner.has_resources(trial.resources):
@@ -93,7 +89,9 @@ class CheckpointBasedPruning(FIFOScheduler):
                     return trial
 
         # Launch filtering tasks based on the checkpoint
-        for trial in trial_runner.get_trials():
+        trials = list(trial_runner.get_trials())
+        random.shuffle(trials)
+        for trial in trials:
             if (trial.status == Trial.PENDING and
                     trial not in self._waiting_for_eval and
                     trial_runner.has_resources(trial.resources)):
@@ -103,8 +101,8 @@ class CheckpointBasedPruning(FIFOScheduler):
                     config=trial.config,
                     local_dir=os.path.join(
                         os.path.dirname(trial.local_dir),
-                        os.path.basename(trial.local_dir) + CBP_SUFFIX),
-                    experiment_tag="{}_{}".format(CBP_SUFFIX, self._num_eval),
+                        os.path.basename(trial.local_dir) + "_chkpt_eval"),
+                    experiment_tag="0_chkpt_eval_{}".format(self._num_eval),
                     resources=trial.resources,
                     stopping_criterion={
                         self._reltime_attr: self._checkpoint_eval_t,
@@ -118,10 +116,22 @@ class CheckpointBasedPruning(FIFOScheduler):
                 return eval_trial
 
         # Nothing to do, fall back to running remaining trials
-        trial = FIFOScheduler.choose_trial_to_run(self, trial_runner)
-        if trial:
-            self._num_run += 1
-        return trial
+        return self._choose_random_trial(trial_runner)
+
+    def _choose_random_trial(self, trial_runner):
+        trials = list(trial_runner.get_trials())
+        random.shuffle(trials)
+        for trial in trials:
+            if (trial.status == Trial.PENDING
+                    and trial_runner.has_resources(trial.resources)):
+                self._num_run += 1
+                return trial
+        for trial in trials:
+            if (trial.status == Trial.PAUSED
+                    and trial_runner.has_resources(trial.resources)):
+                self._num_run += 1
+                return trial
+        return None
 
     def on_trial_result(self, trial_runner, trial, result):
         score = result[self._reward_attr]

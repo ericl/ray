@@ -65,7 +65,7 @@ if __name__ == "__main__":
     run_experiments({
         "easy2": {
             "run": EasyModel,
-            "num_samples": 100,
+            "num_samples": 300,
             "stop": {
                 "training_iteration": 100,
             },
