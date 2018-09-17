@@ -82,7 +82,7 @@ class TrialRunner(object):
             os.environ.get("TRIALRUNNER_WALLTIME_LIMIT", float('inf')))
         self._total_time = 0
         self._total_iterations = 0
-        self._best_reward = 0
+        self._best_reward = -999
         self._server = None
         if launch_web_server:
             self._server = TuneServer(self, server_port)
@@ -244,7 +244,7 @@ class TrialRunner(object):
                 if self._total_iterations % 100 == 0:
                     print(
                         "overall_progress", self._total_iterations,
-                        self._best_reward)
+                        self._total_time, self._best_reward)
 
             if trial.should_stop(result):
                 # Hook into scheduler
