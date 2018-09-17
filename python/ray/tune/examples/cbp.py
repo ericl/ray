@@ -46,7 +46,6 @@ if __name__ == "__main__":
         reward_attr="episode_reward_mean")
     
     cbp = CheckpointBasedPruning(
-        time_attr="training_iteration",
         reltime_attr="iterations_since_restore",
         reward_attr="episode_reward_mean",
         checkpoint_eval_t=2,

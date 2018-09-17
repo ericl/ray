@@ -19,11 +19,7 @@ class CheckpointBasedPruning(FIFOScheduler):
     existing checkpoint with the given combination a few iterations.
 
     Args:
-        time_attr (str): A training result attr to use for comparing time.
-            Note that you can pass in something non-temporal such as
-            `training_iteration` as a measure of progress, the only requirement
-            is that the attribute should increase monotonically.
-        reltime_attr (str): The corresponding attr that measures time
+        reltime_attr (str): A result attribute that measures time
             since the restore only (e.g., iterations_since_restore).
         reward_attr (str): The training result objective value attribute. As
             with `time_attr`, this may refer to any objective value. Stopping
@@ -42,7 +38,6 @@ class CheckpointBasedPruning(FIFOScheduler):
     """
 
     def __init__(self,
-                 time_attr="training_iteration",
                  reltime_attr="iterations_since_restore",
                  reward_attr="episode_reward_mean",
                  bootstrap_checkpoint=None,
@@ -51,7 +46,6 @@ class CheckpointBasedPruning(FIFOScheduler):
                  reduction_factor=5):
         assert reduction_factor > 1, "Reduction Factor not valid!"
         FIFOScheduler.__init__(self)
-        self._time_attr = time_attr
         self._reltime_attr = reltime_attr
         self._reward_attr = reward_attr
         self._current_reward = checkpoint_min_reward
@@ -152,7 +146,7 @@ class CheckpointBasedPruning(FIFOScheduler):
             del self._eval_trials[trial]
             self._record_eval_result(result, orig_trial)
         elif trial in self._admitted_trials:
-            self._run_time += result[self._time_attr]
+            self._run_time += result[self._reltime_attr]
         else:
             print("WARN: Ignoring stale eval result from", trial, result)
 
