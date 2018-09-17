@@ -238,7 +238,7 @@ class TrialRunner(object):
             result = self.trial_executor.fetch_result(trial)
             self._total_iterations += 1
             self._total_time += result[TIME_THIS_ITER_S]
-            if "CHECKPOINT" not in trial.experiment_tag:
+            if "chkpt" not in trial.experiment_tag:
                 self._best_reward = max(
                     self._best_reward, result["episode_reward_mean"])
                 if self._total_iterations % 100 == 0:
