@@ -11,20 +11,12 @@ from ray.tune.schedulers import CheckpointBasedPruning, AsyncHyperBandScheduler
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--random", action="store_true")
+parser.add_argument("--hyperopt", action="store_true")
+parser.add_argument("--hyperband", action="store_true")
 
 
 if __name__ == "__main__":
     ray.init(num_cpus=40)
-
-#    space = {
-#        "a_0": hp.uniform("a_0", 0, 1),
-#        "a_1": hp.uniform("a_1", 0, 1),
-#        "a_2": hp.uniform("a_2", 0, 1),
-#    }
-#    algo = HyperOptSearch(
-#        space,
-#        max_concurrent=4,
-#        reward_attr="episode_reward_mean")
     
     cbp = CheckpointBasedPruning(
         reltime_attr="time_since_restore",
@@ -34,21 +26,40 @@ if __name__ == "__main__":
         bootstrap_checkpoint="/home/ubuntu/ray_results/pong-a3c/A3C_PongDeterministic-v4_0_2018-09-17_07-57-31OEK7hT/checkpoint-140",
         reduction_factor=10)
     
-#    hb = AsyncHyperBandScheduler(
-#       time_attr="training_iteration",
-#       reward_attr="episode_reward_mean",
-#       max_t=100,
-#       grace_period=10,
-#       reduction_factor=3,
-#       brackets=3)
-
     args = parser.parse_args()
     if args.random:
         name = "pong-cbp-random"
         scheduler = None
+        algo = None
+    elif args.hyperopt:
+        name = "pong-hyperopt"
+        space = {
+            "sample_batch_size": hp.choice("sample_batch_size",
+                [10, 20, 40, 80, 160, 320, 640]),
+            "num_envs_per_worker": hp.choice("num_envs_per_worker",
+                    [1, 2, 5, 10]),
+            "lr": hp.choice("lr", 
+                [0.005, 0.001, 0.0005, 0.0001, 0.00005, 0.00001,
+                 0.000005, 0.000001, 0.0000005, 0.0000001]),
+        }
+        algo = HyperOptSearch(
+            space,
+            max_concurrent=2,
+            reward_attr="episode_reward_mean")
+    elif args.hyperband:
+        name = "pong-hyperopt"
+        algo = None
+        scheduler = AsyncHyperBandScheduler(
+           time_attr="time_total_s",
+           reward_attr="episode_reward_mean",
+           max_t=1800,
+           grace_period=200,
+           reduction_factor=3,
+           brackets=3)
     else:
         name = "pong-cbp5"
         scheduler = cbp
+        algo = None
 
     run_experiments({
         name: {
@@ -86,5 +97,5 @@ if __name__ == "__main__":
                 },
             },
         },
-    }, scheduler=scheduler)
+    }, scheduler=scheduler, search_alg=algo)
 
