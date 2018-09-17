@@ -26,7 +26,7 @@ if __name__ == "__main__":
         reward_attr="episode_reward_mean",
         checkpoint_eval_t=120,
         checkpoint_min_reward=9999,
-        bootstrap_checkpoint="/home/ubuntu/ray_results/pong-a3c/A3C_PongDeterministic-v4_0_2018-09-17_07-57-31OEK7hT/checkpoint-280",
+        bootstrap_checkpoint="/home/ubuntu/ray_results/pong-a3c/A3C_PongDeterministic-v4_0_2018-09-17_07-57-31OEK7hT/checkpoint-140",
         reduction_factor=10)
     
 #    hb = AsyncHyperBandScheduler(
