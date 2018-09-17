@@ -43,7 +43,7 @@ if __name__ == "__main__":
             "env": "PongDeterministic-v4",
             "stop": {
                 "episode_reward_mean": 20,
-                "time_total_s": 900,
+                "time_total_s": 1800,
             },
             "config": {
                 "num_workers": 16,
