@@ -31,7 +31,8 @@ class CheckpointBasedPruning(FIFOScheduler):
         bootstrap_checkpoint (str): Existing checkpoint to use for pruning.
             If not specified, an initial one will be generated from trial runs.
         checkpoint_min_reward (float): Start taking checkpoints for pruning
-            after this reward is reached.
+            after this reward is reached. Note: set this to infinity if you
+            only want to use the bootstrap checkpoint.
         checkpoint_eval_t (float): Amount of additional time to evaluate
             hyperparams starting from the checkpoint time.
         reduction_factor (float): Controls aggressiveness of pruning. Must be
