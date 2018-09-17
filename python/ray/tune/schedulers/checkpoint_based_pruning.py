@@ -152,7 +152,8 @@ class CheckpointBasedPruning(FIFOScheduler):
 
     def _record_eval_result(self, eval_result, orig_trial):
         score = eval_result[self._reward_attr]
-        self._eval_scores.append((score, orig_trial))
+        if not np.isnan(score):
+            self._eval_scores.append((score, orig_trial))
 
     def _get_admissable_trials(self):
         if len(self._eval_scores) < self._reduction_factor:
