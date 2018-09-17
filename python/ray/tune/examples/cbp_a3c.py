@@ -1,11 +1,16 @@
 import numpy as np
 import os
+import argparse
 
 import ray
 from ray.tune import Trainable, run_experiments, grid_search
 from ray.tune.suggest import HyperOptSearch
 from ray.tune.schedulers import CheckpointBasedPruning, AsyncHyperBandScheduler
 #from hyperopt import hp
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--random", action="store_true")
 
 
 if __name__ == "__main__":
@@ -37,8 +42,16 @@ if __name__ == "__main__":
 #       reduction_factor=3,
 #       brackets=3)
 
+    args = parser.parse_args()
+    if args.random:
+        name = "pong-cbp-random"
+        scheduler = None
+    else:
+        name = "pong-cbp5"
+        scheduler = cbp
+
     run_experiments({
-        "pong-cpb4": {
+        name: {
             "run": "A3C",
             "env": "PongDeterministic-v4",
             "stop": {
@@ -73,5 +86,5 @@ if __name__ == "__main__":
                 },
             },
         },
-    }, scheduler=cbp) #search_alg=algo) #scheduler=cbp)
+    }, scheduler=scheduler)
 
