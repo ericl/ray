@@ -38,7 +38,7 @@ if __name__ == "__main__":
 #       brackets=3)
 
     run_experiments({
-        "pong-cpb": {
+        "pong-cpb4": {
             "run": "A3C",
             "env": "PongDeterministic-v4",
             "stop": {
