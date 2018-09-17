@@ -3,6 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 from ray.tune.trial import Trial
+import random
 
 
 class TrialScheduler(object):
@@ -84,11 +85,13 @@ class FIFOScheduler(TrialScheduler):
         pass
 
     def choose_trial_to_run(self, trial_runner):
-        for trial in trial_runner.get_trials():
+        trials = trial_runner.get_trials()
+        random.shuffle(trials)
+        for trial in trials:
             if (trial.status == Trial.PENDING
                     and trial_runner.has_resources(trial.resources)):
                 return trial
-        for trial in trial_runner.get_trials():
+        for trial in trials:
             if (trial.status == Trial.PAUSED
                     and trial_runner.has_resources(trial.resources)):
                 return trial
