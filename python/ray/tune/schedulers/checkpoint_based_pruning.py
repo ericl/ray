@@ -140,7 +140,7 @@ class CheckpointBasedPruning(FIFOScheduler):
             self._current_reward = score
             self._waiting_for_eval.clear()
             self._eval_trials.clear()
-            self._eval_scores.clear()
+            self._eval_scores = []
         return TrialScheduler.CONTINUE
 
     def on_trial_complete(self, trial_runner, trial, result):
