@@ -83,9 +83,9 @@ if __name__ == "__main__":
                 "gamma": 0.95,
                 "lambda": 0.1,
                 "sample_batch_size": 100,
-                "num_sgd_iter": grid_search([1, 2, 4, 8, 16, 32]),
+                "num_sgd_iter": grid_search([1, 2, 4, 8, 16]),
                 "train_batch_size":
-                    grid_search([400, 800, 1600, 3200, 6400, 12800, 25600]),
+                    grid_search([400, 800, 1600, 3200, 6400]),
                 "sgd_minibatch_size":
                     grid_search([50, 100, 200, 400]),
                 "lr":
