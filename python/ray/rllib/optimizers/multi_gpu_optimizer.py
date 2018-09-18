@@ -125,7 +125,6 @@ class LocalMultiGPUOptimizer(PolicyOptimizer):
         with self.grad_timer:
             num_batches = (
                 int(tuples_per_device) // int(self.per_device_batch_size))
-            print("== sgd epochs ==")
             for i in range(self.num_sgd_iter):
                 iter_extra_fetches = defaultdict(list)
                 permutation = np.random.permutation(num_batches)
@@ -135,7 +134,6 @@ class LocalMultiGPUOptimizer(PolicyOptimizer):
                         permutation[batch_index] * self.per_device_batch_size)
                     for k, v in batch_fetches.items():
                         iter_extra_fetches[k].append(v)
-                print(i, _averaged(iter_extra_fetches))
 
         self.num_steps_sampled += samples.count
         self.num_steps_trained += samples.count
