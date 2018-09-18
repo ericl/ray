@@ -13,18 +13,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--random", action="store_true")
 parser.add_argument("--hyperopt", action="store_true")
 parser.add_argument("--hyperband", action="store_true")
+parser.add_argument("--bootstrap", action="store_true")
 
 
 if __name__ == "__main__":
     ray.init(num_cpus=40)
-    
-    cbp = CheckpointBasedPruning(
-        reltime_attr="time_since_restore",
-        reward_attr="episode_reward_mean",
-        checkpoint_eval_t=120,
-        checkpoint_min_reward=9999,
-        bootstrap_checkpoint="/home/ubuntu/ray_results/pong-a3c/A3C_PongDeterministic-v4_0_2018-09-17_07-57-31OEK7hT/checkpoint-140",
-        reduction_factor=10)
     
     args = parser.parse_args()
     if args.random:
@@ -56,9 +49,25 @@ if __name__ == "__main__":
            grace_period=200,
            reduction_factor=3,
            brackets=3)
+    elif bootstrap:
+        name = "pong-cbp5"
+        scheduler = CheckpointBasedPruning(
+            reltime_attr="time_since_restore",
+            reward_attr="episode_reward_mean",
+            checkpoint_eval_t=120,
+            checkpoint_min_reward=-18.5,
+            bootstrap_checkpoint=None,
+            reduction_factor=10)
+        algo = None
     else:
         name = "pong-cbp5"
-        scheduler = cbp
+        scheduler = CheckpointBasedPruning(
+            reltime_attr="time_since_restore",
+            reward_attr="episode_reward_mean",
+            checkpoint_eval_t=120,
+            checkpoint_min_reward=9999,
+            bootstrap_checkpoint="/home/ubuntu/ray_results/pong-a3c/A3C_PongDeterministic-v4_0_2018-09-17_07-57-31OEK7hT/checkpoint-140",
+            reduction_factor=10)
         algo = None
 
     run_experiments({

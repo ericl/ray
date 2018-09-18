@@ -42,6 +42,7 @@ class CheckpointBasedPruning(FIFOScheduler):
                  reward_attr="episode_reward_mean",
                  bootstrap_checkpoint=None,
                  checkpoint_min_reward=0,
+                 checkpoint_min_incr=9999,
                  checkpoint_eval_t=1,
                  reduction_factor=5):
         assert reduction_factor > 1, "Reduction Factor not valid!"
@@ -51,6 +52,7 @@ class CheckpointBasedPruning(FIFOScheduler):
         self._current_reward = checkpoint_min_reward
         self._current_checkpoint = bootstrap_checkpoint
         self._checkpoint_min_reward = checkpoint_min_reward
+        self._checkpoint_min_incr = checkpoint_min_incr
         self._checkpoint_eval_t = checkpoint_eval_t
         self._reduction_factor = reduction_factor
 
@@ -130,7 +132,9 @@ class CheckpointBasedPruning(FIFOScheduler):
 
     def on_trial_result(self, trial_runner, trial, result):
         score = result[self._reward_attr]
-        if score > self._current_reward * 1.1:
+        if score > self._current_reward and (
+                not self._current_checkpoint or
+                score > (self._current_reward + self._checkpoint_min_incr)):
             print("Resetting checkpoint due to new high score", score)
             self._current_checkpoint = trial_runner.trial_executor.save(trial)
             self._current_reward = score
