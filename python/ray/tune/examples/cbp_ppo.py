@@ -65,7 +65,7 @@ if __name__ == "__main__":
         scheduler = CheckpointBasedPruning(
             reltime_attr="time_since_restore",
             reward_attr="episode_reward_mean",
-            checkpoint_eval_t=20,
+            checkpoint_eval_t=30,
             checkpoint_min_reward=-900,
             bootstrap_checkpoint=None,
             reduction_factor=10)
@@ -87,6 +87,8 @@ if __name__ == "__main__":
                 "num_sgd_iter": grid_search([1, 2, 4, 8, 16, 32]),
                 "train_batch_size":
                     grid_search([400, 800, 1600, 3200, 6400, 12800, 25600]),
+                "sgd_minibatch_size":
+                    grid_search([50, 100, 200, 400]),
                 "lr":
                     grid_search(
                         [0.001, 0.0005, 0.0003, 0.0001, 0.00005, 0.00001]),
