@@ -45,8 +45,8 @@ if __name__ == "__main__":
         scheduler = AsyncHyperBandScheduler(
            time_attr="time_total_s",
            reward_attr="episode_reward_mean",
-           max_t=1800,
-           grace_period=200,
+           max_t=300,
+           grace_period=30,
            reduction_factor=3,
            brackets=3)
     elif args.bootstrap:
@@ -65,8 +65,8 @@ if __name__ == "__main__":
         scheduler = CheckpointBasedPruning(
             reltime_attr="time_since_restore",
             reward_attr="episode_reward_mean",
-            checkpoint_eval_t=120,
-            checkpoint_min_reward=9999,
+            checkpoint_eval_t=20,
+            checkpoint_min_reward=-900,
             bootstrap_checkpoint=None,
             reduction_factor=10)
         algo = None
