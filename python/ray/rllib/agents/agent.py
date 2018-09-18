@@ -122,8 +122,8 @@ class Agent(Trainable):
             merge_dicts(
                 self.config, {
                     "tf_session_args": {
-                        "intra_op_parallelism_threads": None,
-                        "inter_op_parallelism_threads": None,
+                        "intra_op_parallelism_threads": 4,
+                        "inter_op_parallelism_threads": 4,
                     }
                 }))
 
