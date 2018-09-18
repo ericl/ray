@@ -74,7 +74,7 @@ class PPOLoss(object):
             vf_clipped = vf_preds + tf.clip_by_value(value_fn - vf_preds,
                                                      -clip_param, clip_param)
             vf_loss2 = tf.square(vf_clipped - value_targets)
-            vf_loss = tf.maximum(vf_loss1, vf_loss2)
+            vf_loss = tf.minimum(vf_loss1, vf_loss2)
             self.mean_vf_loss = tf.reduce_mean(vf_loss)
             loss = tf.reduce_mean(-surrogate_loss + cur_kl_coeff * action_kl +
                                   vf_loss_coeff * vf_loss -
