@@ -49,13 +49,13 @@ if __name__ == "__main__":
            grace_period=200,
            reduction_factor=3,
            brackets=3)
-    elif bootstrap:
+    elif args.bootstrap:
         name = "pong-cbp5"
         scheduler = CheckpointBasedPruning(
             reltime_attr="time_since_restore",
             reward_attr="episode_reward_mean",
             checkpoint_eval_t=120,
-            checkpoint_min_reward=-18.5,
+            checkpoint_min_reward=-19.5,
             bootstrap_checkpoint=None,
             reduction_factor=10)
         algo = None
