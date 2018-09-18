@@ -54,8 +54,8 @@ if __name__ == "__main__":
         scheduler = CheckpointBasedPruning(
             reltime_attr="time_since_restore",
             reward_attr="episode_reward_mean",
-            checkpoint_eval_t=120,
-            checkpoint_min_reward=-19.5,
+            checkpoint_eval_t=30,
+            checkpoint_min_reward=-900,
             bootstrap_checkpoint=None,
             reduction_factor=10)
         algo = None
@@ -76,7 +76,6 @@ if __name__ == "__main__":
             "run": "PPO",
             "env": "Pendulum-v0",
             "stop": {
-                "episode_reward_mean": -140,
                 "time_total_s": 300,
             },
             "config": {
