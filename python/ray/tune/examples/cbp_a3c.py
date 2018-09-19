@@ -71,7 +71,7 @@ if __name__ == "__main__":
             # 140 -> -17
             # 280 -> 10
             bootstrap_checkpoint="/home/ubuntu/ray_results/pong-a3c/A3C_PongDeterministic-v4_0_2018-09-17_07-57-31OEK7hT/checkpoint-80",
-            reduction_factor=10)
+            reduction_factor=100)
         algo = None
 
     run_experiments({

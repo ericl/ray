@@ -76,7 +76,7 @@ class A3CAgent(Agent):
         return Resources(
             cpu=1,
             gpu=0,
-            extra_cpu=cf["num_workers"],
+            extra_cpu=cf["num_workers"] * 2,
             extra_gpu=cf["use_gpu_for_workers"] and cf["num_workers"] or 0)
 
     def _init(self):

@@ -116,6 +116,8 @@ class CheckpointBasedPruning(FIFOScheduler):
         return self._choose_random_trial(trial_runner)
 
     def _choose_random_trial(self, trial_runner):
+        return None
+
         trials = list(trial_runner.get_trials())
         random.shuffle(trials)
         for trial in trials:
