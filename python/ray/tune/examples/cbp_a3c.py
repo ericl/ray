@@ -21,7 +21,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     if args.random:
-        name = "pong-cbp-random"
+        name = "pong-random-ex"
         scheduler = None
         algo = None
     elif args.hyperopt:
@@ -60,7 +60,7 @@ if __name__ == "__main__":
             reduction_factor=10)
         algo = None
     else:
-        name = "pong-cbp5"
+        name = "pong-cbp-ex"
         scheduler = CheckpointBasedPruning(
             reltime_attr="time_since_restore",
             reward_attr="episode_reward_mean",
@@ -82,13 +82,13 @@ if __name__ == "__main__":
                 "num_workers": 16,
                 "sample_batch_size":
                     grid_search(
-                        [10, 20, 40, 80, 160, 320, 640]),
+                        [10, 40, 160, 640]),
                 "lr":
                     grid_search(
                         [0.005, 0.001, 0.0005, 0.0001, 0.00005, 0.00001,
                          0.000005, 0.000001, 0.0000005, 0.0000001]),
-                "num_envs_per_worker":
-                    grid_search([1, 2, 5, 10]),
+#                "num_envs_per_worker":
+#                    grid_search([1, 2, 5, 10]),
                 "observation_filter": "NoFilter",
                 "preprocessor_pref": "rllib",
                 "model": {
