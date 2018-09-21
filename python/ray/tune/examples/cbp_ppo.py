@@ -19,7 +19,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     if args.random:
-        name = "pendulum-cbp-random"
+        name = "pendulum-cbp-grid"
         scheduler = None
         algo = None
     elif args.hyperopt:
