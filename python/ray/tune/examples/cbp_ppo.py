@@ -90,6 +90,9 @@ if __name__ == "__main__":
                         [400, 800, 1600, 3200, 6400]),
                     "lr": grid_search(
                         [0.001, 0.0005, 0.0003, 0.0001, 0.00005, 0.00001]),
+                    "model": {
+                        "fcnet_hiddens": [64, 64],
+                    },
 #                    "sgd_minibatch_size": grid_search([50, 100, 200, 400]),
 #                    "num_envs_per_worker": grid_search([1, 2, 5, 10]),
                 },
