@@ -57,14 +57,16 @@ if __name__ == "__main__":
             reduction_factor=10)
         algo = None
     else:
-        name = "pendulum-cbp-ex140"
-        assert False, "No bootstrap checkpoint"
+        name = "pendulum-cbp-ex40"
         scheduler = CheckpointBasedPruning(
             reltime_attr="time_since_restore",
             reward_attr="episode_reward_mean",
             checkpoint_eval_t=60,
             checkpoint_min_reward=99999,
-            bootstrap_checkpoint=None,
+            # 40 -> -831
+            # 120 -> -195
+            bootstrap_checkpoint=
+            "/home/ubuntu/ray_results/pendulum-ppo/PPO_Pendulum-v0_0_2018-09-21_21-47-15yGq5N9/checkpoint-40",
             reduction_factor=999999)
         algo = None
 
