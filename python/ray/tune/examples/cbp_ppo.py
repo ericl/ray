@@ -57,15 +57,15 @@ if __name__ == "__main__":
             reduction_factor=10)
         algo = None
     else:
-        name = "pendulum-cbp5"
+        name = "pendulum-cbp-ex140"
         assert False, "No bootstrap checkpoint"
         scheduler = CheckpointBasedPruning(
             reltime_attr="time_since_restore",
             reward_attr="episode_reward_mean",
-            checkpoint_eval_t=30,
-            checkpoint_min_reward=-900,
+            checkpoint_eval_t=60,
+            checkpoint_min_reward=99999,
             bootstrap_checkpoint=None,
-            reduction_factor=10)
+            reduction_factor=999999)
         algo = None
 
     run_experiments(
@@ -82,12 +82,14 @@ if __name__ == "__main__":
                     "lambda": 0.1,
                     "sample_batch_size": 100,
                     "num_sgd_iter": grid_search([1, 2, 4, 8, 16]),
+                    "vf_clip_param":
+                        grid_search([0.01, 0.3, 1.0, 10.0]),
                     "train_batch_size": grid_search(
                         [400, 800, 1600, 3200, 6400]),
-                    "sgd_minibatch_size": grid_search([50, 100, 200, 400]),
                     "lr": grid_search(
                         [0.001, 0.0005, 0.0003, 0.0001, 0.00005, 0.00001]),
-                    "num_envs_per_worker": grid_search([1, 2, 5, 10]),
+#                    "sgd_minibatch_size": grid_search([50, 100, 200, 400]),
+#                    "num_envs_per_worker": grid_search([1, 2, 5, 10]),
                 },
             },
         },

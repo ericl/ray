@@ -57,7 +57,7 @@ if __name__ == "__main__":
             reduction_factor=10)
         algo = None
     else:
-        name = "pong-cbp-p2-ex220",
+        name = "pong-cbp-p2-ex220"
         scheduler = CheckpointBasedPruning(
             reltime_attr="time_since_restore",
             reward_attr="episode_reward_mean",
