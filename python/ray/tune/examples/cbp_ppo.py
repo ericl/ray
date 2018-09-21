@@ -15,7 +15,7 @@ parser.add_argument("--hyperband", action="store_true")
 parser.add_argument("--bootstrap", action="store_true")
 
 if __name__ == "__main__":
-    ray.init(num_cpus=40)
+    ray.init()
 
     args = parser.parse_args()
     if args.random:
