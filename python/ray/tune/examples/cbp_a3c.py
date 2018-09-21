@@ -57,7 +57,7 @@ if __name__ == "__main__":
             reduction_factor=10)
         algo = None
     else:
-        name = "pong-cbp-ex280-anneal"
+        name = "pong-cbp-p2-ex220",
         scheduler = CheckpointBasedPruning(
             reltime_attr="time_since_restore",
             reward_attr="episode_reward_mean",
@@ -67,8 +67,12 @@ if __name__ == "__main__":
             # 80 -> -19.9
             # 140 -> -17
             # 280 -> 10
+#            bootstrap_checkpoint=
+#            "/home/ubuntu/ray_results/pong-a3c/A3C_PongDeterministic-v4_0_2018-09-17_07-57-31OEK7hT/checkpoint-280",
+            # 220 -> -19.3
+            # 300 -> -19.1
             bootstrap_checkpoint=
-            "/home/ubuntu/ray_results/pong-a3c/A3C_PongDeterministic-v4_0_2018-09-17_07-57-31OEK7hT/checkpoint-280",
+            "/home/ubuntu/ray_results/pong-a3c/A3C_PongDeterministic-v4_0_2018-09-21_20-20-29GG2M9Q/checkpoint-220",
             reduction_factor=100)
         algo = None
 
@@ -84,16 +88,21 @@ if __name__ == "__main__":
                 "config": {
                     "num_workers": 16,
                     "sample_batch_size": grid_search([10, 40, 160, 640]),
-                    "lr_schedule": [
-                        [0, 0.0001],
-                        [
-                            100000,
+                    "lr": 
                             grid_search([
                                 0.005, 0.001, 0.0005, 0.0001, 0.00005, 0.00001,
                                 0.000005, 0.000001, 0.0000005, 0.0000001
                             ]),
-                        ],
-                    ],
+#                    "lr_schedule": [
+#                        [0, 0.0001],
+#                        [
+#                            100000,
+#                            grid_search([
+#                                0.005, 0.001, 0.0005, 0.0001, 0.00005, 0.00001,
+#                                0.000005, 0.000001, 0.0000005, 0.0000001
+#                            ]),
+#                        ],
+#                    ],
                     #                "num_envs_per_worker":
                     #                    grid_search([1, 2, 5, 10]),
                     "observation_filter": "NoFilter",
