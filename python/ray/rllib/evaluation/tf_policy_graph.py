@@ -245,7 +245,8 @@ class LearningRateSchedule(object):
 
     def on_global_var_update(self, global_vars):
         super(LearningRateSchedule, self).on_global_var_update(global_vars)
-        print("Loading lr", global_vars, self.lr_schedule.value(global_vars["timestep"]))
+        print("Loading lr", global_vars,
+              self.lr_schedule.value(global_vars["timestep"]))
         self.cur_lr.load(
             self.lr_schedule.value(global_vars["timestep"]),
             session=self._sess)

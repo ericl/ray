@@ -89,9 +89,9 @@ class CheckpointBasedPruning(FIFOScheduler):
         trials = list(trial_runner.get_trials())
         random.shuffle(trials)
         for trial in trials:
-            if (trial.status == Trial.PENDING and
-                    trial not in self._waiting_for_eval and
-                    trial_runner.has_resources(trial.resources)):
+            if (trial.status == Trial.PENDING
+                    and trial not in self._waiting_for_eval
+                    and trial_runner.has_resources(trial.resources)):
                 print("Launch eval", trial.config)
                 eval_trial = Trial(
                     trial.trainable_name,
@@ -135,8 +135,8 @@ class CheckpointBasedPruning(FIFOScheduler):
     def on_trial_result(self, trial_runner, trial, result):
         score = result[self._reward_attr]
         if score > self._current_reward and (
-                not self._current_checkpoint or
-                score > (self._current_reward + self._checkpoint_min_incr)):
+                not self._current_checkpoint or score >
+            (self._current_reward + self._checkpoint_min_incr)):
             print("Resetting checkpoint due to new high score", score)
             self._current_checkpoint = trial_runner.trial_executor.save(trial)
             self._current_reward = score

@@ -41,37 +41,37 @@ if __name__ == "__main__":
         "a_2": hp.uniform("a_2", 0, 1),
     }
     algo = HyperOptSearch(
-        space,
-        max_concurrent=4,
-        reward_attr="episode_reward_mean")
-    
+        space, max_concurrent=4, reward_attr="episode_reward_mean")
+
     cbp = CheckpointBasedPruning(
         reltime_attr="iterations_since_restore",
         reward_attr="episode_reward_mean",
         checkpoint_eval_t=2,
         checkpoint_min_reward=20,
-#        bootstrap_checkpoint=os.path.abspath("state-70"),
+        #        bootstrap_checkpoint=os.path.abspath("state-70"),
         reduction_factor=25)
-    
-    hb = AsyncHyperBandScheduler(
-       time_attr="training_iteration",
-       reward_attr="episode_reward_mean",
-       max_t=100,
-       grace_period=10,
-       reduction_factor=3,
-       brackets=3)
 
-    run_experiments({
-        "easy2": {
-            "run": EasyModel,
-            "num_samples": 300,
-            "stop": {
-                "training_iteration": 100,
-            },
-            "config": {
-                "a_0": lambda _: np.random.uniform(0.0, 1),
-                "a_1": lambda _: np.random.uniform(0.0, 1),
-                "a_2": lambda _: np.random.uniform(0.0, 1),
-            },
-        }
-    }, scheduler=cbp) #search_alg=algo) #scheduler=cbp)
+    hb = AsyncHyperBandScheduler(
+        time_attr="training_iteration",
+        reward_attr="episode_reward_mean",
+        max_t=100,
+        grace_period=10,
+        reduction_factor=3,
+        brackets=3)
+
+    run_experiments(
+        {
+            "easy2": {
+                "run": EasyModel,
+                "num_samples": 300,
+                "stop": {
+                    "training_iteration": 100,
+                },
+                "config": {
+                    "a_0": lambda _: np.random.uniform(0.0, 1),
+                    "a_1": lambda _: np.random.uniform(0.0, 1),
+                    "a_2": lambda _: np.random.uniform(0.0, 1),
+                },
+            }
+        },
+        scheduler=cbp)  #search_alg=algo) #scheduler=cbp)

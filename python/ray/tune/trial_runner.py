@@ -242,12 +242,11 @@ class TrialRunner(object):
             self._total_iterations += 1
             self._total_time += result[TIME_THIS_ITER_S]
             if "chkpt" not in trial.experiment_tag:
-                self._best_reward = max(
-                    self._best_reward, result["episode_reward_mean"])
+                self._best_reward = max(self._best_reward,
+                                        result["episode_reward_mean"])
                 if self._total_iterations % 100 == 0:
-                    print(
-                        "overall_progress", self._total_iterations,
-                        self._total_time, self._best_reward)
+                    print("overall_progress", self._total_iterations,
+                          self._total_time, self._best_reward)
 
             if trial.should_stop(result):
                 # Hook into scheduler
