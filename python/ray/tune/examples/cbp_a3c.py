@@ -15,7 +15,7 @@ parser.add_argument("--hyperband", action="store_true")
 parser.add_argument("--bootstrap", action="store_true")
 
 if __name__ == "__main__":
-    ray.init()
+    ray.init(num_cpus=70)
 
     args = parser.parse_args()
     if args.random:
@@ -57,7 +57,7 @@ if __name__ == "__main__":
             reduction_factor=10)
         algo = None
     else:
-        name = "pong-cbp-p2-ex220"
+        name = "pong-cbp-ex80"
         scheduler = CheckpointBasedPruning(
             reltime_attr="time_since_restore",
             reward_attr="episode_reward_mean",
@@ -67,12 +67,12 @@ if __name__ == "__main__":
             # 80 -> -19.9
             # 140 -> -17
             # 280 -> 10
-#            bootstrap_checkpoint=
-#            "/home/ubuntu/ray_results/pong-a3c/A3C_PongDeterministic-v4_0_2018-09-17_07-57-31OEK7hT/checkpoint-280",
+            bootstrap_checkpoint=
+            "/home/ubuntu/ray_results/pong-a3c/A3C_PongDeterministic-v4_0_2018-09-17_07-57-31OEK7hT/checkpoint-80",
             # 220 -> -19.3
             # 300 -> -19.1
-            bootstrap_checkpoint=
-            "/home/ubuntu/ray_results/pong-a3c/A3C_PongDeterministic-v4_0_2018-09-21_20-20-29GG2M9Q/checkpoint-220",
+#            bootstrap_checkpoint=
+#            "/home/ubuntu/ray_results/pong-a3c/A3C_PongDeterministic-v4_0_2018-09-21_20-20-29GG2M9Q/checkpoint-220",
             reduction_factor=100)
         algo = None
 
