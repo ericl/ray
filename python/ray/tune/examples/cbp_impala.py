@@ -65,7 +65,9 @@ if __name__ == "__main__":
             checkpoint_min_reward=9999,
             bootstrap_checkpoint=
 #            "/home/ubuntu/ray_results/atari-checkpoints/IMPALA_BreakoutNoFrameskip-v4_0_env=BreakoutNoFrameskip-v4_2018-09-23_02-13-09cvQB93/checkpoint-40",
-"/home/ubuntu/ray_results/atari-checkpoints/IMPALA_BeamRiderNoFrameskip-v4_1_env=BeamRiderNoFrameskip-v4_2018-09-23_02-13-09KUM_OF/checkpoint-40",
+"/home/ubuntu/ray_results/atari-checkpoints/IMPALA_QbertNoFrameskip-v4_2_env=QbertNoFrameskip-v4_2018-09-23_02-13-09llKPVp/checkpoint-40",
+#"/home/ubuntu/ray_results/atari-checkpoints/IMPALA_SpaceInvadersNoFrameskip-v4_3_env=SpaceInvadersNoFrameskip-v4_2018-09-23_02-13-09iA5hAc/checkpoint-40",
+#"/home/ubuntu/ray_results/atari-checkpoints/IMPALA_BeamRiderNoFrameskip-v4_1_env=BeamRiderNoFrameskip-v4_2018-09-23_02-13-09KUM_OF/checkpoint-40",
             reduction_factor=100)
         algo = None
 
@@ -73,7 +75,7 @@ if __name__ == "__main__":
         {
             name: {
                 "run": "IMPALA",
-                "env": "BeamRiderNoFrameskip-v4",
+                "env": "QbertNoFrameskip-v4",
                 "stop": {
 #                    "episode_reward_mean": 20,
                     "time_total_s": 900,
