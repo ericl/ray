@@ -21,6 +21,9 @@ PolicyEvalData = namedtuple("PolicyEvalData",
                             ["env_id", "agent_id", "obs", "rnn_state"])
 
 
+WARMUP_PERIOD = 0
+
+
 class SyncSampler(object):
     """This class interacts with the environment and tells it what to do.
 
@@ -52,8 +55,18 @@ class SyncSampler(object):
             self.policy_mapping_fn, self.num_local_steps, self.horizon,
             self._obs_filters, clip_rewards, pack, tf_sess)
         self.metrics_queue = queue.Queue()
+        self.warmed = False
 
     def get_data(self):
+        if not self.warmed:
+            import time
+            start = time.time()
+            print("Entering warmup")
+            while time.time() - start < WARMUP_PERIOD:
+                next(self.rollout_provider)
+            print("Warmup done")
+            self.warmed = True
+
         while True:
             item = next(self.rollout_provider)
             if isinstance(item, RolloutMetrics):
@@ -113,6 +126,7 @@ class AsyncSampler(threading.Thread):
         self.daemon = True
         self.pack = pack
         self.tf_sess = tf_sess
+        self.warmed = False
 
     def run(self):
         try:
@@ -126,6 +140,16 @@ class AsyncSampler(threading.Thread):
             self.async_vector_env, self.extra_batches.put, self.policies,
             self.policy_mapping_fn, self.num_local_steps, self.horizon,
             self._obs_filters, self.clip_rewards, self.pack, self.tf_sess)
+
+        if not self.warmed:
+            import time
+            start = time.time()
+            print("Entering warmup")
+            while time.time() - start < WARMUP_PERIOD:
+                next(rollout_provider)
+            print("Warmup done")
+            self.warmed = True
+
         while True:
             # The timeout variable exists because apparently, if one worker
             # dies, the other workers won't die with it, unless the timeout is

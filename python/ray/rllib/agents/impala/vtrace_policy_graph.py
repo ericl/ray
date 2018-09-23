@@ -136,6 +136,14 @@ class VTracePolicyGraph(LearningRateSchedule, TFPolicyGraph):
                 rs,
                 [1, 0] + list(range(2, 1 + int(tf.shape(tensor).shape[0]))))
 
+        self.grad_clip = tf.get_variable(
+            "grad_clip", initializer=self.config["grad_clip"])
+        self.entropy_coeff = tf.get_variable(
+            "entropy_coeff", initializer=self.config["entropy_coeff"])
+        self.vtrace_clip_rho_threshold = tf.get_variable(
+            "vtrace_clip_rho_threshold",
+            initializer=self.config["vtrace_clip_rho_threshold"])
+
         # Inputs are reshaped from [B * T] => [T - 1, B] for V-trace calc.
         self.loss = VTraceLoss(
             actions=to_batches(actions)[:-1],
@@ -149,9 +157,9 @@ class VTracePolicyGraph(LearningRateSchedule, TFPolicyGraph):
             values=to_batches(values)[:-1],
             bootstrap_value=to_batches(values)[-1],
             vf_loss_coeff=self.config["vf_loss_coeff"],
-            entropy_coeff=self.config["entropy_coeff"],
-            clip_rho_threshold=self.config["vtrace_clip_rho_threshold"],
-            clip_pg_rho_threshold=self.config["vtrace_clip_pg_rho_threshold"])
+            entropy_coeff=self.entropy_coeff,
+            clip_rho_threshold=self.vtrace_clip_rho_threshold,
+            clip_pg_rho_threshold=self.vtrace_clip_rho_threshold)
 
         # Initialize TFPolicyGraph
         loss_in = [
@@ -182,6 +190,9 @@ class VTracePolicyGraph(LearningRateSchedule, TFPolicyGraph):
         self.stats_fetches = {
             "stats": {
                 "cur_lr": tf.cast(self.cur_lr, tf.float64),
+                "cur_grad_clip": tf.cast(self.grad_clip, tf.float64),
+                "cur_vtrace_clip_rho_threshold": tf.cast(self.vtrace_clip_rho_threshold, tf.float64),
+                "cur_entropy_coeff": tf.cast(self.entropy_coeff, tf.float64),
                 "policy_loss": self.loss.pi_loss,
                 "entropy": self.loss.entropy,
                 "grad_gnorm": tf.global_norm(self._grads),
@@ -203,7 +214,7 @@ class VTracePolicyGraph(LearningRateSchedule, TFPolicyGraph):
 
     def gradients(self, optimizer):
         grads = tf.gradients(self.loss.total_loss, self.var_list)
-        self.grads, _ = tf.clip_by_global_norm(grads, self.config["grad_clip"])
+        self.grads, _ = tf.clip_by_global_norm(grads, self.grad_clip)
         clipped_grads = list(zip(self.grads, self.var_list))
         return clipped_grads
 
@@ -219,3 +230,19 @@ class VTracePolicyGraph(LearningRateSchedule, TFPolicyGraph):
 
     def get_initial_state(self):
         return self.model.state_init
+
+    def on_global_var_update(self, global_vars):
+        super(VTracePolicyGraph, self).on_global_var_update(global_vars)
+        for k, v in global_vars["schedule_values"].items():
+            if k == "lr":
+                self.cur_lr.load(v, session=self._sess)
+            elif k == "train_batch_size":
+                pass
+            elif k == "grad_clip":
+                self.grad_clip.load(v, session=self._sess)
+            elif k == "vtrace_clip_rho_threshold":
+                self.vtrace_clip_rho_threshold.load(v, session=self._sess)
+            elif k == "entropy_coeff":
+                self.entropy_coeff.load(v, session=self._sess)
+            else:
+                raise ValueError("don't know how to set: {}".format(k))

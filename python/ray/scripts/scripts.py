@@ -18,6 +18,9 @@ import ray.utils
 logger = logging.getLogger(__name__)
 
 
+logger = logging.getLogger(__name__)
+
+
 def check_no_existing_redis_clients(node_ip_address, redis_client):
     # The client table prefix must be kept in sync with the file
     # "src/common/redis_module/ray_redis_module.cc" where it is defined.

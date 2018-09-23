@@ -38,6 +38,10 @@ def linear_interpolation(l, r, alpha):
     return l + alpha * (r - l)
 
 
+def no_interpolation(l, r, alpha):
+    return l
+
+
 class PiecewiseSchedule(object):
     def __init__(self,
                  endpoints,
