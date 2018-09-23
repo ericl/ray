@@ -79,7 +79,7 @@ if __name__ == "__main__":
                 },
                 "config": {
                     "num_workers": 32,
-                    "clip_reward": True,
+                    "clip_rewards": True,
                     "sample_batch_size": 250,
                     "train_batch_size": 500,
                     "num_envs_per_worker": 5,
