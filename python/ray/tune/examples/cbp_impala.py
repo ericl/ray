@@ -64,7 +64,7 @@ if __name__ == "__main__":
             checkpoint_eval_t=120,
             checkpoint_min_reward=9999,
             bootstrap_checkpoint=
-            "/home/ubuntu/ray_results/atari-impala/IMPALA_BreakoutNoFrameskip-v4_0_env=BreakoutNoFrameskip-v4_2018-09-05_05-16-59YOnUrv/checkpoint-40",
+            "/home/ubuntu/ray_results/atari-checkpoints/IMPALA_BreakoutNoFrameskip-v4_0_env=BreakoutNoFrameskip-v4_2018-09-23_02-13-09cvQB93/checkpoint-40",
             reduction_factor=100)
         algo = None
 
