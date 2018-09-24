@@ -15,11 +15,11 @@ parser.add_argument("--hyperband", action="store_true")
 parser.add_argument("--bootstrap", action="store_true")
 
 if __name__ == "__main__":
-    ray.init(num_cpus=70)
+    ray.init(redis_address="localhost:6379")
 
     args = parser.parse_args()
     if args.random:
-        name = "pong-random-ex"
+        name = "breakout-grid"
         scheduler = None
         algo = None
     elif args.hyperopt:
@@ -84,6 +84,7 @@ if __name__ == "__main__":
                 "stop": {
                     "time_total_s": 3600,
                 },
+                "checkpoint_freq": 40,
                 "config": {
                     "num_workers": 16,
                     "sample_batch_size": grid_search([20, 40, 80, 160]),
@@ -111,20 +112,20 @@ if __name__ == "__main__":
                     #                "num_envs_per_worker":
                     #                    grid_search([1, 2, 5, 10]),
                     "observation_filter": "NoFilter",
-                    "preprocessor_pref": "rllib",
-                    "model": {
-                        "use_lstm": True,
-                        "conv_activation": "elu",
-                        "dim": 42,
-                        "grayscale": True,
-                        "zero_mean": False,
-                        "conv_filters": [
-                            [32, [3, 3], 2],
-                            [32, [3, 3], 2],
-                            [32, [3, 3], 2],
-                            [32, [3, 3], 2],
-                        ],
-                    },
+                    "preprocessor_pref": "deepmind",
+#                    "model": {
+#                        "use_lstm": True,
+#                        "conv_activation": "elu",
+#                        "dim": 42,
+#                        "grayscale": True,
+#                        "zero_mean": False,
+#                        "conv_filters": [
+#                            [32, [3, 3], 2],
+#                            [32, [3, 3], 2],
+#                            [32, [3, 3], 2],
+#                            [32, [3, 3], 2],
+#                        ],
+#                    },
                 },
             },
         },
