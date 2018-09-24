@@ -80,17 +80,17 @@ if __name__ == "__main__":
         {
             name: {
                 "run": "A3C",
-                "env": "PongDeterministic-v4",
+                "env": "BreakoutDeterministic-v4",
                 "stop": {
-                    "episode_reward_mean": 20,
-                    "time_total_s": 1800,
+                    "time_total_s": 3600,
                 },
                 "config": {
                     "num_workers": 16,
-                    "sample_batch_size": grid_search([20, 80]),
+                    "sample_batch_size": grid_search([20, 40, 80, 160]),
+                    "grad_clip": grid_search([8.0, 40.0, 200.0]),
                     "lr":
                             grid_search([
-                                0.0003, 0.0001, 0.00005,
+                                0.001, 0.0005, 0.0001, 0.00005,
                             ]),
 #                    "sample_batch_size": grid_search([10, 40, 160, 640]),
 #                    "lr": 
