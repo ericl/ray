@@ -57,7 +57,7 @@ if __name__ == "__main__":
             reduction_factor=10)
         algo = None
     else:
-        name = "pong-cbp-ex80"
+        name = "breakout-cbp-ex40"
         scheduler = CheckpointBasedPruning(
             reltime_attr="time_since_restore",
             reward_attr="episode_reward_mean",
@@ -68,7 +68,9 @@ if __name__ == "__main__":
             # 140 -> -17
             # 280 -> 10
             bootstrap_checkpoint=
-            "/home/ubuntu/ray_results/pong-a3c/A3C_PongDeterministic-v4_0_2018-09-17_07-57-31OEK7hT/checkpoint-80",
+            "/home/ubuntu/breakout-check/checkpoint-40",
+#            "/home/ubuntu/breakout-check/checkpoint-120",
+#            "/home/ubuntu/breakout-check/checkpoint-240",
             # 220 -> -19.3
             # 300 -> -19.1
 #            bootstrap_checkpoint=
