@@ -57,16 +57,17 @@ if __name__ == "__main__":
             reduction_factor=10)
         algo = None
     else:
-        name = "atari-cbp-ex40"
+        name = "atari-cbp-ex120"
         scheduler = CheckpointBasedPruning(
             reltime_attr="time_since_restore",
             reward_attr="episode_reward_mean",
-            checkpoint_eval_t=120,
+            checkpoint_eval_t=300,
             checkpoint_min_reward=9999,
             bootstrap_checkpoint=
 #            "/home/ubuntu/ray_results/atari-checkpoints/IMPALA_BreakoutNoFrameskip-v4_0_env=BreakoutNoFrameskip-v4_2018-09-23_02-13-09cvQB93/checkpoint-40",
 #"/home/ubuntu/ray_results/atari-checkpoints/IMPALA_QbertNoFrameskip-v4_2_env=QbertNoFrameskip-v4_2018-09-23_02-13-09llKPVp/checkpoint-40",
-"/home/ubuntu/ray_results/atari-checkpoints/IMPALA_SpaceInvadersNoFrameskip-v4_3_env=SpaceInvadersNoFrameskip-v4_2018-09-23_02-13-09iA5hAc/checkpoint-40",
+#"/home/ubuntu/ray_results/atari-checkpoints/IMPALA_SpaceInvadersNoFrameskip-v4_3_env=SpaceInvadersNoFrameskip-v4_2018-09-23_02-13-09iA5hAc/checkpoint-40",
+"/home/ubuntu/ray_results/atari-fishing/IMPALA_FishingDerby-v4_10_entropy_coeff=-0.01,env=FishingDerby-v4,grad_clip=400.0,lr=0.0001,train_batch_size=500_2018-09-25_03-45-00iSNv2c/checkpoint-120",
 #"/home/ubuntu/ray_results/atari-checkpoints/IMPALA_BeamRiderNoFrameskip-v4_1_env=BeamRiderNoFrameskip-v4_2018-09-23_02-13-09KUM_OF/checkpoint-40",
             reduction_factor=100)
         algo = None
@@ -75,20 +76,20 @@ if __name__ == "__main__":
         {
             name: {
                 "run": "IMPALA",
-                "env": "SpaceInvadersNoFrameskip-v4",
+                "env": "FishingDerbyNoFrameskip-v4",
                 "stop": {
 #                    "episode_reward_mean": 20,
                     "time_total_s": 900,
                 },
                 "config": {
-                    "num_workers": 32,
+                    "num_workers": 16,
                     "clip_rewards": True,
-                    "sample_batch_size": 250,
-                    "train_batch_size": 500,
-                    "num_envs_per_worker": 5,
-                    "lr": grid_search([0.005, 0.0005, 0.00005]),
-                    "grad_clip": grid_search([2.0, 40.0, 800.0]),
-                    "entropy_coeff": grid_search([-0.1, -0.01, -0.0001]),
+                    "sample_batch_size": 500,
+                    "train_batch_size": grid_search([500, 2000]),
+                    "num_envs_per_worker": 10,
+                    "lr": grid_search([0.0005, 0.0001, 0.00005, 0.00001]),
+                    "grad_clip": grid_search([40.0, 400.0]),
+                    "entropy_coeff": grid_search([-0.05, -0.01, -0.001]),
                 },
             },
         },
