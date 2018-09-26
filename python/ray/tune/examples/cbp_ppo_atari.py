@@ -57,7 +57,7 @@ if __name__ == "__main__":
             reduction_factor=10)
         algo = None
     else:
-        name = "jamesbond-cbp-ex40"
+        name = "jamesbond-cbp-ex50"
         scheduler = CheckpointBasedPruning(
             reltime_attr="time_since_restore",
             reward_attr="episode_reward_mean",
@@ -66,7 +66,8 @@ if __name__ == "__main__":
             # 40 -> -831
             # 120 -> -195
             bootstrap_checkpoint=
-            "/home/ubuntu/ray_results/pendulum-ppo/PPO_Pendulum-v0_0_2018-09-21_21-47-15yGq5N9/checkpoint-40",
+            "/home/ubuntu/ray_results/jamesbond-check/PPO_Jamesbond-v4_11_clip_param=0.3,entropy_coeff=0.001,env=Jamesbond-v4,lr=5e-05,vf_clip_param=1.0_2018-09-26_04-55-43NRIe7q/checkpoint-50",
+#            "/home/ubuntu/ray_results/jamesbond-check/PPO_Jamesbond-v4_11_clip_param=0.3,entropy_coeff=0.001,env=Jamesbond-v4,lr=5e-05,vf_clip_param=1.0_2018-09-26_04-55-43NRIe7q/checkpoint-150",
             reduction_factor=999999)
         algo = None
 
