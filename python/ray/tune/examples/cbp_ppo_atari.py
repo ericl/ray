@@ -15,7 +15,7 @@ parser.add_argument("--hyperband", action="store_true")
 parser.add_argument("--bootstrap", action="store_true")
 
 if __name__ == "__main__":
-    ray.init()
+    ray.init(num_cpu=100)
 
     args = parser.parse_args()
     if args.random:
@@ -75,7 +75,12 @@ if __name__ == "__main__":
         {
             name: {
                 "run": "PPO",
-                "env": "JamesBondNoFrameskip-v4",
+                "env": "JamesbondNoFrameskip-v4",
+                "trial_resources": {
+                    "gpu": 0.5,
+                    "cpu": 1,
+                    "extra_cpu": 10,
+                },
                 "stop": {
                     "time_total_s": 3600,
                 },
