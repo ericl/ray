@@ -75,6 +75,11 @@ if __name__ == "__main__":
     run_experiments(
         {
             name: {
+                "trial_resources": {
+                    "gpu": 0.5,
+                    "cpu": 1,
+                    "extra_cpu": 16,
+                },
                 "run": "IMPALA",
                 "env": "FishingDerbyNoFrameskip-v4",
                 "stop": {
