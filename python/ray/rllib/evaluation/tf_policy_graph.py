@@ -132,26 +132,19 @@ class TFPolicyGraph(PolicyGraph):
 
     def _get_loss_inputs_dict(self, batch):
         feed_dict = {}
-
-        # Simple case
-        if not self._state_inputs:
-            for k, ph in self._loss_inputs:
-                feed_dict[ph] = batch[k]
-            return feed_dict
-
-        # RNN case
-        feature_keys = [k for k, v in self._loss_inputs]
-        state_keys = [
-            "state_in_{}".format(i) for i in range(len(self._state_inputs))
-        ]
-        feature_sequences, initial_states, seq_lens = chop_into_sequences(
-            batch["eps_id"], [batch[k] for k in feature_keys],
-            [batch[k] for k in state_keys], self._max_seq_len)
-        for k, v in zip(feature_keys, feature_sequences):
-            feed_dict[self._loss_input_dict[k]] = v
-        for k, v in zip(state_keys, initial_states):
-            feed_dict[self._loss_input_dict[k]] = v
-        feed_dict[self._seq_lens] = seq_lens
+        for k, ph in self._loss_inputs:
+            feed_dict[ph] = batch[k]
+        if self._state_inputs:
+            feature_keys = [k for k, v in self._loss_inputs]
+            state_keys = [
+                "state_in_{}".format(i) for i in range(len(self._state_inputs))
+            ]
+            initial_states, seq_lens = chop_into_sequences(
+                batch["eps_id"], [batch[k] for k in state_keys],
+                self._max_seq_len)
+            for k, v in zip(state_keys, initial_states):
+                feed_dict[self._loss_input_dict[k]] = v
+            feed_dict[self._seq_lens] = seq_lens
         return feed_dict
 
     def build_compute_gradients(self, builder, postprocessed_batch):

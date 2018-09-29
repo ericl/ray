@@ -120,15 +120,10 @@ class VTracePolicyGraph(LearningRateSchedule, TFPolicyGraph):
             tf.float32, [None, ac_size], name="behaviour_logits")
 
         def to_batches(tensor):
-            if self.config["model"]["use_lstm"]:
-                B = tf.shape(self.model.seq_lens)[0]
-                T = tf.shape(tensor)[0] // B
-            else:
-                # Important: chop the tensor into batches at known episode cut
-                # boundaries. TODO(ekl) this is kind of a hack
-                T = (self.config["sample_batch_size"] //
-                     self.config["num_envs_per_worker"])
-                B = tf.shape(tensor)[0] // T
+            # Important: chop the tensor into batches at known episode cut
+            # boundaries. TODO(ekl) this is kind of a hack
+            T = self.config["sample_batch_size"]
+            B = tf.shape(tensor)[0] // T
             rs = tf.reshape(tensor,
                             tf.concat([[B, T], tf.shape(tensor)[1:]], axis=0))
             # swap B and T axes

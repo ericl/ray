@@ -121,7 +121,8 @@ class LocalSyncParallelOptimizer(object):
         if len(state_inputs) > 0:
             seq_len = len(inputs[0]) // len(state_inputs[0])
             self._loaded_max_seq_len = seq_len
-            assert len(state_inputs[0]) * seq_len == len(inputs[0])
+            assert len(state_inputs[0]) * seq_len == len(inputs[0]), \
+                (len(state_inputs[0]), seq_len, len(inputs[0]))
             # Make sure the shorter state inputs arrays are evenly divisible
             state_inputs = [
                 make_divisible_by(arr, self.batch_size) for arr in state_inputs

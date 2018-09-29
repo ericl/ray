@@ -40,7 +40,7 @@ class LocalMultiGPUOptimizer(PolicyOptimizer):
         self.num_sgd_iter = num_sgd_iter
         self.train_batch_size = train_batch_size
         if not num_gpus:
-            self.devices = ["/cpu:0"]
+            self.devices = ["/cpu:0", "/cpu:1"]
         else:
             self.devices = ["/gpu:{}".format(i) for i in range(num_gpus)]
         self.batch_size = int(sgd_batch_size / len(self.devices)) * len(
