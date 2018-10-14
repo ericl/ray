@@ -98,9 +98,10 @@ class VTracePolicyGraph(LearningRateSchedule, TFPolicyGraph):
 
         # Create input placeholders
         if existing_inputs:
-            actions, dones, behaviour_logits, rewards, observations = \
-                existing_inputs[:5]
-            existing_state_in = existing_inputs[5:-1]
+            actions, dones, behaviour_logits, rewards, observations, \
+                prev_actions, prev_rewards = \
+                existing_inputs[:7]
+            existing_state_in = existing_inputs[7:-1]
             existing_seq_lens = existing_inputs[-1]
         else:
             if isinstance(action_space, gym.spaces.Box):
@@ -120,14 +121,15 @@ class VTracePolicyGraph(LearningRateSchedule, TFPolicyGraph):
                 tf.float32, [None, ac_size], name="behaviour_logits")
             observations = tf.placeholder(
                 tf.float32, [None] + list(observation_space.shape))
+            prev_actions = ModelCatalog.get_action_placeholder(action_space)
+            prev_rewards = tf.placeholder(
+                tf.float32, [None], name="prev_reward")
             existing_state_in = None
             existing_seq_lens = None
 
         # Setup the policy
         dist_class, logit_dim = ModelCatalog.get_action_dist(
             action_space, self.config["model"])
-        prev_actions = ModelCatalog.get_action_placeholder(action_space)
-        prev_rewards = tf.placeholder(tf.float32, [None], name="prev_reward")
         self.model = ModelCatalog.get_model(
             {
                 "obs": observations,
