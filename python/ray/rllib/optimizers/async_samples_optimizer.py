@@ -178,8 +178,10 @@ class _LoaderThread(threading.Thread):
             tuples_per_device = opt.load_data(l.sess,
                                               [tuples[k] for k in data_keys],
                                               [tuples[k] for k in state_keys])
-            assert int(tuples_per_device) == int(
-                opt._loaded_per_device_batch_size)
+            assert (int(tuples_per_device) == int(
+                opt._loaded_per_device_batch_size)), \
+                (int(tuples_per_device),
+                 int(opt._loaded_per_device_batch_size))
 
         l.ready_optimizers.put(opt)
 
