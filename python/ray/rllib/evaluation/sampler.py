@@ -3,7 +3,6 @@ from __future__ import division
 from __future__ import print_function
 
 from collections import defaultdict, namedtuple
-import logging
 import numpy as np
 import six.moves.queue as queue
 import threading
@@ -16,8 +15,6 @@ from ray.rllib.env.async_vector_env import AsyncVectorEnv
 from ray.rllib.env.atari_wrappers import get_wrapper_by_cls, MonitorEnv
 from ray.rllib.models.action_dist import TupleActions
 from ray.rllib.utils.tf_run_builder import TFRunBuilder
-
-logger = logging.getLogger(__name__)
 
 RolloutMetrics = namedtuple(
     "RolloutMetrics", ["episode_length", "episode_reward", "agent_rewards"])
@@ -224,7 +221,7 @@ def _env_runner(async_vector_env,
             horizon = (
                 async_vector_env.get_unwrapped()[0].spec.max_episode_steps)
     except Exception:
-        logger.warn("no episode horizon specified, assuming inf")
+        print("*** WARNING ***: no episode horizon specified, assuming inf")
     if not horizon:
         horizon = float("inf")
 
@@ -349,7 +346,11 @@ def _env_runner(async_vector_env,
                                         policy.action_space.sample())), 0.0))
 
         # Batch eval policy actions if possible
-        builder = None
+        if tf_sess:
+            builder = TFRunBuilder(tf_sess, "policy_eval")
+            pending_fetches = {}
+        else:
+            builder = None
         eval_results = {}
         rnn_in_cols = {}
         for policy_id, eval_data in to_eval.items():
