@@ -117,7 +117,7 @@ class MultiPong(MultiAgentEnv):
 
     def step(self, action_dict):
         obs, rew, done, info = {}, {}, {}, {}
-        rew = self.agents.step(0)
+        res = self.agents.step(0)
         for i, action in action_dict.items():
             obs[i], rew[i], done[i], info[i] = res
             if done[i]:
