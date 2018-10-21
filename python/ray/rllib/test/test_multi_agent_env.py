@@ -104,23 +104,25 @@ class RoundRobinMultiAgent(MultiAgentEnv):
 
 class MultiPong(MultiAgentEnv):
     def __init__(self, num):
-        self.agents = [
-            wrap_deepmind(gym.make("Pong-v0"), dim=84, framestack=True) for _ in range(num)]
+        self.agents = wrap_deepmind(gym.make("Pong-v0"), dim=84, framestack=True)
         self.dones = set()
-        self.observation_space = self.agents[0].observation_space
-        self.action_space = self.agents[0].action_space
+        self.num = num
+        self.observation_space = self.agents.observation_space
+        self.action_space = self.agents.action_space
 
     def reset(self):
         self.dones = set()
-        return {i: a.reset() for i, a in enumerate(self.agents)}
+        obs = self.agents.reset()
+        return {i: obs for i in range(self.num)}
 
     def step(self, action_dict):
         obs, rew, done, info = {}, {}, {}, {}
+        rew = self.agents.step(0)
         for i, action in action_dict.items():
-            obs[i], rew[i], done[i], info[i] = self.agents[i].step(action)
+            obs[i], rew[i], done[i], info[i] = res
             if done[i]:
                 self.dones.add(i)
-        done["__all__"] = len(self.dones) == len(self.agents)
+        done["__all__"] = len(self.dones) > 0
         return obs, rew, done, info
 
 
