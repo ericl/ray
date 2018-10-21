@@ -6,6 +6,8 @@ import gym
 import random
 import unittest
 
+from ray.rllib.env.atari_wrappers import wrap_deepmind, is_atari
+
 import ray
 from ray.rllib.agents.pg import PGAgent
 from ray.rllib.agents.pg.pg_policy_graph import PGPolicyGraph
@@ -102,7 +104,8 @@ class RoundRobinMultiAgent(MultiAgentEnv):
 
 class MultiPong(MultiAgentEnv):
     def __init__(self, num):
-        self.agents = [gym.make("Pong-v0") for _ in range(num)]
+        self.agents = [
+            wrap_deepmind(gym.make("Pong-v0"), dim=84, framestack=True) for _ in range(num)]
         self.dones = set()
         self.observation_space = self.agents[0].observation_space
         self.action_space = self.agents[0].action_space
