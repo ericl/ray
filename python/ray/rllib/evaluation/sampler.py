@@ -346,11 +346,11 @@ def _env_runner(async_vector_env,
                                         policy.action_space.sample())), 0.0))
 
         # Batch eval policy actions if possible
-        if tf_sess:
-            builder = TFRunBuilder(tf_sess, "policy_eval")
-            pending_fetches = {}
-        else:
-            builder = None
+#        if tf_sess:
+#            builder = TFRunBuilder(tf_sess, "policy_eval")
+#            pending_fetches = {}
+#        else:
+        builder = None
         eval_results = {}
         rnn_in_cols = {}
         for policy_id, eval_data in to_eval.items():
