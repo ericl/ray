@@ -18,6 +18,7 @@ import random
 
 import ray
 from ray import tune
+from ray.rllib.env.atari_wrappers import wrap_deepmind, is_atari
 from ray.rllib.agents.pg.pg_policy_graph import PGPolicyGraph
 from ray.rllib.test.test_multi_agent_env import MultiPong
 from ray.tune import run_experiments
@@ -35,7 +36,7 @@ if __name__ == "__main__":
 
     # Simple environment with `num_agents` independent cartpole entities
     register_env("multi_pong", lambda _: MultiPong(args.num_agents))
-    single_env = gym.make("Pong-v0")
+    single_env = wrap_deepmind(gym.make("Pong-v0"))
     obs_space = single_env.observation_space
     act_space = single_env.action_space
 
