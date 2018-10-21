@@ -100,6 +100,27 @@ class RoundRobinMultiAgent(MultiAgentEnv):
         return obs, rew, done, info
 
 
+class MultiPong(MultiAgentEnv):
+    def __init__(self, num):
+        self.agents = [gym.make("Pong-v0") for _ in range(num)]
+        self.dones = set()
+        self.observation_space = self.agents[0].observation_space
+        self.action_space = self.agents[0].action_space
+
+    def reset(self):
+        self.dones = set()
+        return {i: a.reset() for i, a in enumerate(self.agents)}
+
+    def step(self, action_dict):
+        obs, rew, done, info = {}, {}, {}, {}
+        for i, action in action_dict.items():
+            obs[i], rew[i], done[i], info[i] = self.agents[i].step(action)
+            if done[i]:
+                self.dones.add(i)
+        done["__all__"] = len(self.dones) == len(self.agents)
+        return obs, rew, done, info
+
+
 class MultiCartpole(MultiAgentEnv):
     def __init__(self, num):
         self.agents = [gym.make("CartPole-v0") for _ in range(num)]

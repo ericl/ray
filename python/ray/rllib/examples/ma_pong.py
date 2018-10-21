@@ -19,7 +19,7 @@ import random
 import ray
 from ray import tune
 from ray.rllib.agents.pg.pg_policy_graph import PGPolicyGraph
-from ray.rllib.test.test_multi_agent_env import MultiCartpole
+from ray.rllib.test.test_multi_agent_env import MultiPong
 from ray.tune import run_experiments
 from ray.tune.registry import register_env
 
@@ -34,8 +34,8 @@ if __name__ == "__main__":
     ray.init()
 
     # Simple environment with `num_agents` independent cartpole entities
-    register_env("multi_cartpole", lambda _: MultiCartpole(args.num_agents))
-    single_env = gym.make("CartPole-v0")
+    register_env("multi_pong", lambda _: MultiPong(args.num_agents))
+    single_env = gym.make("Pong-v0")
     obs_space = single_env.observation_space
     act_space = single_env.action_space
 
@@ -56,13 +56,12 @@ if __name__ == "__main__":
     run_experiments({
         "test": {
             "run": "PG",
-            "env": "multi_cartpole",
+            "env": "multi_pong",
             "stop": {
                 "training_iteration": args.num_iters
             },
             "config": {
                 "gpu": True,
-                "model": {"fcnet_hiddens": [16, 16]},
                 "multiagent": {
                     "policy_graphs": policy_graphs,
                     "policy_mapping_fn": tune.function(
