@@ -62,7 +62,7 @@ if __name__ == "__main__":
                 "training_iteration": args.num_iters
             },
             "config": {
-                "gpu": False,
+                "gpu": True,
                 "multiagent": {
                     "policy_graphs": policy_graphs,
                     "policy_mapping_fn": tune.function(
