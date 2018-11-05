@@ -6,6 +6,7 @@ import binascii
 import functools
 import hashlib
 import inspect
+import logging
 import numpy as np
 import os
 import subprocess
@@ -17,6 +18,8 @@ import uuid
 import ray.gcs_utils
 import ray.raylet
 import ray.ray_constants as ray_constants
+
+logger = logging.getLogger(__name__)
 
 
 def _random_string():
@@ -423,3 +426,42 @@ def thread_safe_client(client, lock=None):
     if lock is None:
         lock = threading.Lock()
     return _ThreadSafeProxy(client, lock)
+
+
+class MemoryMonitorThread(threading.Thread):
+    """Thread that checks for low memory conditions and warns the user.
+
+    This is only run on the driver process for now.
+    """
+
+    def __init__(self):
+        threading.Thread.__init__(self)
+        self.daemon = True
+
+    def run(self):
+        try:
+            import psutil
+            total_gb = psutil.virtual_memory().total / 1e9
+        except ImportError:
+            logger.warning(
+                "Run `pip install psutil` to enable memory use warnings.")
+            return
+
+        while True:
+            try:
+                avail_gb = psutil.virtual_memory().available / 1e9
+                if avail_gb < total_gb * 0.1:
+                    logger.warning(
+                        "***LOW MEMORY*** less than 10% of the memory on "
+                        "this node is available for use ({}/{}GB). ".format(
+                            round(avail_gb, 1), round(total_gb, 1)) +
+                        "This can cause unexpected crashes. Consider "
+                        "reducing the memory used by your application "
+                        "or reducing the Ray object store size by setting "
+                        "`object_store_memory` when starting Ray.")
+                    # Print the warning at most every 5 minutes
+                    time.sleep(5 * 60)
+                # Check with a higher frequency
+                time.sleep(5)
+            except Exception:
+                logger.exception("Failed to check current memory usage")

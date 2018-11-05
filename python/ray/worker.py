@@ -38,6 +38,7 @@ from ray.utils import (
     is_cython,
     random_string,
     thread_safe_client,
+    MemoryMonitorThread,
 )
 
 SCRIPT_MODE = 0
@@ -1869,6 +1870,7 @@ def connect(info,
                 "The type of given driver id must be ray.ObjectID.")
 
         worker.worker_id = driver_id.id()
+        MemoryMonitorThread().start()
 
     # When tasks are executed on remote workers in the context of multiple
     # drivers, the task driver ID is used to keep track of which driver is
