@@ -1,0 +1,20 @@
+pong-impala-lowlatency:
+    env: PongNoFrameskip-v4
+    run: IMPALA
+    config:
+        sample_batch_size: 50
+        num_envs_per_worker: 5
+        train_batch_size: 1000
+        num_workers: 256
+        num_parallel_data_loaders: 8
+        num_gpus: 2
+        max_sample_requests_in_flight_per_worker: 1
+        replay_proportion: 0.0
+        replay_buffer_num_slots: 100
+        lr: 0.0005
+        model:
+            dim: 42
+        lr_schedule: [
+            [0, 0.0005],
+            [20000000, 0.0001],
+        ]

@@ -313,7 +313,7 @@ class AsyncSamplesOptimizer(PolicyOptimizer):
 
                 # Note that it's important to pull new weights once
                 # updated to avoid excessive correlation between actors
-                if weights is None or self.learner.weights_updated:
+                if weights is None or (self.learner.weights_updated and random.random() > 0.8):
                     self.learner.weights_updated = False
                     with self.timers["put_weights"]:
                         weights = ray.put(self.local_evaluator.get_weights())
