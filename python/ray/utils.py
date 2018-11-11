@@ -465,3 +465,7 @@ class MemoryMonitorThread(threading.Thread):
                 time.sleep(5)
             except Exception:
                 logger.exception("Failed to check current memory usage")
+
+
+def is_main_thread():
+    return threading.current_thread().getName() == "MainThread"
