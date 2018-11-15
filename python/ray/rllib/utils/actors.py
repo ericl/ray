@@ -20,8 +20,11 @@ class TaskPool(object):
     def add(self, worker, all_obj_ids):
         if isinstance(all_obj_ids, list):
             obj_id = all_obj_ids[0]
+            obj_list = all_obj_ids
         else:
             obj_id = all_obj_ids
+            obj_list = [obj_id]
+        prefetch(obj_list)
         self._tasks[obj_id] = worker
         self._objects[obj_id] = all_obj_ids
 
@@ -38,9 +41,6 @@ class TaskPool(object):
         Assumes obj_id only is one id."""
 
         for worker, obj_id in self.completed():
-            plasma_id = ray.pyarrow.plasma.ObjectID(obj_id.id())
-            (ray.worker.global_worker.local_scheduler_client.
-             fetch_or_reconstruct([obj_id], True))
             self._fetching.append((worker, obj_id))
 
         remaining = []
@@ -55,6 +55,11 @@ class TaskPool(object):
     @property
     def count(self):
         return len(self._tasks)
+
+
+def prefetch(obj_ids):
+    ray.worker.global_worker.local_scheduler_client.fetch_or_reconstruct(
+        obj_ids, True)
 
 
 def drop_colocated(actors):
