@@ -195,7 +195,7 @@ class AsyncSamplesOptimizer(PolicyOptimizer):
               replay_proportion=0.0,
               num_parallel_data_loaders=1,
               max_sample_requests_in_flight_per_worker=2,
-              broadcast_interval=0.1):
+              broadcast_interval=5):
         self.learning_started = False
         self.train_batch_size = train_batch_size
         self.sample_batch_size = sample_batch_size
@@ -281,7 +281,7 @@ class AsyncSamplesOptimizer(PolicyOptimizer):
 
     def _step(self):
         sample_timesteps, train_timesteps = 0, 0
-        last_update_time = time.time()
+        num_broadcast = 0
         weights = None
 
         for ev, sample_batch in self._augment_with_replay(
@@ -308,11 +308,11 @@ class AsyncSamplesOptimizer(PolicyOptimizer):
 
             # Note that it's important to pull new weights once
             # updated to avoid excessive correlation between actors
-            if weights is None or (time.time() - last_update_time >
-                                   self.broadcast_interval):
+            if weights is None or num_broadcast >= self.broadcast_interval:
                 weights = ray.put(self.local_evaluator.get_weights())
-                last_update_time = time.time()
+                num_broadcast = 0
             ev.set_weights.remote(weights)
+            num_broadcast += 1
             self.num_weight_syncs += 1
 
             # Kick off another sample request
