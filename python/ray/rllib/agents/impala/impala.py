@@ -20,7 +20,6 @@ OPTIMIZER_SHARED_CONFIGS = [
     "num_data_loader_buffers",
     "max_sample_requests_in_flight_per_worker",
     "num_sgd_iter",
-    "sgd_minibatch_size",
     "broadcast_interval",
     "num_sgd_iter",
     "minibatch_buffer_size",
@@ -87,7 +86,6 @@ DEFAULT_CONFIG = with_common_config({
     "vf_loss_coeff": 1.0,
     "entropy_coeff": -0.01,
 
-    "sgd_minibatch_size": 128,        
     "use_ppo": True,
     "clip_param": 0.3,
     "num_sgd_iter": 5,

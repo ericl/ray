@@ -93,7 +93,6 @@ class LearnerThread(threading.Thread):
         self.stats = {}
         self.stopped = False
         self.num_sgd_iter = num_sgd_iter
-        self.sgd_minibatch_size = sgd_minibatch_size
 
     def run(self):
         while not self.stopped:
