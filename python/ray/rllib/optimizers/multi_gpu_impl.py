@@ -43,7 +43,6 @@ class LocalSyncParallelOptimizer(object):
             clipped.
         build_graph: Function that takes the specified inputs and returns a
             TF Policy Graph instance.
-        grad_norm_clipping: None or int stdev to clip grad norms by
     """
 
     def __init__(self,
@@ -88,13 +87,6 @@ class LocalSyncParallelOptimizer(object):
                                    len(input_placeholders)))
 
         avg = average_gradients([t.grads for t in self._towers])
-        if grad_norm_clipping:
-            clipped = []
-            for grad, _ in avg:
-                clipped.append(grad)
-            clipped, _ = tf.clip_by_global_norm(clipped, grad_norm_clipping)
-            for i, (grad, var) in enumerate(avg):
-                avg[i] = (clipped[i], var)
         self._train_op = self.optimizer.apply_gradients(avg)
 
     def load_data(self, sess, inputs, state_inputs):
