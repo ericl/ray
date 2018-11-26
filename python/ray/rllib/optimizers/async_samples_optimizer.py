@@ -151,7 +151,7 @@ class TFMultiGPULearner(LearnerThread):
                     else:
                         rnn_inputs = []
                     adam = tf.train.AdamOptimizer(self.lr)
-                    for _ in range(num_parallel_data_loaders):
+                    for _ in range(num_data_loader_buffers):
                         self.par_opt.append(
                             LocalSyncParallelOptimizer(
                                 adam,
@@ -159,8 +159,7 @@ class TFMultiGPULearner(LearnerThread):
                                 [v for _, v in self.policy.loss_inputs()],
                                 rnn_inputs,
                                 999999,  # it will get rounded down
-                                self.policy.copy,
-                                grad_norm_clipping=grad_clip))
+                                self.policy.copy))
 
                 self.sess = self.local_evaluator.tf_sess
                 self.sess.run(tf.global_variables_initializer())
