@@ -104,10 +104,7 @@ class LearnerThread(threading.Thread):
 
         with self.grad_timer:
             fetches = None
-            print(self.num_sgd_iter)
-            for i in range(self.num_sgd_iter):
-                fetches = self.local_evaluator.compute_apply(batch)
-            print(fetches)
+            fetches = self.local_evaluator.compute_apply(batch)
             if 'kl' in fetches:
                 print("THIS IS INTERSTING")
                 self.local_evaluator.for_policy(
@@ -192,11 +189,10 @@ class TFMultiGPULearner(LearnerThread):
             if released:
                 self.idle_optimizers.put(opt)
 
-        for _ in range(self.num_sgd_iter):
-            with self.grad_timer:
-                fetches = opt.optimize(self.sess, 0)
-                self.weights_updated = True
-                self.stats = fetches.get("stats", {})
+        with self.grad_timer:
+            fetches = opt.optimize(self.sess, 0)
+            self.weights_updated = True
+            self.stats = fetches.get("stats", {})
 
         self.outqueue.put(self.train_batch_size)
         self.learner_queue_size.push(self.inqueue.qsize())
