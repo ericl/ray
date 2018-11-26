@@ -173,17 +173,21 @@ class TFMultiGPULearner(LearnerThread):
             self.loader_thread = _LoaderThread(self, share_stats=(i == 0))
             self.loader_thread.start()
 
+        self.minibatch_buffer = MinibatchBuffer(
+            self.ready_optimizers, minibatch_buffer_size, num_sgd_passes)
+
     def step(self):
         assert self.loader_thread.is_alive()
         with self.load_wait_timer:
-            opt = self.ready_optimizers.get()
+            opt, released = self.minibatch_buffer.get()
+            if released:
+                self.idle_optimizers.put(opt)
 
         with self.grad_timer:
             fetches = opt.optimize(self.sess, 0)
             self.weights_updated = True
             self.stats = fetches.get("stats", {})
 
-        self.idle_optimizers.put(opt)
         self.outqueue.put(self.train_batch_size)
         self.learner_queue_size.push(self.inqueue.qsize())
 
