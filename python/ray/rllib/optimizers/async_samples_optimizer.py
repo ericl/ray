@@ -86,13 +86,12 @@ class TFMultiGPULearner(LearnerThread):
                  num_gpus=1,
                  lr=0.0005,
                  train_batch_size=500,
-                 grad_clip=40,
                  num_parallel_data_loaders=1,
                  num_sgd_iter=1):
         # Multi-GPU requires TensorFlow to function.
         import tensorflow as tf
 
-        LearnerThread.__init__(self, local_evaluator)
+        LearnerThread.__init__(self, local_evaluator, 1, 1)
         self.lr = lr
         self.train_batch_size = train_batch_size
         self.num_sgd_iter = num_sgd_iter
@@ -127,8 +126,7 @@ class TFMultiGPULearner(LearnerThread):
                                 [v for _, v in self.policy.loss_inputs()],
                                 rnn_inputs,
                                 999999,  # it will get rounded down
-                                self.policy.copy,
-                                grad_norm_clipping=grad_clip))
+                                self.policy.copy))
 
                 self.sess = self.local_evaluator.tf_sess
                 self.sess.run(tf.global_variables_initializer())
@@ -206,7 +204,6 @@ class AsyncSamplesOptimizer(PolicyOptimizer):
               num_envs_per_worker=1,
               num_gpus=0,
               lr=0.0005,
-              grad_clip=40,
               replay_buffer_num_slots=0,
               replay_proportion=0.0,
               num_parallel_data_loaders=1,
@@ -230,7 +227,6 @@ class AsyncSamplesOptimizer(PolicyOptimizer):
                 lr=lr,
                 num_gpus=num_gpus,
                 train_batch_size=train_batch_size,
-                grad_clip=grad_clip,
                 num_parallel_data_loaders=num_parallel_data_loaders,
                 num_sgd_iter=num_sgd_iter)
         else:

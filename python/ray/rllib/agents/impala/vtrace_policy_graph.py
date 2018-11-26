@@ -65,7 +65,7 @@ class VTraceLoss(object):
         # Compute vtrace on the CPU for better perf.
         print(clip_param)
         def to_batches(tensor):
-            T = 200
+            T = 50
             B = tf.shape(tensor)[0] // T
             rs = tf.reshape(tensor,
                             tf.concat([[B, T], tf.shape(tensor)[1:]], axis=0))
