@@ -1,18 +1,20 @@
-pong-impala-fast:
+pong-impala-old:
     env: PongNoFrameskip-v4
     run: IMPALA
     stop:
         episode_reward_mean: 20.0
-        timesteps_total: 20000000 
+        timesteps_total: 5000000
     config:
-        sample_batch_size: 200
-        train_batch_size: 2000
-        num_workers: 47
+        sample_batch_size: 50
+        train_batch_size: 1000
+        num_workers: 32
+        broadcast_interval: 1
+        max_sample_requests_in_flight_per_worker: 2
+        num_parallel_data_loaders: 4
         num_envs_per_worker: 5
-        num_sgd_iter: 
-            grid_search: [5,1]
-        clip_param:
-            grid_search: [1000000000, 0.3]
+        num_sgd_passes: 3
+        vf_loss_coeff: 1.0
+        clip_param: 0.3
         num_gpus: 1
         model:
           dim: 42
