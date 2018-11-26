@@ -27,6 +27,46 @@ LEARNER_QUEUE_MAX_SIZE = 16
 NUM_DATA_LOAD_THREADS = 16
 
 
+class MinibatchBuffer(object):
+    """Ring buffer of recent data batches for minibatch SGD."""
+
+    def __init__(self, inqueue, size, num_passes):
+        """Initialize a minibatch buffer.
+
+        Arguments:
+            inqueue: Queue to populate the internal ring buffer from.
+            size: Max number of data items to buffer.
+            num_passes: Max num times each data item should be emitted.
+        """
+        self.inqueue = inqueue
+        self.size = size
+        self.max_ttl = num_passes
+        self.cur_max_ttl = 1  # ramp up slowly to better mix the input data
+        self.buffers = [None] * size
+        self.ttl = [0] * size
+        self.idx = 0
+
+    def get(self):
+        """Get a new batch from the internal ring buffer.
+
+        Returns:
+            buf: Data item saved from inqueue.
+            released: True if the item is now removed from the ring buffer.
+        """
+        if self.ttl[self.idx] <= 0:
+            self.buffers[self.idx] = self.inqueue.get()
+            self.ttl[self.idx] = self.cur_max_ttl
+            if self.cur_max_ttl < self.max_ttl:
+                self.cur_max_ttl += 1
+        buf = self.buffers[self.idx]
+        self.ttl[self.idx] -= 1
+        released = self.ttl[self.idx] <= 0
+        if released:
+            self.buffers[self.idx] = None
+        self.idx = (self.idx + 1) % len(self.buffers)
+        return buf, released
+
+
 class LearnerThread(threading.Thread):
     """Background thread that updates the local model from sample trajectories.
 
@@ -36,12 +76,14 @@ class LearnerThread(threading.Thread):
     improves overall throughput.
     """
 
-    def __init__(self, local_evaluator):
+    def __init__(self, local_evaluator, minibatch_buffer_size, num_sgd_passes):
         threading.Thread.__init__(self)
         self.learner_queue_size = WindowStat("size", 50)
         self.local_evaluator = local_evaluator
         self.inqueue = queue.Queue(maxsize=LEARNER_QUEUE_MAX_SIZE)
         self.outqueue = queue.Queue()
+        self.minibatch_buffer = MinibatchBuffer(
+            self.inqueue, minibatch_buffer_size, num_sgd_passes)
         self.queue_timer = TimerStat()
         self.grad_timer = TimerStat()
         self.load_timer = TimerStat()
@@ -57,7 +99,7 @@ class LearnerThread(threading.Thread):
 
     def step(self):
         with self.queue_timer:
-            batch = self.inqueue.get()
+            batch, _ = self.minibatch_buffer.get()
 
         with self.grad_timer:
             fetches = self.local_evaluator.compute_apply(batch)
@@ -76,12 +118,14 @@ class TFMultiGPULearner(LearnerThread):
                  num_gpus=1,
                  lr=0.0005,
                  train_batch_size=500,
-                 grad_clip=40,
-                 num_parallel_data_loaders=1):
+                 num_data_loader_buffers=1,
+                 minibatch_buffer_size=1,
+                 num_sgd_passes=1):
         # Multi-GPU requires TensorFlow to function.
         import tensorflow as tf
 
-        LearnerThread.__init__(self, local_evaluator)
+        LearnerThread.__init__(self, local_evaluator, minibatch_buffer_size,
+                               num_sgd_passes)
         self.lr = lr
         self.train_batch_size = train_batch_size
         if not num_gpus:
@@ -193,21 +237,28 @@ class AsyncSamplesOptimizer(PolicyOptimizer):
               num_envs_per_worker=1,
               num_gpus=0,
               lr=0.0005,
-              grad_clip=40,
               replay_buffer_num_slots=0,
               replay_proportion=0.0,
-              num_parallel_data_loaders=1,
+              num_data_loader_buffers=1,
               max_sample_requests_in_flight_per_worker=2,
-              broadcast_interval=1):
+              broadcast_interval=1,
+              num_sgd_passes=1,
+              minibatch_buffer_size=1):
         self.learning_started = False
         self.train_batch_size = train_batch_size
         self.sample_batch_size = sample_batch_size
         self.broadcast_interval = broadcast_interval
 
-        if num_gpus > 1 or num_parallel_data_loaders > 1:
+        if num_gpus > 1 or num_data_loader_buffers > 1:
             logger.info(
                 "Enabling multi-GPU mode, {} GPUs, {} parallel loaders".format(
-                    num_gpus, num_parallel_data_loaders))
+                    num_gpus, num_data_loader_buffers))
+            if num_data_loader_buffers < minibatch_buffer_size:
+                raise ValueError(
+                    "In multi-gpu mode you must have at least as many "
+                    "parallel data loader buffers as minibatch buffers: "
+                    "{} vs {}".format(num_data_loader_buffers,
+                                      minibatch_buffer_size))
             if train_batch_size // max(1, num_gpus) % (
                     sample_batch_size // num_envs_per_worker) != 0:
                 raise ValueError(
@@ -217,10 +268,12 @@ class AsyncSamplesOptimizer(PolicyOptimizer):
                 lr=lr,
                 num_gpus=num_gpus,
                 train_batch_size=train_batch_size,
-                grad_clip=grad_clip,
-                num_parallel_data_loaders=num_parallel_data_loaders)
+                num_data_loader_buffers=num_data_loader_buffers,
+                minibatch_buffer_size=minibatch_buffer_size,
+                num_sgd_passes=num_sgd_passes)
         else:
-            self.learner = LearnerThread(self.local_evaluator)
+            self.learner = LearnerThread(self.local_evaluator,
+                                         minibatch_buffer_size, num_sgd_passes)
         self.learner.start()
 
         assert len(self.remote_evaluators) > 0
