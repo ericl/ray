@@ -16,5 +16,6 @@ pong-impala-old:
         vf_loss_coeff: 1.0
         clip_param: 0.3
         num_gpus: 1
+        use_vtrace_advantages: false
         model:
           dim: 42

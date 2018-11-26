@@ -11,6 +11,7 @@ import gym
 
 import ray
 from ray.rllib.agents.impala import vtrace
+from ray.rllib.evaluation.postprocessing import compute_advantages
 from ray.rllib.evaluation.tf_policy_graph import TFPolicyGraph, \
     LearningRateSchedule
 from ray.rllib.models.catalog import ModelCatalog
@@ -41,6 +42,9 @@ class VTraceLoss(object):
                  clip_rho_threshold=1.0,
                  clip_pg_rho_threshold=1.0,
                  use_ppo=True,
+                 use_vtrace_advantages=True,
+                 adv_ph=None,
+                 value_targets=None,
                  clip_param=0.3):
         """Policy gradient loss with vtrace importance weighting.
 
@@ -92,7 +96,10 @@ class VTraceLoss(object):
         if use_ppo:
             logp_ratio = to_batches(tf.exp(curr_action_dist.logp(unmodified_actions) - prev_action_dist.logp(unmodified_actions)))[:-1]
 
-            advantages = self.vtrace_returns.pg_advantages
+            if use_vtrace_advantages:
+                advantages = self.vtrace_returns.pg_advantages
+            else:
+                advantages = to_batches(adv_ph)[:-1]
             surrogate_loss = tf.minimum(
                         advantages * logp_ratio,
                         advantages * tf.clip_by_value(logp_ratio, 1 - clip_param,
@@ -109,7 +116,11 @@ class VTraceLoss(object):
                                 valid_mask))
 
         # The baseline loss
-        delta = tf.boolean_mask(values - self.vtrace_returns.vs, valid_mask)
+        if use_vtrace_advantages:
+            delta = tf.boolean_mask(values - self.vtrace_returns.vs, valid_mask)
+        else:
+            value_targets = to_batches(value_targets)[:-1]
+            delta = tf.boolean_mask(values - value_targets, valid_mask)
         self.vf_loss = 0.5 * tf.reduce_sum(tf.square(delta))
 
         # The entropy loss
@@ -163,6 +174,11 @@ class VTracePolicyGraph(LearningRateSchedule, TFPolicyGraph):
                 tf.float32, [None] + list(observation_space.shape))
             existing_state_in = None
             existing_seq_lens = None
+            adv_ph = tf.placeholder(
+                tf.float32, name="advantages", shape=(None, ))
+            value_targets = tf.placeholder(
+                tf.float32, name="value_targets", shape=(None, ))
+        self.observations = observations
 
         # Setup the policy
         dist_class, logit_dim = ModelCatalog.get_action_dist(
@@ -185,6 +201,7 @@ class VTracePolicyGraph(LearningRateSchedule, TFPolicyGraph):
         prev_action_dist = dist_class(behaviour_logits)
 
         values = self.model.value_function()
+        self.value_function = values
         self.var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
                                           tf.get_variable_scope().name)
 
@@ -236,7 +253,10 @@ class VTracePolicyGraph(LearningRateSchedule, TFPolicyGraph):
             clip_rho_threshold=self.config["vtrace_clip_rho_threshold"],
             clip_pg_rho_threshold=self.config["vtrace_clip_pg_rho_threshold"],
             use_ppo=self.config["use_ppo"],
-            clip_param=self.config["clip_param"])
+            use_vtrace_advantages=self.config["use_vtrace_advantages"],
+            clip_param=self.config["clip_param"],
+            value_targets=value_targets,
+            adv_ph=adv_ph)
 
         # KL divergence between worker and learner logits for debugging
         model_dist = Categorical(self.model.outputs)
@@ -256,6 +276,9 @@ class VTracePolicyGraph(LearningRateSchedule, TFPolicyGraph):
             ("prev_actions", prev_actions),
             ("prev_rewards", prev_rewards),
         ]
+        if not self.config["use_vtrace_advantages"]:
+            loss_in.append(("advantages", adv_ph))
+            loss_in.append(("value_targets", value_targets))
         LearningRateSchedule.__init__(self, self.config["lr"],
                                       self.config["lr_schedule"])
         TFPolicyGraph.__init__(
@@ -313,7 +336,10 @@ class VTracePolicyGraph(LearningRateSchedule, TFPolicyGraph):
         return clipped_grads
 
     def extra_compute_action_fetches(self):
-        return {"behaviour_logits": self.model.outputs}
+        return {
+            "behaviour_logits": self.model.outputs,
+            "vf_preds": self.value_function,
+        }
 
     def extra_compute_grad_fetches(self):
         return self.stats_fetches
@@ -326,12 +352,39 @@ class VTracePolicyGraph(LearningRateSchedule, TFPolicyGraph):
         self.kl_coeff.load(self.kl_coeff_val, session=self.sess)
         return self.kl_coeff_val
 
+    def value(self, ob, *args):
+        feed_dict = {self.observations: [ob], self.model.seq_lens: [1]}
+        assert len(args) == len(self.model.state_in), \
+            (args, self.model.state_in)
+        for k, v in zip(self.model.state_in, args):
+            feed_dict[k] = v
+        vf = self.sess.run(self.value_function, feed_dict)
+        return vf[0]
+
     def postprocess_trajectory(self,
                                sample_batch,
                                other_agent_batches=None,
                                episode=None):
-        del sample_batch.data["new_obs"]  # not used, so save some bandwidth
-        return sample_batch
+        if not self.config["use_vtrace_advantages"]:
+            completed = sample_batch["dones"][-1]
+            if completed:
+                last_r = 0.0
+            else:
+                next_state = []
+                for i in range(len(self.model.state_in)):
+                    next_state.append(
+                        [sample_batch["state_out_{}".format(i)][-1]])
+                last_r = self.value(sample_batch["new_obs"][-1], *next_state)
+            batch = compute_advantages(
+                sample_batch,
+                last_r,
+                self.config["gamma"],
+                self.config["lambda"],
+                use_gae=self.config["use_gae"])
+        else:
+            batch = sample_batch
+        del batch.data["new_obs"]  # not used, so save some bandwidth
+        return batch
 
     def get_initial_state(self):
         return self.model.state_init

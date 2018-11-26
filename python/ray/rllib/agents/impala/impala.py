@@ -87,6 +87,12 @@ DEFAULT_CONFIG = with_common_config({
     "entropy_coeff": -0.01,
 
     "use_ppo": True,
+    "use_vtrace_advantages": True,
+    # If true, use the Generalized Advantage Estimator (GAE)
+    # with a value function, see https://arxiv.org/pdf/1506.02438.pdf.
+    "use_gae": True,
+    # GAE(lambda) parameter
+    "lambda": 1.0,
     "clip_param": 0.3,
     "num_sgd_iter": 5,
     "kl_coeff": 0.2,

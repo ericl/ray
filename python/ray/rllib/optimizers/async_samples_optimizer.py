@@ -106,7 +106,6 @@ class LearnerThread(threading.Thread):
             fetches = None
             fetches = self.local_evaluator.compute_apply(batch)
             if 'kl' in fetches:
-                print("THIS IS INTERSTING")
                 self.local_evaluator.for_policy(
                     lambda pi: pi.update_kl(fetches["kl"]))
             self.weights_updated = True
