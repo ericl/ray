@@ -87,13 +87,15 @@ class TFMultiGPULearner(LearnerThread):
                  lr=0.0005,
                  train_batch_size=500,
                  grad_clip=40,
-                 num_parallel_data_loaders=1):
+                 num_parallel_data_loaders=1,
+                 num_sgd_iter=1):
         # Multi-GPU requires TensorFlow to function.
         import tensorflow as tf
 
         LearnerThread.__init__(self, local_evaluator)
         self.lr = lr
         self.train_batch_size = train_batch_size
+        self.num_sgd_iter = num_sgd_iter
         if not num_gpus:
             self.devices = ["/cpu:0"]
         else:
@@ -144,10 +146,11 @@ class TFMultiGPULearner(LearnerThread):
         with self.load_wait_timer:
             opt = self.ready_optimizers.get()
 
-        with self.grad_timer:
-            fetches = opt.optimize(self.sess, 0)
-            self.weights_updated = True
-            self.stats = fetches.get("stats", {})
+        for _ in range(self.num_sgd_iter):
+            with self.grad_timer:
+                fetches = opt.optimize(self.sess, 0)
+                self.weights_updated = True
+                self.stats = fetches.get("stats", {})
 
         self.idle_optimizers.put(opt)
         self.outqueue.put(self.train_batch_size)
@@ -228,7 +231,8 @@ class AsyncSamplesOptimizer(PolicyOptimizer):
                 num_gpus=num_gpus,
                 train_batch_size=train_batch_size,
                 grad_clip=grad_clip,
-                num_parallel_data_loaders=num_parallel_data_loaders)
+                num_parallel_data_loaders=num_parallel_data_loaders,
+                num_sgd_iter=num_sgd_iter)
         else:
             self.learner = LearnerThread(self.local_evaluator, num_sgd_iter, sgd_minibatch_size)
         self.learner.start()
