@@ -158,6 +158,8 @@ class VTracePolicyGraph(LearningRateSchedule, TFPolicyGraph):
                 prev_actions, prev_rewards = existing_inputs[:7]
             existing_state_in = existing_inputs[7:-1]
             existing_seq_lens = existing_inputs[-1]
+            value_targets = None  # TODO
+            adv_ph = None  # TODO
         else:
             if isinstance(action_space, gym.spaces.Discrete):
                 ac_size = action_space.n
