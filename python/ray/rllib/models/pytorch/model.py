@@ -30,7 +30,9 @@ class TorchModel(nn.Module):
         input_dict["obs"] = input_dict["obs"].float()  # TODO(ekl): avoid cast
         input_dict = _restore_original_dimensions(
             input_dict, self.obs_space, tensorlib=torch)
+        print("I", hidden_state)
         outputs, features, vf, h = self._forward(input_dict, hidden_state)
+        print("O", h)
         if type(hidden_state) is list or type(h) is list:
             raise DeprecationWarning(
                 "List-type RNN state output is deprecated. Please use a "
