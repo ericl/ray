@@ -60,7 +60,7 @@ class QMixLoss(nn.Module):
 
         # Calculate estimated Q-Values
         mac_out = []
-        h = [s.expand([B, self.n_agents, -1]) for s in self.model.state_init()]
+        h = self.model.state_init().expand([B, self.n_agents, -1])
         for t in range(T):
             q, h = _mac(self.model, obs[:, t], h)
             mac_out.append(q)
@@ -72,10 +72,7 @@ class QMixLoss(nn.Module):
 
         # Calculate the Q-Values necessary for the target
         target_mac_out = []
-        target_h = [
-            s.expand([B, self.n_agents, -1])
-            for s in self.target_model.state_init()
-        ]
+        target_h = self.target_model.state_init().expand([B, self.n_agents, -1])
         for t in range(T):
             target_q, target_h = _mac(self.target_model, obs[:, t], target_h)
             target_mac_out.append(target_q)
@@ -218,7 +215,7 @@ class QMixPolicyGraph(PolicyGraph):
         with th.no_grad():
             q_values, hiddens = _mac(
                 self.model, th.from_numpy(obs_batch),
-                [th.from_numpy(np.array(s)) for s in state_batches])
+                th.from_numpy(np.array(state_batches[0])))
             avail = th.from_numpy(action_mask).float()
             masked_q_values = q_values.clone()
             masked_q_values[avail == 0.0] = -float("inf")
@@ -229,7 +226,7 @@ class QMixPolicyGraph(PolicyGraph):
             actions = (pick_random * random_actions +
                        (1 - pick_random) * masked_q_values.max(dim=2)[1])
             actions = actions.numpy()
-            hiddens = [s.numpy() for s in hiddens]
+            hiddens = hiddens.numpy()
 
         return TupleActions(list(actions.transpose([1, 0]))), hiddens, {}
 
@@ -299,10 +296,7 @@ class QMixPolicyGraph(PolicyGraph):
 
     @override(PolicyGraph)
     def get_initial_state(self):
-        return [
-            s.expand([self.n_agents, -1]).numpy()
-            for s in self.model.state_init()
-        ]
+        return self.model.state_init().expand([self.n_agents, -1]).numpy()
 
     @override(PolicyGraph)
     def get_weights(self):
@@ -416,7 +410,6 @@ def _mac(model, obs, h):
     """
     B, n_agents = obs.size(0), obs.size(1)
     obs_flat = obs.reshape([B * n_agents, -1])
-    h_flat = [s.reshape([B * n_agents, -1]) for s in h]
+    h_flat = h.reshape([B * n_agents, -1])
     q_flat, _, _, h_flat = model.forward({"obs": obs_flat}, h_flat)
-    return q_flat.reshape(
-        [B, n_agents, -1]), [s.reshape([B, n_agents, -1]) for s in h_flat]
+    return q_flat.reshape([B, n_agents, -1]), h_flat.reshape([B, n_agents, -1])

@@ -31,13 +31,17 @@ class TorchModel(nn.Module):
         input_dict = _restore_original_dimensions(
             input_dict, self.obs_space, tensorlib=torch)
         outputs, features, vf, h = self._forward(input_dict, hidden_state)
+        if type(hidden_state) is list or type(h) is list:
+            raise DeprecationWarning(
+                "List-type RNN state output is deprecated. Please use a "
+                "single tensor value instead for hidden_state.")
         return outputs, features, vf, h
 
     def state_init(self):
-        """Returns a list of initial hidden state tensors, if any."""
-        return []
+        """Returns the initial hidden state tensor value, if any."""
+        return torch.zeros(0)
 
-    def _forward(self, input_dict, hidden_state):
+    def _forward(self, input_dict, hidden_state=None):
         """Forward pass for the model.
 
         Prefer implementing this instead of forward() directly for proper
@@ -47,12 +51,12 @@ class TorchModel(nn.Module):
             input_dict (dict): Dictionary of tensor inputs, commonly
                 including "obs", "prev_action", "prev_reward", each of shape
                 [BATCH_SIZE, ...].
-            hidden_state (list): List of hidden state tensors, each of shape
-                [BATCH_SIZE, h_size].
+            hidden_state (obj): Hidden state tensor, of shape
+                [BATCH_SIZE, h_size], or None.
 
         Returns:
             (outputs, feature_layer, values, state): Tensors of size
                 [BATCH_SIZE, num_outputs], [BATCH_SIZE, desired_feature_size],
-                [BATCH_SIZE], and [len(hidden_state), BATCH_SIZE, h_size].
+                [BATCH_SIZE], and [BATCH_SIZE, h_size].
         """
         raise NotImplementedError

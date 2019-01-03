@@ -5,10 +5,13 @@ from __future__ import print_function
 from collections import OrderedDict
 
 import gym
+import logging
 import tensorflow as tf
 
 from ray.rllib.models.misc import linear, normc_initializer
 from ray.rllib.models.preprocessors import get_preprocessor
+
+logger = logging.getLogger(__name__)
 
 
 class Model(object):
@@ -53,9 +56,9 @@ class Model(object):
         assert isinstance(input_dict, dict), input_dict
 
         # Default attribute values for the non-RNN case
-        self.state_init = []
-        self.state_in = state_in or []
-        self.state_out = []
+        self.state_init = None
+        self.state_in = state_in
+        self.state_out = None
         if seq_lens is not None:
             self.seq_lens = seq_lens
         else:
@@ -73,6 +76,20 @@ class Model(object):
         except NotImplementedError:
             self.outputs, self.last_layer = self._build_layers(
                 input_dict["obs"], num_outputs, options)
+
+        if (type(self.state_in) is list or type(self.state_in) is list
+                or type(self.state_out) is list):
+            logger.warn(
+                "List-type RNN state output is deprecated and will be "
+                "removed in a future release. Please use a single "
+                "tensor value instead for [state_init, state_in, state_out].")
+        # Support both list and single-tensor states during deprecation period.
+        if type(self.state_in) is not list:
+            self.state_in = [self.state_in]
+        if type(self.state_out) is not list:
+            self.state_out = [self.state_out]
+        if type(self.state_init) is not list:
+            self.state_init = [self.state_init]
 
         if options.get("free_log_std", False):
             log_std = tf.get_variable(

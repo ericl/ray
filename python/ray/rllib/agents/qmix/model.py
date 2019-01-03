@@ -24,15 +24,15 @@ class RNNModel(TorchModel):
     @override(TorchModel)
     def state_init(self):
         # make hidden states on same device as model
-        return [self.fc1.weight.new(1, self.rnn_hidden_dim).zero_().squeeze(0)]
+        return self.fc1.weight.new(1, self.rnn_hidden_dim).zero_().squeeze(0)
 
     @override(TorchModel)
     def _forward(self, input_dict, hidden_state):
         x = F.relu(self.fc1(input_dict["obs"]))
-        h_in = hidden_state[0].reshape(-1, self.rnn_hidden_dim)
+        h_in = hidden_state.reshape(-1, self.rnn_hidden_dim)
         h = self.rnn(x, h_in)
         q = self.fc2(h)
-        return q, h, None, [h]
+        return q, h, None, h
 
 
 def _get_size(obs_space):
