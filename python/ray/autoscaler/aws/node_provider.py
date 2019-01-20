@@ -136,7 +136,7 @@ class AWSNodeProvider(NodeProvider):
         with self.tag_cache_lock:
             d1 = self.tag_cache[node_id]
             d2 = self.tag_cache_pending.get(node_id, {})
-            return {**d1, **d2}
+            return dict(d1, **d2)
 
     def external_ip(self, node_id):
         return self._node(node_id).public_ip_address
