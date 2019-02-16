@@ -27,9 +27,9 @@ let dashboard = new Vue({
                 dashboard.tasks = resp.data.result.tasks;
                 dashboard.totals = resp.data.result.totals;
             }).catch(function() {
-                setTimeout(dashboard.updateNodeInfo, 500);
+//                setTimeout(dashboard.updateNodeInfo, 500);
 
-                dashboard.error = "request error"
+                dashboard.error = "node request error"
                 dashboard.clients = undefined;
                 dashboard.tasks = undefined;
                 dashboard.totals = undefined;
@@ -45,9 +45,9 @@ let dashboard = new Vue({
                 }
                 dashboard.ray_config = resp.data.result;
             }).catch(function() {
-                setTimeout(dashboard.updateRayConfig, 10000);
+//                setTimeout(dashboard.updateRayConfig, 10000);
 
-                dashboard.error = "request error"
+                dashboard.error = "config request error"
                 dashboard.ray_config = undefined;
             });
         },
