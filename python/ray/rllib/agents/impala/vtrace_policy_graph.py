@@ -68,10 +68,10 @@ class VTraceLoss(object):
 
         # Compute vtrace on the CPU for better perf.
         with tf.device("/cpu:0"):
-            self.vtrace_returns = vtrace.multi_from_logits(
+            self.vtrace_returns = vtrace.from_logits(
                 behaviour_policy_logits=behaviour_logits,
                 target_policy_logits=target_logits,
-                actions=tf.unstack(tf.cast(actions, tf.int32), axis=2),
+                actions=tf.cast(actions, tf.int32),
                 discounts=tf.to_float(~dones) * discount,
                 rewards=rewards,
                 values=values,
@@ -145,6 +145,7 @@ class VTracePolicyGraph(LearningRateSchedule, TFPolicyGraph):
         # Unpack behaviour logits
         unpacked_behaviour_logits = tf.split(
             behaviour_logits, output_hidden_shape, axis=1)
+        print("unpacked", unpacked_behaviour_logits)
 
         # Setup the policy
         dist_class, logit_dim = ModelCatalog.get_action_dist(
@@ -223,15 +224,15 @@ class VTracePolicyGraph(LearningRateSchedule, TFPolicyGraph):
 
         # Inputs are reshaped from [B * T] => [T - 1, B] for V-trace calc.
         self.loss = VTraceLoss(
-            actions=tf.expand_dims(make_time_major(actions, drop_last=True), axis=2),
+            actions=make_time_major(actions, drop_last=True),
             actions_logp=make_time_major(
                 action_dist.logp(actions), drop_last=True),
             actions_entropy=make_time_major(
                 action_dist.entropy(), drop_last=True),
             dones=make_time_major(dones, drop_last=True),
             behaviour_logits=make_time_major(
-                unpacked_behaviour_logits, drop_last=True),
-            target_logits=make_time_major(unpacked_outputs, drop_last=True),
+                behaviour_logits, drop_last=True),
+            target_logits=make_time_major(self.model.outputs, drop_last=True),
             discount=config["gamma"],
             rewards=make_time_major(rewards, drop_last=True),
             values=make_time_major(values, drop_last=True),
