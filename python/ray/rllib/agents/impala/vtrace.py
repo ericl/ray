@@ -201,6 +201,7 @@ def multi_from_logits(behaviour_policy_logits,
         target policy action probabilities (log \pi(a_t)).
   """
 
+    print("ACTIONS IN", actions)
     for i in range(len(behaviour_policy_logits)):
         behaviour_policy_logits[i] = tf.convert_to_tensor(
             behaviour_policy_logits[i], dtype=tf.float32)

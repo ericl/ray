@@ -216,12 +216,14 @@ class VTracePolicyGraph(LearningRateSchedule, TFPolicyGraph):
             mask = tf.ones_like(rewards, dtype=tf.bool)
 
         # Prepare actions for loss
-        loss_actions = actions if is_multidiscrete else tf.expand_dims(
-            actions, axis=1)
+#        loss_actions = actions if is_multidiscrete else tf.expand_dims(
+#            actions, axis=1)
+#        print("out", make_time_major(actions, drop_last=True))
+#        print("out", tf.expand_dims(make_time_major(actions, drop_last=True), axis=2))
 
         # Inputs are reshaped from [B * T] => [T - 1, B] for V-trace calc.
         self.loss = VTraceLoss(
-            actions=make_time_major(loss_actions, drop_last=True),
+            actions=tf.expand_dims(make_time_major(actions, drop_last=True), axis=2),
             actions_logp=make_time_major(
                 action_dist.logp(actions), drop_last=True),
             actions_entropy=make_time_major(
