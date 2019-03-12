@@ -65,6 +65,31 @@ def log_probs_from_logits_and_actions(policy_logits, actions):
     return -tf.nn.sparse_softmax_cross_entropy_with_logits(
         logits=policy_logits, labels=actions)
 
+def multi_from_logits(
+                behaviour_policy_logits,
+                target_policy_logits,
+                actions,
+                discounts,
+                rewards,
+                values,
+                bootstrap_value,
+                clip_rho_threshold=1.0,
+                clip_pg_rho_threshold=1.0):
+    behaviour_policy_logits = behaviour_policy_logits[0]
+    target_policy_logits = target_policy_logits[0]
+    actions = actions[0]
+
+    return from_logits(
+            behaviour_policy_logits,
+            target_policy_logits,
+            actions,
+            discounts,
+            rewards,
+            values,
+            bootstrap_value,
+            clip_rho_threshold=clip_rho_threshold,
+            clip_pg_rho_threshold=clip_pg_rho_threshold)
+
 
 def from_logits(behaviour_policy_logits,
                 target_policy_logits,
