@@ -92,7 +92,7 @@ if __name__ == "__main__":
     if args.smoke_test:
         ray.init(num_cpus=2)  # force pausing to happen for test
     else:
-        ray.init()
+        ray.init(num_cpus=1)
 
     pbt = PopulationBasedTraining(
         time_attr="training_iteration",
@@ -111,7 +111,7 @@ if __name__ == "__main__":
             "stop": {
                 "training_iteration": 2000,
             },
-            "num_samples": 4,
+            "num_samples": 8,
             "config": {
                 "lr": 0.0001,
             },

@@ -174,6 +174,7 @@ class PopulationBasedTraining(FIFOScheduler):
         self._resample_probability = resample_probability
         self._trial_state = {}
         self._custom_explore_fn = custom_explore_fn
+        self._checkpoints = []
 
         # Metrics
         self._num_checkpoints = 0
@@ -194,23 +195,74 @@ class PopulationBasedTraining(FIFOScheduler):
         state.last_perturbation_time = time
         lower_quantile, upper_quantile = self._quantiles()
 
-        if trial in upper_quantile:
-            state.last_checkpoint = trial_runner.trial_executor.save(
-                trial, Checkpoint.MEMORY)
-            self._num_checkpoints += 1
-        else:
-            state.last_checkpoint = None  # not a top trial
+#        if trial in upper_quantile:
+        state.last_checkpoint = trial_runner.trial_executor.save(
+            trial, Checkpoint.MEMORY)
+        self._num_checkpoints += 1
+        self._checkpoints.append(
+            (trial, trial.config,
+             "{} (score {})".format(trial, state.last_score),
+             state.last_score, state.last_checkpoint, time))
+#        else:
+#            state.last_checkpoint = None  # not a top trial
 
-        if trial in lower_quantile:
-            trial_to_clone = random.choice(upper_quantile)
-            assert trial is not trial_to_clone
-            self._exploit(trial_runner.trial_executor, trial, trial_to_clone)
+        if self._is_bad(trial, score, time):
+            print("is_bad", trial, score, time)
+            config, desc, _, checkpoint, t = self._get_good_checkpoint(time, trial)
+            self._do_exploit(
+                trial_runner.trial_executor, trial, config, desc, checkpoint, t)
 
-        for trial in trial_runner.get_trials():
-            if trial.status in [Trial.PENDING, Trial.PAUSED]:
-                return TrialScheduler.PAUSE  # yield time to other trials
+#        if trial in lower_quantile:
+#            trial_to_clone = random.choice(upper_quantile)
+#            assert trial is not trial_to_clone
+#            self._exploit(trial_runner.trial_executor, trial, trial_to_clone)
+
+#        for trial in trial_runner.get_trials():
+#            if trial.status in [Trial.PENDING, Trial.PAUSED]:
+#                return TrialScheduler.PAUSE  # yield time to other trials
 
         return TrialScheduler.CONTINUE
+
+        self._do_exploit(
+            trial_executor, trial,
+            trial_to_clone.config, desc, new_state.last_checkpoint,
+            new_state.last_perturbation_time)
+
+    def _is_bad(self, trial, score, time):
+        prev = {}
+        for (trial_, config, desc, score, chkpt, t) in self._checkpoints:
+            if t > time or trial == trial_:
+                continue
+            elif trial_ not in prev:
+                prev[trial_] = score
+            elif score > prev[trial_]:
+                prev[trial_] = score
+        trials = list(prev.items()) + [(trial, score)]
+        trials.sort(key=lambda t: t[1])
+        if len(trials) < 2:
+            return False
+        lower, upper = (
+            trials[:int(math.ceil(len(trials) * PBT_QUANTILE))],
+            trials[int(math.floor(-len(trials) * PBT_QUANTILE)):])
+        print("is bad", lower, trial)
+        return trial in [x[0] for x in lower]
+
+    def _get_good_checkpoint(self, time, trial):
+        prev = {}
+        for (trial_, config, desc, score, chkpt, t) in self._checkpoints:
+            if t > time or trial == trial_:
+                continue
+            elif trial_ not in prev:
+                prev[trial_] = (config, desc, score, chkpt, t)
+            elif score > prev[trial_][2]:
+                prev[trial_] = (config, desc, score, chkpt, t)
+        trials = list(prev.values())
+        trials.sort(key=lambda t: t[2])
+        print("sorted checkpoints", trials)
+        lower, upper = (
+            trials[:int(math.ceil(len(trials) * PBT_QUANTILE))],
+            trials[int(math.floor(-len(trials) * PBT_QUANTILE)):])
+        return random.choice(upper)
 
     def _exploit(self, trial_executor, trial, trial_to_clone):
         """Transfers perturbed state from trial_to_clone -> trial."""
@@ -221,30 +273,39 @@ class PopulationBasedTraining(FIFOScheduler):
             logger.info("[pbt]: no checkpoint for trial."
                         " Skip exploit for Trial {}".format(trial))
             return
-        new_config = explore(trial_to_clone.config, self._hyperparam_mutations,
+        desc = "{} (score {})".format(
+            trial_to_clone, new_state.last_score)
+        self._do_exploit(
+            trial_executor, trial,
+            trial_to_clone.config, desc, new_state.last_checkpoint,
+            new_state.last_perturbation_time)
+
+    def _do_exploit(
+            self, trial_executor, trial, config, checkpoint_desc, checkpoint, t):
+        trial_state = self._trial_state[trial]
+        new_config = explore(config, self._hyperparam_mutations,
                              self._resample_probability,
                              self._custom_explore_fn)
         logger.info("[exploit] transferring weights from trial "
-                    "{} (score {}) -> {} (score {})".format(
-                        trial_to_clone, new_state.last_score, trial,
-                        trial_state.last_score))
+                    "{} -> {} (score {})".format(
+                        checkpoint_desc, trial, trial_state.last_score))
         new_tag = make_experiment_tag(trial_state.orig_tag, new_config,
                                       self._hyperparam_mutations)
         reset_successful = trial_executor.reset_trial(trial, new_config,
                                                       new_tag)
         if reset_successful:
             trial_executor.restore(
-                trial, Checkpoint.from_object(new_state.last_checkpoint))
+                trial, Checkpoint.from_object(checkpoint))
         else:
             trial_executor.stop_trial(trial, stop_logger=False)
             trial.config = new_config
             trial.experiment_tag = new_tag
             trial_executor.start_trial(
-                trial, Checkpoint.from_object(new_state.last_checkpoint))
+                trial, Checkpoint.from_object(checkpoint))
 
         self._num_perturbations += 1
         # Transfer over the last perturbation time as well
-        trial_state.last_perturbation_time = new_state.last_perturbation_time
+        trial_state.last_perturbation_time = t
 
     def _quantiles(self):
         """Returns trials in the lower and upper `quantile` of the population.
