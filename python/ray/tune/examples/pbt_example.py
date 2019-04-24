@@ -115,7 +115,7 @@ if __name__ == "__main__":
             "stop": {
                 "training_iteration": 2000,
             },
-            "num_samples": 8,
+            "num_samples": 16,
             "config": {
                 "lr": 0.0001,
                 # note: this parameter is perturbed but has no effect on
