@@ -99,10 +99,14 @@ if __name__ == "__main__":
         reward_attr="mean_accuracy",
         perturbation_interval=20,
         hyperparam_mutations={
+            # distribution for resampling
             "lr": lambda: random.uniform(0.0001, 0.02),
+            # allow perturbations within this set of categorical values
+            "some_other_factor": [1, 2],
         })
 
-    run(PBTBenchmarkExample,
+    run(
+        PBTBenchmarkExample,
         name="pbt_test",
         scheduler=pbt,
         reuse_actors=True,
@@ -114,5 +118,8 @@ if __name__ == "__main__":
             "num_samples": 8,
             "config": {
                 "lr": 0.0001,
+                # note: this parameter is perturbed but has no effect on
+                # the model training in this example
+                "some_other_factor": 1,
             },
         })
