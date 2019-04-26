@@ -274,7 +274,7 @@ class RainbowTorchPolicyGraph(DQNPostProcessing, PolicyGraph):
         (weights * loss).mean().backward()
         nn.utils.clip_grad_norm(self.online_net.parameters(), self.max_gradient_norm)
         self.optimiser.step()
-        return {'td_error': loss.detach()}
+        return {'td_error': loss.detach().cpu().numpy()}
 
     @override(PolicyGraph)
     def get_weights(self):
