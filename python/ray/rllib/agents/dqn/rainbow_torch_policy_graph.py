@@ -149,7 +149,7 @@ def _postprocess_dqn(policy_graph, batch):
         td_errors = policy_graph.compute_td_error(
             batch[SampleBatch.CUR_OBS], batch[SampleBatch.ACTIONS],
             batch[SampleBatch.REWARDS], batch[SampleBatch.NEXT_OBS],
-            np.invert(batch[SampleBatch.DONES])).detach().numpy()
+            np.invert(batch[SampleBatch.DONES])).detach().cpu().numpy()
         new_priorities = (
                 np.abs(td_errors) + policy_graph.config["prioritized_replay_eps"])
         batch.data[PRIO_WEIGHTS] = new_priorities
