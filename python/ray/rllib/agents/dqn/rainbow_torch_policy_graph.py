@@ -286,10 +286,6 @@ class RainbowTorchPolicyGraph(DQNPostProcessing, PolicyGraph):
         with self.lock:
             self.online_net.load_state_dict(weights)
 
-    @override(PolicyGraph)
-    def get_initial_state(self):
-        return [s.numpy() for s in self.online_net.state_init()]
-
     def update_target(self):
         self.target_net.load_state_dict(self.online_net.state_dict())
 
