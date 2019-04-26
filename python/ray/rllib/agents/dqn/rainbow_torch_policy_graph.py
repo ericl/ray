@@ -295,6 +295,9 @@ class RainbowTorchPolicyGraph(DQNPostProcessing, PolicyGraph):
     def get_initial_state(self):
         return [s.numpy() for s in self._model.state_init()]
 
+    def update_target(self):
+        self.target_net.load_state_dict(self.online_net.state_dict())
+
     def set_epsilon(self, epsilon):
         self.cur_epsilon = epsilon
 
