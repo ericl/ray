@@ -1,24 +1,34 @@
 from __future__ import absolute_import
 
+import os
+
 from gym.spaces import Dict
 import math
+import torch
 import torch as th
 import torch.nn as nn
 import torch.nn.functional as F
+from ray.rllib import SampleBatch
 from torch.optim import RMSprop
+import numpy as np
 
 from ray.rllib.agents.dqn.dqn import DEFAULT_CONFIG as DQN_DEFAULT_CONFIG
 from ray.rllib.agents.qmix.model import _get_size
 from ray.rllib.evaluation.policy_graph import PolicyGraph
+from ray.rllib.evaluation.torch_policy_graph import TorchPolicyGraph
 from ray.rllib.utils.annotations import override
 from ray.rllib.models.catalog import ModelCatalog
+
+# Importance sampling weights for prioritized replay
+PRIO_WEIGHTS = "weights"
 
 
 class NoisyLinear(nn.Module):
     """
         todo: add reference to Kaixhin's Rainbow etc.
     """
-    def __init__(self, in_features, out_features, std_init=0.5):
+
+    def __init__(self, in_features, out_features, std_init=0.1):
         super(NoisyLinear, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
@@ -58,36 +68,38 @@ class NoisyLinear(nn.Module):
             return F.linear(input_, self.weight_mu, self.bias_mu)
 
 
-class RainbowTorchLoss(nn.Module):
+class RainbowModel(nn.Module):
     """
     todo: add reference to Kaixhin's Rainbow etc.
     """
-    def __init__(self, args, action_space):
-        super().__init__()
-        self.atoms = args.atoms
-        self.action_space = action_space
 
-        self.conv1 = nn.Conv2d(args.history_length, 32, 8, stride=4, padding=1)
+    def __init__(self, config, observation_space, action_space):
+        super().__init__()
+        self.atoms = config['num_atoms']
+        self.num_actions = action_space.n
+
+        self.conv1 = nn.Conv2d(observation_space.shape[2], 32, 8, stride=4, padding=1)
         self.conv2 = nn.Conv2d(32, 64, 4, stride=2)
         self.conv3 = nn.Conv2d(64, 64, 3)
-        self.fc_h_v = NoisyLinear(3136, args.hidden_size, std_init=args.noisy_std)
-        self.fc_h_a = NoisyLinear(3136, args.hidden_size, std_init=args.noisy_std)
-        self.fc_z_v = NoisyLinear(args.hidden_size, self.atoms, std_init=args.noisy_std)
-        self.fc_z_a = NoisyLinear(args.hidden_size, action_space * self.atoms, std_init=args.noisy_std)
+        self.fc_h_v = NoisyLinear(3136, config['hiddens'][0])
+        self.fc_h_a = NoisyLinear(3136, config['hiddens'][0])
+        self.fc_z_v = NoisyLinear(config['hiddens'][0], self.atoms)
+        self.fc_z_a = NoisyLinear(config['hiddens'][0], self.num_actions * self.atoms)
 
     def forward(self, x, log=False):
+        x = x.permute(0, 3, 1, 2)
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
         x = x.view(-1, 3136)
         v = self.fc_z_v(F.relu(self.fc_h_v(x)))  # Value stream
         a = self.fc_z_a(F.relu(self.fc_h_a(x)))  # Advantage stream
-        v, a = v.view(-1, 1, self.atoms), a.view(-1, self.action_space, self.atoms)
+        v, a = v.view(-1, 1, self.atoms), a.view(-1, self.num_actions, self.atoms)
         q = v + a - a.mean(1, keepdim=True)  # Combine streams
         if log:  # Use log softmax for numerical stability
-          q = F.log_softmax(q, dim=2)  # Log probabilities with action over second dimension
+            q = F.log_softmax(q, dim=2)  # Log probabilities with action over second dimension
         else:
-          q = F.softmax(q, dim=2)  # Probabilities with action over second dimension
+            q = F.softmax(q, dim=2)  # Probabilities with action over second dimension
         return q
 
     def reset_noise(self):
@@ -96,77 +108,188 @@ class RainbowTorchLoss(nn.Module):
                 module.reset_noise()
 
 
-class RainbowTorchPolicyGraph(PolicyGraph):
+def _adjust_nstep(n_step, gamma, obs, actions, rewards, new_obs, dones):
+    """Rewrites the given trajectory fragments to encode n-step rewards.
+
+    reward[i] = (
+        reward[i] * gamma**0 +
+        reward[i+1] * gamma**1 +
+        ... +
+        reward[i+n_step-1] * gamma**(n_step-1))
+
+    The ith new_obs is also adjusted to point to the (i+n_step-1)'th new obs.
+
+    At the end of the trajectory, n is truncated to fit in the traj length.
+    """
+
+    assert not any(dones[:-1]), "Unexpected done in middle of trajectory"
+
+    traj_length = len(rewards)
+    for i in range(traj_length):
+        for j in range(1, n_step):
+            if i + j < traj_length:
+                new_obs[i] = new_obs[i + j]
+                dones[i] = dones[i + j]
+                rewards[i] += gamma ** j * rewards[i + j]
+
+
+def _postprocess_dqn(policy_graph, batch):
+    # N-step Q adjustments
+    if policy_graph.config["n_step"] > 1:
+        _adjust_nstep(policy_graph.config["n_step"],
+                      policy_graph.config["gamma"], batch[SampleBatch.CUR_OBS],
+                      batch[SampleBatch.ACTIONS], batch[SampleBatch.REWARDS],
+                      batch[SampleBatch.NEXT_OBS], batch[SampleBatch.DONES])
+
+    if PRIO_WEIGHTS not in batch:
+        batch[PRIO_WEIGHTS] = np.ones_like(batch[SampleBatch.REWARDS])
+
+    # Prioritize on the worker side
+    if batch.count > 0 and policy_graph.config["worker_side_prioritization"]:
+        td_errors = policy_graph.compute_td_error(
+            batch[SampleBatch.CUR_OBS], batch[SampleBatch.ACTIONS],
+            batch[SampleBatch.REWARDS], batch[SampleBatch.NEXT_OBS],
+            np.invert(batch[SampleBatch.DONES])).detach().numpy()
+        new_priorities = (
+                np.abs(td_errors) + policy_graph.config["prioritized_replay_eps"])
+        batch.data[PRIO_WEIGHTS] = new_priorities
+
+    return batch
+
+
+class DQNPostProcessing(object):
+    """Implements n-step learning and param noise adjustments."""
+
+    @override(PolicyGraph)
+    def postprocess_trajectory(self,
+                               sample_batch,
+                               other_agent_batches=None,
+                               episode=None):
+        return _postprocess_dqn(self, sample_batch)
+
+
+class RainbowTorchPolicyGraph(DQNPostProcessing, PolicyGraph):
     def __init__(self, observation_space, action_space, config):
         _validate(config)
         config = dict(DQN_DEFAULT_CONFIG, **config)
         self.config = config
+
         self.observation_space = observation_space
         self.action_space = action_space
-        self.n_actions = action_space.spaces[0].n
-        self.cur_epsilon = 1.0
+        self.atoms = config['num_atoms']
+        self.Vmin = config['v_min']
+        self.Vmax = config['v_max']
+        self.support = torch.linspace(self.Vmin, self.Vmax, self.atoms)  # Support (range) of z
+        self.delta_z = (self.Vmax - self.Vmin) / (self.atoms - 1)
+        self.batch_size = config['sample_batch_size']
+        self.n = config['n_step']
+        self.discount = config['gamma']
+        self.priority_exponent = config['prioritized_replay_alpha']
+        self.max_gradient_norm = config['grad_norm_clipping']
 
-        agent_obs_space = observation_space.original_space.spaces[0]
-        if isinstance(agent_obs_space, Dict):
-            space_keys = set(agent_obs_space.spaces.keys())
-            if space_keys != {"obs", "action_mask"}:
-                raise ValueError(
-                    "Dict obs space for agent must have keyset "
-                    "['obs', 'action_mask'], got {}".format(space_keys))
-            mask_shape = tuple(agent_obs_space.spaces["action_mask"].shape)
-            if mask_shape != (self.n_actions, ):
-                raise ValueError("Action mask shape must be {}, got {}".format(
-                    (self.n_actions, ), mask_shape))
-            self.has_action_mask = True
-            self.obs_size = _get_size(agent_obs_space.spaces["obs"])
-            # The real agent obs space is nested inside the dict
-            agent_obs_space = agent_obs_space.spaces["obs"]
-        else:
-            self.has_action_mask = False
-            self.obs_size = _get_size(agent_obs_space)
+        self.online_net = RainbowModel(config, observation_space, self.action_space)
+        self.online_net.train()
 
-        self.model = ModelCatalog.get_torch_model(
-            agent_obs_space,
-            self.n_actions,
-            config["model"])
-
+        self.target_net = RainbowModel(config, observation_space, self.action_space)
+        self.update_target()
+        self.target_net.train()
+        for param in self.target_net.parameters():
+            param.requires_grad = False
+        self.device = (torch.device("cuda")
+                       if bool(os.environ.get("CUDA_VISIBLE_DEVICES", None))
+                       else torch.device("cpu"))
+        self.online_net.to(self.device)
+        self.target_net.to(self.device)
+        self.support = self.support.to(self.device)
         # Setup optimiser
-        self.params = list(self.model.parameters())
-        self.loss = RainbowTorchLoss(self.model, self.n_actions)
-        self.optimiser = RMSprop(
-            params=self.params,
-            lr=config["lr"],
-            alpha=config["optim_alpha"],
-            eps=config["optim_eps"])
+        self.optimiser = torch.optim.Adam(self.online_net.parameters(), lr=config['lr'], eps=config['adam_epsilon'])
+
+    def compute_td_error(self, states, actions, returns, next_states, nonterminals):
+        self.batch_size = actions.shape[0]
+        states = torch.from_numpy(np.array(states)).float().to(self.device)
+        next_states = torch.from_numpy(np.array(next_states)).float().to(self.device)
+        returns = torch.from_numpy(np.array(returns)).float().to(self.device)
+        nonterminals = torch.from_numpy(np.array(nonterminals).astype('float32')).to(self.device).unsqueeze(1)
+        actions = torch.from_numpy(np.array(actions)).to(self.device)
+        # Calculate current state probabilities (online network noise already sampled)
+        log_ps = self.online_net(states, log=True)  # Log probabilities log p(s_t, ·; θonline)
+        log_ps_a = log_ps[range(self.batch_size), actions]  # log p(s_t, a_t; θonline)
+
+        with torch.no_grad():
+            # Calculate nth next state probabilities
+            pns = self.online_net(next_states)  # Probabilities p(s_t+n, ·; θonline)
+            dns = self.support.expand_as(pns) * pns  # Distribution d_t+n = (z, p(s_t+n, ·; θonline))
+            argmax_indices_ns = dns.sum(2).argmax(
+                1)  # Perform argmax action selection using online network: argmax_a[(z, p(s_t+n, a; θonline))]
+            self.target_net.reset_noise()  # Sample new target net noise
+            pns = self.target_net(next_states)  # Probabilities p(s_t+n, ·; θtarget)
+            pns_a = pns[range(
+                self.batch_size), argmax_indices_ns]  # Double-Q probabilities p(s_t+n, argmax_a[(z, p(s_t+n, a; θonline))]; θtarget)
+
+            # Compute Tz (Bellman operator T applied to z)
+            Tz = returns.unsqueeze(1) + nonterminals * (self.discount ** self.n) * self.support.unsqueeze(
+                0)  # Tz = R^n + (γ^n)z (accounting for terminal states)
+            Tz = Tz.clamp(min=self.Vmin, max=self.Vmax)  # Clamp between supported values
+            # Compute L2 projection of Tz onto fixed support z
+            b = (Tz - self.Vmin) / self.delta_z  # b = (Tz - Vmin) / Δz
+            l, u = b.floor().to(torch.int64), b.ceil().to(torch.int64)
+            # Fix disappearing probability mass when l = b = u (b is int)
+            l[(u > 0) * (l == u)] -= 1
+            u[(l < (self.atoms - 1)) * (l == u)] += 1
+
+            # Distribute probability of Tz
+            m = states.new_zeros(self.batch_size, self.atoms)
+            offset = torch.linspace(0, ((self.batch_size - 1) * self.atoms), self.batch_size).unsqueeze(1).expand(
+                self.batch_size, self.atoms).to(actions)
+            m.view(-1).index_add_(0, (l + offset).view(-1),
+                                  (pns_a * (u.float() - b)).view(-1))  # m_l = m_l + p(s_t+n, a*)(u - b)
+            m.view(-1).index_add_(0, (u + offset).view(-1),
+                                  (pns_a * (b - l.float())).view(-1))  # m_u = m_u + p(s_t+n, a*)(b - l)
+
+        loss = -torch.sum(m * log_ps_a, 1)  # Cross-entropy loss (minimises DKL(m||p(s_t, a_t)))
+        return loss
 
     @override(PolicyGraph)
     def compute_actions(self,
                         obs_batch,
-                        state_batches,
+                        state_batches=None,
                         prev_action_batch=None,
                         prev_reward_batch=None,
                         info_batch=None,
                         episodes=None,
                         **kwargs):
-        pass  # todo
+        with torch.no_grad():
+            return [(self.online_net(
+                torch.from_numpy(np.array(obs_batch)).float().to(self.device)).data * self.support).sum(2).max(1)[1][
+                        0]], [], {}
 
     @override(PolicyGraph)
     def learn_on_batch(self, samples):
-        pass  # todo
+        self.optimiser.zero_grad()
+        loss = self.compute_td_error(samples[SampleBatch.CUR_OBS], samples[SampleBatch.ACTIONS],
+                                     samples[SampleBatch.REWARDS], samples[SampleBatch.NEXT_OBS],
+                                     np.invert(samples[SampleBatch.DONES]))
+        weights = torch.from_numpy(samples[PRIO_WEIGHTS]).float().to(self.device)
+        (weights * loss).mean().backward()
+        nn.utils.clip_grad_norm(self.online_net.parameters(), self.max_gradient_norm)
+        self.optimiser.step()
+        return {'td_error': loss.detach()}
 
     @override(PolicyGraph)
     def get_weights(self):
-        return {"model": self.model.state_dict()}
+        return {"model": self.online_net.state_dict()}
 
     @override(PolicyGraph)
     def set_weights(self, weights):
-        self.model.load_state_dict(weights["model"])
+        self.online_net.load_state_dict(weights["model"])
+
+    def update_target(self):
+        self.target_net.load_state_dict(self.online_net.state_dict())
+
+    def set_epsilon(self, epsilon):
+        self.cur_epsilon = epsilon
 
 
 def _validate(config):
-    if not hasattr(config, "optim_alpha"):
-        raise ValueError("Need to specify \"optim_alpha\" attribute of config, got: {}".format(config))
-    if not hasattr(config, "optim_eps"):
-        raise ValueError("Need to specify \"optim_eps\" attribute of config, got: {}".format(config))
-    if not hasattr(config, "model"):
-        raise ValueError("Need to specify \"model\" attribute of config, got: {}".format(config))
+    pass
+
