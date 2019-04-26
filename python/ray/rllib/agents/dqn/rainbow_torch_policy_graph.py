@@ -11,6 +11,7 @@ import torch.nn.functional as F
 from ray.rllib import SampleBatch
 from torch.optim import RMSprop
 import numpy as np
+from threading import Lock
 
 from ray.rllib.agents.dqn.dqn import DEFAULT_CONFIG as DQN_DEFAULT_CONFIG
 from ray.rllib.agents.qmix.model import _get_size
@@ -173,7 +174,7 @@ class RainbowTorchPolicyGraph(DQNPostProcessing, PolicyGraph):
         _validate(config)
         config = dict(DQN_DEFAULT_CONFIG, **config)
         self.config = config
-
+        self.lock = Lock()
         self.observation_space = observation_space
         self.action_space = action_space
         self.atoms = config['num_atoms']
@@ -206,11 +207,11 @@ class RainbowTorchPolicyGraph(DQNPostProcessing, PolicyGraph):
 
     def compute_td_error(self, states, actions, returns, next_states, nonterminals):
         self.batch_size = actions.shape[0]
-        states = torch.tensor(np.array(states)).float().to(self.device)
-        next_states = torch.tensor(np.array(next_states)).float().to(self.device)
-        returns = torch.tensor(np.array(returns)).float().to(self.device)
-        nonterminals = torch.tensor(np.array(nonterminals).astype('float32')).to(self.device).unsqueeze(1)
-        actions = torch.tensor(np.array(actions)).to(self.device)
+        states = torch.from_numpy(np.array(states)).float().to(self.device)
+        next_states = torch.from_numpy(np.array(next_states)).float().to(self.device)
+        returns = torch.from_numpy(np.array(returns)).float().to(self.device)
+        nonterminals = torch.from_numpy(np.array(nonterminals).astype('float32')).to(self.device).unsqueeze(1)
+        actions = torch.from_numpy(np.array(actions)).to(self.device)
         # Calculate current state probabilities (online network noise already sampled)
         log_ps = self.online_net(states, log=True)  # Log probabilities log p(s_t, ·; θonline)
         log_ps_a = log_ps[range(self.batch_size), actions]  # log p(s_t, a_t; θonline)
@@ -277,14 +278,22 @@ class RainbowTorchPolicyGraph(DQNPostProcessing, PolicyGraph):
 
     @override(PolicyGraph)
     def get_weights(self):
-        return {"model": self.online_net.state_dict()}
+        with self.lock:
+            return {k: v.cpu() for k, v in self._model.state_dict().items()}
+
+    @override(PolicyGraph)
+    def get_weights(self):
+        with self.lock:
+            return {k: v.cpu() for k, v in self._model.state_dict().items()}
 
     @override(PolicyGraph)
     def set_weights(self, weights):
-        self.online_net.load_state_dict(weights["model"])
+        with self.lock:
+            self._model.load_state_dict(weights)
 
-    def update_target(self):
-        self.target_net.load_state_dict(self.online_net.state_dict())
+    @override(PolicyGraph)
+    def get_initial_state(self):
+        return [s.numpy() for s in self._model.state_init()]
 
     def set_epsilon(self, epsilon):
         self.cur_epsilon = epsilon
