@@ -279,21 +279,16 @@ class RainbowTorchPolicyGraph(DQNPostProcessing, PolicyGraph):
     @override(PolicyGraph)
     def get_weights(self):
         with self.lock:
-            return {k: v.cpu() for k, v in self._model.state_dict().items()}
-
-    @override(PolicyGraph)
-    def get_weights(self):
-        with self.lock:
-            return {k: v.cpu() for k, v in self._model.state_dict().items()}
+            return {k: v.cpu() for k, v in self.online_net.state_dict().items()}
 
     @override(PolicyGraph)
     def set_weights(self, weights):
         with self.lock:
-            self._model.load_state_dict(weights)
+            self.online_net.load_state_dict(weights)
 
     @override(PolicyGraph)
     def get_initial_state(self):
-        return [s.numpy() for s in self._model.state_init()]
+        return [s.numpy() for s in self.online_net.state_init()]
 
     def update_target(self):
         self.target_net.load_state_dict(self.online_net.state_dict())
