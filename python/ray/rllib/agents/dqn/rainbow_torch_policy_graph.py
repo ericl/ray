@@ -206,11 +206,11 @@ class RainbowTorchPolicyGraph(DQNPostProcessing, PolicyGraph):
 
     def compute_td_error(self, states, actions, returns, next_states, nonterminals):
         self.batch_size = actions.shape[0]
-        states = torch.from_numpy(np.array(states)).float().to(self.device)
-        next_states = torch.from_numpy(np.array(next_states)).float().to(self.device)
-        returns = torch.from_numpy(np.array(returns)).float().to(self.device)
-        nonterminals = torch.from_numpy(np.array(nonterminals).astype('float32')).to(self.device).unsqueeze(1)
-        actions = torch.from_numpy(np.array(actions)).to(self.device)
+        states = torch.tensor(np.array(states)).float().to(self.device)
+        next_states = torch.tensor(np.array(next_states)).float().to(self.device)
+        returns = torch.tensor(np.array(returns)).float().to(self.device)
+        nonterminals = torch.tensor(np.array(nonterminals).astype('float32')).to(self.device).unsqueeze(1)
+        actions = torch.tensor(np.array(actions)).to(self.device)
         # Calculate current state probabilities (online network noise already sampled)
         log_ps = self.online_net(states, log=True)  # Log probabilities log p(s_t, ·; θonline)
         log_ps_a = log_ps[range(self.batch_size), actions]  # log p(s_t, a_t; θonline)
