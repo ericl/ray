@@ -260,7 +260,7 @@ class RainbowTorchPolicyGraph(DQNPostProcessing, PolicyGraph):
                         **kwargs):
         with torch.no_grad():
             return [(self.online_net(
-                torch.from_numpy(np.array(obs_batch)).float().to(self.device)).data * self.support).sum(2).max(1)[1][
+                torch.from_numpy(np.array(obs_batch)).float().to(self.device)).data * self.support).cpu().sum(2).max(1)[1][
                         0]], [], {}
 
     @override(PolicyGraph)
