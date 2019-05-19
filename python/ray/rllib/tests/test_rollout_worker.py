@@ -213,8 +213,7 @@ class TestRolloutWorker(unittest.TestCase):
                 "sample_batch_size": 5,
                 "num_envs_per_worker": 2,
             })
-        results = pg.optimizer.foreach_worker(
-            lambda ev: ev.sample_batch_size)
+        results = pg.optimizer.foreach_worker(lambda ev: ev.sample_batch_size)
         results2 = pg.optimizer.foreach_worker_with_index(
             lambda ev, i: (i, ev.sample_batch_size))
         results3 = pg.optimizer.foreach_worker(

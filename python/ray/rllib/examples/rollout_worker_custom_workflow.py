@@ -68,7 +68,7 @@ def training_workflow(config, reporter):
     policy = CustomPolicy(env.observation_space, env.action_space, {})
     workers = [
         RolloutWorker.as_remote().remote(lambda c: gym.make("CartPole-v0"),
-                                           CustomPolicy)
+                                         CustomPolicy)
         for _ in range(config["num_workers"])
     ]
 

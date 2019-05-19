@@ -12,8 +12,7 @@ from ray.rllib.agents.pg.pg_policy import PGTFPolicy
 from ray.rllib.agents.dqn.dqn_policy import DQNTFPolicy
 from ray.rllib.optimizers import (SyncSamplesOptimizer, SyncReplayOptimizer,
                                   AsyncGradientsOptimizer)
-from ray.rllib.tests.test_rollout_worker import (MockEnv, MockEnv2,
-                                                   MockPolicy)
+from ray.rllib.tests.test_rollout_worker import (MockEnv, MockEnv2, MockPolicy)
 from ray.rllib.evaluation.rollout_worker import RolloutWorker
 from ray.rllib.policy.policy import Policy
 from ray.rllib.evaluation.metrics import collect_metrics

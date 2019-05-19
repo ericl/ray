@@ -22,11 +22,7 @@ class IOContext(object):
     """
 
     @PublicAPI
-    def __init__(self,
-                 log_dir=None,
-                 config=None,
-                 worker_index=0,
-                 worker=None):
+    def __init__(self, log_dir=None, config=None, worker_index=0, worker=None):
         self.log_dir = log_dir or os.getcwd()
         self.config = config or {}
         self.worker_index = worker_index

@@ -13,9 +13,19 @@ from ray.rllib.evaluation.postprocessing import compute_advantages
 from ray.rllib.evaluation.metrics import collect_metrics
 
 __all__ = [
-    "EvaluatorInterface", "RolloutWorker", "PolicyGraph", "TFPolicyGraph",
-    "TorchPolicyGraph", "SampleBatch", "MultiAgentBatch", "SampleBatchBuilder",
-    "MultiAgentSampleBatchBuilder", "SyncSampler", "AsyncSampler",
-    "compute_advantages", "collect_metrics", "MultiAgentEpisode",
+    "EvaluatorInterface",
+    "RolloutWorker",
+    "PolicyGraph",
+    "TFPolicyGraph",
+    "TorchPolicyGraph",
+    "SampleBatch",
+    "MultiAgentBatch",
+    "SampleBatchBuilder",
+    "MultiAgentSampleBatchBuilder",
+    "SyncSampler",
+    "AsyncSampler",
+    "compute_advantages",
+    "collect_metrics",
+    "MultiAgentEpisode",
     "PolicyEvaluator",
 ]

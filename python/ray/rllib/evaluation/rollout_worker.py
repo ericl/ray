@@ -408,8 +408,9 @@ class RolloutWorker(EvaluatorInterface):
         self.output_writer = output_creator(self.io_context)
         assert isinstance(self.output_writer, OutputWriter), self.output_writer
 
-        logger.debug("Created rollout worker with env {} ({}), policies {}".format(
-            self.async_env, self.env, self.policy_map))
+        logger.debug(
+            "Created rollout worker with env {} ({}), policies {}".format(
+                self.async_env, self.env, self.policy_map))
 
     @override(EvaluatorInterface)
     def sample(self):
@@ -444,10 +445,7 @@ class RolloutWorker(EvaluatorInterface):
         batch = batches[0].concat_samples(batches)
 
         if self.callbacks.get("on_sample_end"):
-            self.callbacks["on_sample_end"]({
-                "worker": self,
-                "samples": batch
-            })
+            self.callbacks["on_sample_end"]({"worker": self, "samples": batch})
 
         # Always do writes prior to compression for consistency and to allow
         # for better compression inside the writer.

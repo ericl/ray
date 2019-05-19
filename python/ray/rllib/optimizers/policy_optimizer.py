@@ -21,34 +21,21 @@ class PolicyOptimizer(object):
     used for PPO. These optimizers are all pluggable, and it is possible
     to mix and match as needed.
 
-    In order for an algorithm to use an RLlib optimizer, it must implement
-    the RolloutWorker interface and pass a RolloutWorker class or set of
-    RolloutWorkers to its PolicyOptimizer of choice. The PolicyOptimizer
-    uses these Evaluators to sample from the environment and compute model
-    gradient updates.
-
     Attributes:
         config (dict): The JSON configuration passed to this optimizer.
-        local_evaluator (RolloutWorker): The embedded evaluator instance.
-        remote_evaluators (list): List of remote evaluator replicas, or [].
+        workers (WorkerSet): The set of rollout workers to use.
         num_steps_trained (int): Number of timesteps trained on so far.
         num_steps_sampled (int): Number of timesteps sampled so far.
-        evaluator_resources (dict): Optional resource requests to set for
-            evaluators created by this optimizer.
     """
 
     @DeveloperAPI
-    def __init__(self, local_evaluator, remote_evaluators=None):
+    def __init__(self, workers):
         """Create an optimizer instance.
 
         Args:
-            local_evaluator (Evaluator): Local evaluator instance, required.
-            remote_evaluators (list): A list of Ray actor handles to remote
-                evaluators instances. If empty, the optimizer should fall back
-                to using only the local evaluator.
+            workers (WorkerSet): The set of rollout workers to use.
         """
-        self.local_evaluator = local_evaluator
-        self.remote_evaluators = remote_evaluators or []
+        self.workers = workers
         self.episode_history = []
 
         # Counters that should be updated by sub-classes
@@ -100,23 +87,23 @@ class PolicyOptimizer(object):
     def collect_metrics(self,
                         timeout_seconds,
                         min_history=100,
-                        selected_evaluators=None):
-        """Returns evaluator and optimizer stats.
+                        selected_workers=None):
+        """Returns worker and optimizer stats.
 
         Arguments:
-            timeout_seconds (int): Max wait time for a evaluator before
-                dropping its results. This usually indicates a hung evaluator.
+            timeout_seconds (int): Max wait time for a worker before
+                dropping its results. This usually indicates a hung worker.
             min_history (int): Min history length to smooth results over.
-            selected_evaluators (list): Override the list of remote evaluators
+            selected_workers (list): Override the list of remote workers
                 to collect metrics from.
 
         Returns:
-            res (dict): A training result dict from evaluator metrics with
+            res (dict): A training result dict from worker metrics with
                 `info` replaced with stats from self.
         """
         episodes, num_dropped = collect_episodes(
-            self.local_evaluator,
-            selected_evaluators or self.remote_evaluators,
+            self.workers.local_worker(),
+            selected_workers or self.workers.remote_workers(),
             timeout_seconds=timeout_seconds)
         orig_episodes = list(episodes)
         missing = min_history - len(episodes)
@@ -130,31 +117,31 @@ class PolicyOptimizer(object):
         return res
 
     @DeveloperAPI
-    def reset(self, remote_evaluators):
-        """Called to change the set of remote evaluators being used."""
+    def reset(self, remote_workers):
+        """Called to change the set of remote workers being used."""
 
-        self.remote_evaluators = remote_evaluators
+        self.workers.reset(remote_workers)
 
     @DeveloperAPI
     def foreach_worker(self, func):
-        """Apply the given function to each evaluator instance."""
+        """Apply the given function to each worker instance."""
 
-        local_result = [func(self.local_evaluator)]
+        local_result = [func(self.workers.local_worker())]
         remote_results = ray_get_and_free(
-            [ev.apply.remote(func) for ev in self.remote_evaluators])
+            [w.apply.remote(func) for w in self.workers.remote_workers()])
         return local_result + remote_results
 
     @DeveloperAPI
     def foreach_worker_with_index(self, func):
-        """Apply the given function to each evaluator instance.
+        """Apply the given function to each worker instance.
 
         The index will be passed as the second arg to the given function.
         """
 
-        local_result = [func(self.local_evaluator, 0)]
+        local_result = [func(self.workers.local_worker(), 0)]
         remote_results = ray_get_and_free([
-            ev.apply.remote(func, i + 1)
-            for i, ev in enumerate(self.remote_evaluators)
+            w.apply.remote(func, i + 1)
+            for i, w in enumerate(self.workers.remote_workers())
         ])
         return local_result + remote_results
 
