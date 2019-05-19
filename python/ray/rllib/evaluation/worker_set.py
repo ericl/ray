@@ -11,6 +11,7 @@ from ray.rllib.evaluation.rollout_worker import RolloutWorker, \
 from ray.rllib.offline import NoopOutput, JsonReader, MixedInput, JsonWriter, \
     ShuffledInput
 from ray.rllib.utils import merge_dicts, try_import_tf
+from ray.rllib.utils.memory import ray_get_and_free
 
 tf = try_import_tf()
 
@@ -19,30 +20,36 @@ logger = logging.getLogger(__name__)
 
 @DeveloperAPI
 class WorkerSet(object):
-    """A set of one local RolloutWorker and zero or more remote ones."""
+    """Represents a set of RolloutWorkers.
+
+    There must be one local worker copy, and zero or more remote workers.
+    """
 
     def __init__(self,
                  env_creator,
                  policy,
                  trainer_config,
                  num_workers=0,
-                 logdir=None):
+                 logdir=None,
+                 _setup=True):
         self._env_creator = env_creator
         self._policy = policy
         self._remote_config = trainer_config
         self._num_workers = num_workers
         self._logdir = logdir
-        self._local_config = merge_dicts(
-            trainer_config,
-            {"tf_session_args": trainer_config["local_tf_session_args"]})
 
-        # Always create a local worker
-        self._local_worker = self._make_worker(RolloutWorker, env_creator,
-                                               policy, 0, self._local_config)
+        if _setup:
+            self._local_config = merge_dicts(
+                trainer_config,
+                {"tf_session_args": trainer_config["local_tf_session_args"]})
 
-        # Create a number of remote workers
-        self._remote_workers = []
-        self.add_workers(num_workers)
+            # Always create a local worker
+            self._local_worker = self._make_worker(
+                RolloutWorker, env_creator, policy, 0, self._local_config)
+
+            # Create a number of remote workers
+            self._remote_workers = []
+            self.add_workers(num_workers)
 
     def local_worker(self):
         """Return the local rollout worker."""
@@ -75,6 +82,36 @@ class WorkerSet(object):
         for w in self.remote_evaluators():
             w.stop.remote()
             w.__ray_terminate__.remote()
+
+    @DeveloperAPI
+    def foreach_worker(self, func):
+        """Apply the given function to each worker instance."""
+
+        local_result = [func(self.local_worker())]
+        remote_results = ray_get_and_free(
+            [w.apply.remote(func) for w in self.remote_workers()])
+        return local_result + remote_results
+
+    @DeveloperAPI
+    def foreach_worker_with_index(self, func):
+        """Apply the given function to each worker instance.
+
+        The index will be passed as the second arg to the given function.
+        """
+
+        local_result = [func(self.local_worker(), 0)]
+        remote_results = ray_get_and_free([
+            w.apply.remote(func, i + 1)
+            for i, w in enumerate(self.remote_workers())
+        ])
+        return local_result + remote_results
+
+    @staticmethod
+    def _from_existing(local_worker, remote_workers):
+        workers = WorkerSet(None, None, {}, _setup=False)
+        workers._local_worker = local_worker
+        workers._remote_workers = remote_workers
+        return workers
 
     def _make_worker(self, cls, env_creator, policy, worker_index, config):
         def session_creator():

@@ -182,9 +182,9 @@ For even finer-grained control over training, you can use RLlib's lower-level `b
 
 Accessing Policy State
 ~~~~~~~~~~~~~~~~~~~~~~
-It is common to need to access a trainer's internal state, e.g., to set or get internal weights. In RLlib trainer state is replicated across multiple *policy evaluators* (Ray actors) in the cluster. However, you can easily get and update this state between calls to ``train()`` via ``trainer.optimizer.foreach_worker()`` or ``trainer.optimizer.foreach_worker_with_index()``. These functions take a lambda function that is applied with the evaluator as an arg. You can also return values from these functions and those will be returned as a list.
+It is common to need to access a trainer's internal state, e.g., to set or get internal weights. In RLlib trainer state is replicated across multiple *rollout workers* (Ray actors) in the cluster. However, you can easily get and update this state between calls to ``train()`` via ``trainer.workers.foreach_worker()`` or ``trainer.workers.foreach_worker_with_index()``. These functions take a lambda function that is applied with the worker as an arg. You can also return values from these functions and those will be returned as a list.
 
-You can also access just the "master" copy of the trainer state through ``trainer.get_policy()`` or ``trainer.local_evaluator``, but note that updates here may not be immediately reflected in remote replicas if you have configured ``num_workers > 0``. For example, to access the weights of a local TF policy, you can run ``trainer.get_policy().get_weights()``. This is also equivalent to ``trainer.local_evaluator.policy_map["default_policy"].get_weights()``:
+You can also access just the "master" copy of the trainer state through ``trainer.get_policy()`` or ``trainer.workers.local_worker()``, but note that updates here may not be immediately reflected in remote replicas if you have configured ``num_workers > 0``. For example, to access the weights of a local TF policy, you can run ``trainer.get_policy().get_weights()``. This is also equivalent to ``trainer.workers.local_worker().policy_map["default_policy"].get_weights()``:
 
 .. code-block:: python
 
@@ -192,13 +192,13 @@ You can also access just the "master" copy of the trainer state through ``traine
     trainer.get_policy().get_weights()
 
     # Same as above
-    trainer.local_evaluator.policy_map["default_policy"].get_weights()
+    trainer.workers.local_worker().policy_map["default_policy"].get_weights()
 
-    # Get list of weights of each evaluator, including remote replicas
-    trainer.optimizer.foreach_worker(lambda ev: ev.get_policy().get_weights())
+    # Get list of weights of each worker, including remote replicas
+    trainer.workers.foreach_worker(lambda ev: ev.get_policy().get_weights())
 
     # Same as above
-    trainer.optimizer.foreach_worker_with_index(lambda ev, i: ev.get_policy().get_weights())
+    trainer.workers.foreach_worker_with_index(lambda ev, i: ev.get_policy().get_weights())
 
 Global Coordination
 ~~~~~~~~~~~~~~~~~~~
@@ -299,7 +299,7 @@ Approach 1: Use the Trainer API and update the environment between calls to ``tr
                 phase = 1
             else:
                 phase = 0
-            trainer.optimizer.foreach_worker(
+            trainer.workers.foreach_worker(
                 lambda ev: ev.foreach_env(
                     lambda env: env.set_phase(phase)))
 
@@ -333,7 +333,7 @@ Approach 2: Use the callbacks API to update the environment on new training resu
         else:
             phase = 0
         trainer = info["trainer"]
-        trainer.optimizer.foreach_worker(
+        trainer.workers.foreach_worker(
             lambda ev: ev.foreach_env(
                 lambda env: env.set_phase(phase)))
 

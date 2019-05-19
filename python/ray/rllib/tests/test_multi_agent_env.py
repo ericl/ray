@@ -16,6 +16,7 @@ from ray.rllib.tests.test_rollout_worker import (MockEnv, MockEnv2, MockPolicy)
 from ray.rllib.evaluation.rollout_worker import RolloutWorker
 from ray.rllib.policy.policy import Policy
 from ray.rllib.evaluation.metrics import collect_metrics
+from ray.rllib.evaluation.worker_set import WorkerSet
 from ray.rllib.env.base_env import _MultiAgentEnvToBaseEnv
 from ray.rllib.env.multi_agent_env import MultiAgentEnv
 from ray.tune.registry import register_env
@@ -586,7 +587,7 @@ class TestMultiAgentEnv(unittest.TestCase):
                 "p1": (PGTFPolicy, obs_space, act_space, {}),
                 "p2": (DQNTFPolicy, obs_space, act_space, dqn_config),
             }
-        ev = RolloutWorker(
+        worker = RolloutWorker(
             env_creator=lambda _: MultiCartpole(n),
             policy=policies,
             policy_mapping_fn=lambda agent_id: ["p1", "p2"][agent_id % 2],
@@ -596,7 +597,7 @@ class TestMultiAgentEnv(unittest.TestCase):
             def policy_mapper(agent_id):
                 return ["p1", "p2"][agent_id % 2]
 
-            remote_evs = [
+            remote_workers = [
                 RolloutWorker.as_remote().remote(
                     env_creator=lambda _: MultiCartpole(n),
                     policy=policies,
@@ -604,21 +605,22 @@ class TestMultiAgentEnv(unittest.TestCase):
                     batch_steps=50)
             ]
         else:
-            remote_evs = []
-        optimizer = optimizer_cls(ev, remote_evs)
+            remote_workers = []
+        workers = WorkerSet._from_existing(worker, remote_workers)
+        optimizer = optimizer_cls(workers)
         for i in range(200):
-            ev.foreach_policy(lambda p, _: p.set_epsilon(
+            worker.foreach_policy(lambda p, _: p.set_epsilon(
                 max(0.02, 1 - i * .02))
                               if isinstance(p, DQNTFPolicy) else None)
             optimizer.step()
-            result = collect_metrics(ev, remote_evs)
+            result = collect_metrics(worker, remote_workers)
             if i % 20 == 0:
 
                 def do_update(p):
                     if isinstance(p, DQNTFPolicy):
                         p.update_target()
 
-                ev.foreach_policy(lambda p, _: do_update(p))
+                worker.foreach_policy(lambda p, _: do_update(p))
                 print("Iter {}, rew {}".format(i,
                                                result["policy_reward_mean"]))
                 print("Total reward", result["episode_reward_mean"])
@@ -646,15 +648,16 @@ class TestMultiAgentEnv(unittest.TestCase):
             policies["pg_{}".format(i)] = (PGTFPolicy, obs_space, act_space,
                                            {})
         policy_ids = list(policies.keys())
-        ev = RolloutWorker(
+        worker = RolloutWorker(
             env_creator=lambda _: MultiCartpole(n),
             policy=policies,
             policy_mapping_fn=lambda agent_id: random.choice(policy_ids),
             batch_steps=100)
-        optimizer = SyncSamplesOptimizer(ev, [])
+        workers = WorkerSet._from_existing(worker, [])
+        optimizer = SyncSamplesOptimizer(workers)
         for i in range(100):
             optimizer.step()
-            result = collect_metrics(ev)
+            result = collect_metrics(worker)
             print("Iteration {}, rew {}".format(i,
                                                 result["policy_reward_mean"]))
             print("Total reward", result["episode_reward_mean"])

@@ -213,10 +213,10 @@ class TestRolloutWorker(unittest.TestCase):
                 "sample_batch_size": 5,
                 "num_envs_per_worker": 2,
             })
-        results = pg.optimizer.foreach_worker(lambda ev: ev.sample_batch_size)
-        results2 = pg.optimizer.foreach_worker_with_index(
+        results = pg.workers.foreach_worker(lambda ev: ev.sample_batch_size)
+        results2 = pg.workers.foreach_worker_with_index(
             lambda ev, i: (i, ev.sample_batch_size))
-        results3 = pg.optimizer.foreach_worker(
+        results3 = pg.workers.foreach_worker(
             lambda ev: ev.foreach_env(lambda env: 1))
         self.assertEqual(results, [10, 10, 10])
         self.assertEqual(results2, [(0, 10), (1, 10), (2, 10)])

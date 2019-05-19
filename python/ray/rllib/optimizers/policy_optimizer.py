@@ -6,7 +6,6 @@ import logging
 
 from ray.rllib.utils.annotations import DeveloperAPI
 from ray.rllib.evaluation.metrics import collect_episodes, summarize_episodes
-from ray.rllib.utils.memory import ray_get_and_free
 
 logger = logging.getLogger(__name__)
 
@@ -119,17 +118,12 @@ class PolicyOptimizer(object):
     @DeveloperAPI
     def reset(self, remote_workers):
         """Called to change the set of remote workers being used."""
-
         self.workers.reset(remote_workers)
 
     @DeveloperAPI
     def foreach_worker(self, func):
         """Apply the given function to each worker instance."""
-
-        local_result = [func(self.workers.local_worker())]
-        remote_results = ray_get_and_free(
-            [w.apply.remote(func) for w in self.workers.remote_workers()])
-        return local_result + remote_results
+        return self.workers.foreach_worker(func)
 
     @DeveloperAPI
     def foreach_worker_with_index(self, func):
@@ -137,13 +131,7 @@ class PolicyOptimizer(object):
 
         The index will be passed as the second arg to the given function.
         """
-
-        local_result = [func(self.workers.local_worker(), 0)]
-        remote_results = ray_get_and_free([
-            w.apply.remote(func, i + 1)
-            for i, w in enumerate(self.workers.remote_workers())
-        ])
-        return local_result + remote_results
+        return self.workers.foreach_worker_with_index(func)
 
     def foreach_evaluator(self, func):
         raise DeprecationWarning(
