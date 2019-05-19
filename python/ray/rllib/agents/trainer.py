@@ -70,8 +70,10 @@ COMMON_CONFIG = {
     # Arguments to pass to model. See models/catalog.py for a full list of the
     # available model options.
     "model": MODEL_DEFAULTS,
-    # Arguments to pass to the policy optimizer. These vary by optimizer.
+    # Arguments to pass to the Policy Optimizer. These vary by optimizer.
     "optimizer": {},
+    # Default learning rate of the Adam optimizer.
+    "lr": 0.0004,
 
     # === Environment ===
     # Discount factor of the MDP
