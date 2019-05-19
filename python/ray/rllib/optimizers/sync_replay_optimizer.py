@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 class SyncReplayOptimizer(PolicyOptimizer):
     """Variant of the local sync optimizer that supports replay (for DQN).
 
-    This optimizer requires that policy evaluators return an additional
+    This optimizer requires that rollout workers return an additional
     "td_error" array in the info return of compute_gradients(). This error
     term will be used for sample prioritization."""
 

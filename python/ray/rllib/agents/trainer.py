@@ -17,7 +17,7 @@ from ray.exceptions import RayError
 from ray.rllib.offline import NoopOutput, JsonReader, MixedInput, JsonWriter, \
     ShuffledInput
 from ray.rllib.models import MODEL_DEFAULTS
-from ray.rllib.evaluation.policy_evaluator import PolicyEvaluator, \
+from ray.rllib.evaluation.rollout_worker import RolloutWorker, \
     _validate_multiagent_config
 from ray.rllib.policy.sample_batch import DEFAULT_POLICY_ID
 from ray.rllib.evaluation.metrics import collect_metrics
@@ -223,7 +223,7 @@ COMMON_CONFIG = {
     # === Multiagent ===
     "multiagent": {
         # Map from policy ids to tuples of (policy_cls, obs_space,
-        # act_space, config). See policy_evaluator.py for more info.
+        # act_space, config). See rollout_worker.py for more info.
         "policies": {},
         # Function mapping agent ids to policy ids.
         "policy_mapping_fn": None,
@@ -610,7 +610,7 @@ class Trainer(Trainable):
         """Convenience method to return configured local evaluator."""
 
         return self._make_evaluator(
-            PolicyEvaluator,
+            RolloutWorker,
             env_creator,
             policy,
             0,
@@ -633,7 +633,7 @@ class Trainer(Trainable):
             "resources": self.config["custom_resources_per_worker"],
         }
 
-        cls = PolicyEvaluator.as_remote(**remote_args).remote
+        cls = RolloutWorker.as_remote(**remote_args).remote
 
         return [
             self._make_evaluator(cls, env_creator, policy, i + 1, self.config)

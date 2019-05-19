@@ -22,7 +22,7 @@ class Aggregator(object):
     as concatenating and decompressing sample batches.
 
     Attributes:
-        local_evaluator: local PolicyEvaluator copy
+        local_evaluator: local RolloutWorker copy
     """
 
     def iter_train_batches(self):

@@ -43,7 +43,7 @@ class AsyncReplayOptimizer(PolicyOptimizer):
         - batch replay: simplified mode where entire sample batches are
             replayed. This supports RNNs, but not prioritization.
 
-    This optimizer requires that policy evaluators return an additional
+    This optimizer requires that rollout workers return an additional
     "td_error" array in the info return of compute_gradients(). This error
     term will be used for sample prioritization."""
 

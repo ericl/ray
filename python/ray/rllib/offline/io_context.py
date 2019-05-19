@@ -18,7 +18,7 @@ class IOContext(object):
         config (dict): Configuration of the agent.
         worker_index (int): When there are multiple workers created, this
             uniquely identifies the current worker.
-        evaluator (PolicyEvaluator): policy evaluator object reference.
+        evaluator (RolloutWorker): rollout worker object reference.
     """
 
     @PublicAPI

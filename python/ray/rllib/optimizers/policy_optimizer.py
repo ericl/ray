@@ -22,14 +22,14 @@ class PolicyOptimizer(object):
     to mix and match as needed.
 
     In order for an algorithm to use an RLlib optimizer, it must implement
-    the PolicyEvaluator interface and pass a PolicyEvaluator class or set of
-    PolicyEvaluators to its PolicyOptimizer of choice. The PolicyOptimizer
+    the RolloutWorker interface and pass a RolloutWorker class or set of
+    RolloutWorkers to its PolicyOptimizer of choice. The PolicyOptimizer
     uses these Evaluators to sample from the environment and compute model
     gradient updates.
 
     Attributes:
         config (dict): The JSON configuration passed to this optimizer.
-        local_evaluator (PolicyEvaluator): The embedded evaluator instance.
+        local_evaluator (RolloutWorker): The embedded evaluator instance.
         remote_evaluators (list): List of remote evaluator replicas, or [].
         num_steps_trained (int): Number of timesteps trained on so far.
         num_steps_sampled (int): Number of timesteps sampled so far.
