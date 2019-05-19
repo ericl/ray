@@ -136,7 +136,7 @@ class PolicyOptimizer(object):
         self.remote_evaluators = remote_evaluators
 
     @DeveloperAPI
-    def foreach_evaluator(self, func):
+    def foreach_worker(self, func):
         """Apply the given function to each evaluator instance."""
 
         local_result = [func(self.local_evaluator)]
@@ -145,7 +145,7 @@ class PolicyOptimizer(object):
         return local_result + remote_results
 
     @DeveloperAPI
-    def foreach_evaluator_with_index(self, func):
+    def foreach_worker_with_index(self, func):
         """Apply the given function to each evaluator instance.
 
         The index will be passed as the second arg to the given function.
@@ -157,3 +157,12 @@ class PolicyOptimizer(object):
             for i, ev in enumerate(self.remote_evaluators)
         ])
         return local_result + remote_results
+
+    def foreach_evaluator(self, func):
+        raise DeprecationWarning(
+            "foreach_evaluator has been renamed to foreach_worker")
+
+    def foreach_evaluator_with_index(self, func):
+        raise DeprecationWarning(
+            "foreach_evaluator_with_index has been renamed to "
+            "foreach_worker_with_index")
