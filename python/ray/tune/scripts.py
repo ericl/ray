@@ -20,10 +20,34 @@ def cli():
     "-o",
     default=None,
     type=str,
-    help="Output information to a pickle file.")
-def list_trials(experiment_path, sort, output):
+    help="Select file to output information to.")
+@click.option(
+    "--filter",
+    "filter_op",
+    default=None,
+    type=str,
+    help="Select filter in the format '<column> <operator> <value>'.")
+@click.option(
+    "--columns",
+    default=None,
+    type=str,
+    help="Select columns to be displayed.")
+@click.option(
+    "--limit",
+    default=None,
+    type=int,
+    help="Select number of rows to display.")
+@click.option(
+    "--desc", default=False, type=bool, help="Sort ascending vs. descending.")
+def list_trials(experiment_path, sort, output, filter_op, columns, limit,
+                desc):
     """Lists trials in the directory subtree starting at the given path."""
-    commands.list_trials(experiment_path, sort, output)
+    if sort:
+        sort = sort.split(",")
+    if columns:
+        columns = columns.split(",")
+    commands.list_trials(experiment_path, sort, output, filter_op, columns,
+                         limit, desc)
 
 
 @cli.command()
@@ -35,10 +59,34 @@ def list_trials(experiment_path, sort, output):
     "-o",
     default=None,
     type=str,
-    help="Select filename to output information to.")
-def list_experiments(project_path, sort, output):
+    help="Select file to output information to.")
+@click.option(
+    "--filter",
+    "filter_op",
+    default=None,
+    type=str,
+    help="Select filter in the format '<column> <operator> <value>'.")
+@click.option(
+    "--columns",
+    default=None,
+    type=str,
+    help="Select columns to be displayed.")
+@click.option(
+    "--limit",
+    default=None,
+    type=int,
+    help="Select number of rows to display.")
+@click.option(
+    "--desc", default=False, type=bool, help="Sort ascending vs. descending.")
+def list_experiments(project_path, sort, output, filter_op, columns, limit,
+                     desc):
     """Lists experiments in the directory subtree."""
-    commands.list_experiments(project_path, sort, output)
+    if sort:
+        sort = sort.split(",")
+    if columns:
+        columns = columns.split(",")
+    commands.list_experiments(project_path, sort, output, filter_op, columns,
+                              limit, desc)
 
 
 @cli.command()

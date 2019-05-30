@@ -5,10 +5,12 @@ from __future__ import print_function
 import csv
 import json
 import logging
-import numpy as np
 import os
 import yaml
 import distutils.version
+import numbers
+
+import numpy as np
 
 import ray.cloudpickle as cloudpickle
 from ray.tune.log_sync import get_syncer
@@ -48,6 +50,11 @@ class Logger(object):
 
         raise NotImplementedError
 
+    def update_config(self, config):
+        """Updates the config for all loggers."""
+
+        pass
+
     def close(self):
         """Releases all resources used by this logger."""
 
@@ -66,17 +73,7 @@ class NoopLogger(Logger):
 
 class JsonLogger(Logger):
     def _init(self):
-        config_out = os.path.join(self.logdir, "params.json")
-        with open(config_out, "w") as f:
-            json.dump(
-                self.config,
-                f,
-                indent=2,
-                sort_keys=True,
-                cls=_SafeFallbackEncoder)
-        config_pkl = os.path.join(self.logdir, "params.pkl")
-        with open(config_pkl, "wb") as f:
-            cloudpickle.dump(self.config, f)
+        self.update_config(self.config)
         local_file = os.path.join(self.logdir, "result.json")
         self.local_out = open(local_file, "a")
 
@@ -93,6 +90,15 @@ class JsonLogger(Logger):
 
     def close(self):
         self.local_out.close()
+
+    def update_config(self, config):
+        self.config = config
+        config_out = os.path.join(self.logdir, "params.json")
+        with open(config_out, "w") as f:
+            json.dump(self.config, f, cls=_SafeFallbackEncoder)
+        config_pkl = os.path.join(self.logdir, "params.pkl")
+        with open(config_pkl, "wb") as f:
+            cloudpickle.dump(self.config, f)
 
 
 def to_tf_values(result, path):
@@ -116,10 +122,14 @@ class TFLogger(Logger):
     def _init(self):
         try:
             global tf, use_tf150_api
-            import tensorflow
-            tf = tensorflow
-            use_tf150_api = (distutils.version.LooseVersion(tf.VERSION) >=
-                             distutils.version.LooseVersion("1.5.0"))
+            if "RLLIB_TEST_NO_TF_IMPORT" in os.environ:
+                logger.warning("Not importing TensorFlow for test purposes")
+                tf = None
+            else:
+                import tensorflow
+                tf = tensorflow
+                use_tf150_api = (distutils.version.LooseVersion(tf.VERSION) >=
+                                 distutils.version.LooseVersion("1.5.0"))
         except ImportError:
             logger.warning("Couldn't import TensorFlow - "
                            "disabling TensorBoard logging.")
@@ -225,6 +235,10 @@ class UnifiedLogger(Logger):
         self._log_syncer.set_worker_ip(result.get(NODE_IP))
         self._log_syncer.sync_if_needed()
 
+    def update_config(self, config):
+        for _logger in self._loggers:
+            _logger.update_config(config)
+
     def close(self):
         for _logger in self._loggers:
             _logger.close()
@@ -255,11 +269,19 @@ class _SafeFallbackEncoder(json.JSONEncoder):
     def default(self, value):
         try:
             if np.isnan(value):
-                return None
-            if np.issubdtype(value, float):
-                return float(value)
-            if np.issubdtype(value, int):
+                return self.nan_str
+
+            if (type(value).__module__ == np.__name__
+                    and isinstance(value, np.ndarray)):
+                return value.tolist()
+
+            if issubclass(type(value), numbers.Integral):
                 return int(value)
+            if issubclass(type(value), numbers.Number):
+                return float(value)
+
+            return super(_SafeFallbackEncoder, self).default(value)
+
         except Exception:
             return str(value)  # give up, just stringify it (ok for logs)
 

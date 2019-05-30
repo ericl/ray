@@ -15,25 +15,11 @@ import redis
 
 import ray
 import ray.ray_constants as ray_constants
-from ray.utils import _random_string
 from ray.tests.cluster_utils import Cluster
-from ray.tests.utils import (relevant_errors, wait_for_errors)
-
-
-@pytest.fixture
-def ray_start_regular():
-    # Start the Ray processes.
-    ray.init(num_cpus=2)
-    yield None
-    # The code after the yield will run as teardown code.
-    ray.shutdown()
-
-
-@pytest.fixture
-def shutdown_only():
-    yield None
-    # The code after the yield will run as teardown code.
-    ray.shutdown()
+from ray.tests.utils import (
+    relevant_errors,
+    wait_for_errors,
+)
 
 
 def test_failed_task(ray_start_regular):
@@ -89,7 +75,7 @@ def test_failed_task(ray_start_regular):
         assert False
 
 
-def test_fail_importing_remote_function(ray_start_regular):
+def test_fail_importing_remote_function(ray_start_2_cpus):
     # Create the contents of a temporary Python file.
     temporary_python_file = """
 def temporary_helper_function():
@@ -109,7 +95,15 @@ def temporary_helper_function():
     # fail when it is unpickled.
     @ray.remote
     def g():
-        return module.temporary_python_file()
+        try:
+            module.temporary_python_file()
+        except Exception:
+            # This test is not concerned with the error from running this
+            # function. Only from unpickling the remote function.
+            pass
+
+    # Invoke the function so that the definition is exported.
+    g.remote()
 
     wait_for_errors(ray_constants.REGISTER_REMOTE_FUNCTION_PUSH_ERROR, 2)
     errors = relevant_errors(ray_constants.REGISTER_REMOTE_FUNCTION_PUSH_ERROR)
@@ -129,7 +123,7 @@ def temporary_helper_function():
     sys.path.pop(-1)
 
 
-def test_failed_function_to_run(ray_start_regular):
+def test_failed_function_to_run(ray_start_2_cpus):
     def f(worker):
         if ray.worker.global_worker.mode == ray.WORKER_MODE:
             raise Exception("Function to run failed.")
@@ -170,7 +164,7 @@ def temporary_helper_function():
             return 1
 
     # There should be no errors yet.
-    assert len(ray.error_info()) == 0
+    assert len(ray.errors()) == 0
 
     # Create an actor.
     foo = Foo.remote()
@@ -291,7 +285,7 @@ def test_incorrect_method_calls(ray_start_regular):
 def test_worker_raising_exception(ray_start_regular):
     @ray.remote
     def f():
-        ray.worker.global_worker._get_next_task_from_local_scheduler = None
+        ray.worker.global_worker._get_next_task_from_raylet = None
 
     # Running this task should cause the worker to raise an exception after
     # the task has successfully completed.
@@ -382,21 +376,14 @@ def test_actor_scope_or_intentionally_killed_message(ray_start_regular):
     a = Actor.remote()
     a.__ray_terminate__.remote()
     time.sleep(1)
-    assert len(ray.error_info()) == 0, (
-        "Should not have propogated an error - {}".format(ray.error_info()))
-
-
-@pytest.fixture
-def ray_start_object_store_memory():
-    # Start the Ray processes.
-    store_size = 10**6
-    ray.init(num_cpus=1, object_store_memory=store_size)
-    yield None
-    # The code after the yield will run as teardown code.
-    ray.shutdown()
+    assert len(
+        ray.errors()) == 0, ("Should not have propogated an error - {}".format(
+            ray.errors()))
 
 
 @pytest.mark.skip("This test does not work yet.")
+@pytest.mark.parametrize(
+    "ray_start_object_store_memory", [10**6], indirect=True)
 def test_put_error1(ray_start_object_store_memory):
     num_objects = 3
     object_size = 4 * 10**5
@@ -439,6 +426,8 @@ def test_put_error1(ray_start_object_store_memory):
 
 
 @pytest.mark.skip("This test does not work yet.")
+@pytest.mark.parametrize(
+    "ray_start_object_store_memory", [10**6], indirect=True)
 def test_put_error2(ray_start_object_store_memory):
     # This is the same as the previous test, but it calls ray.put directly.
     num_objects = 3
@@ -518,6 +507,9 @@ def test_export_large_objects(ray_start_regular):
     @ray.remote
     def f():
         large_object
+
+    # Invoke the function so that the definition is exported.
+    f.remote()
 
     # Make sure that a warning is generated.
     wait_for_errors(ray_constants.PICKLING_LARGE_OBJECT_PUSH_ERROR, 1)
@@ -608,8 +600,8 @@ def test_warning_for_too_many_nested_tasks(shutdown_only):
     wait_for_errors(ray_constants.WORKER_POOL_LARGE_ERROR, 1)
 
 
-def test_redis_module_failure(shutdown_only):
-    address_info = ray.init(num_cpus=1)
+def test_redis_module_failure(ray_start_regular):
+    address_info = ray_start_regular
     redis_address = address_info["redis_address"]
     redis_address = redis_address.split(":")
     assert len(redis_address) == 2
@@ -643,41 +635,26 @@ def test_redis_module_failure(shutdown_only):
                      -1)
     run_failure_test("Index is not a number.", "RAY.TABLE_APPEND", 1, 1, 2, 1,
                      b"a")
-    run_failure_test("The entry to remove doesn't exist.", "RAY.SET_REMOVE", 1,
-                     1, 3, 1)
     run_one_command("RAY.TABLE_APPEND", 1, 1, 2, 1)
     # It's okay to add duplicate entries.
     run_one_command("RAY.TABLE_APPEND", 1, 1, 2, 1)
     run_one_command("RAY.TABLE_APPEND", 1, 1, 2, 1, 0)
     run_one_command("RAY.TABLE_APPEND", 1, 1, 2, 1, 1)
     run_one_command("RAY.SET_ADD", 1, 1, 3, 1)
-
-
-@pytest.fixture
-def ray_start_two_nodes():
-    # Start the Ray processes.
-    cluster = Cluster()
-    for _ in range(2):
-        cluster.add_node(
-            num_cpus=0,
-            _internal_config=json.dumps({
-                "num_heartbeats_timeout": 40
-            }))
-    ray.init(redis_address=cluster.redis_address)
-
-    yield cluster
-    # The code after the yield will run as teardown code.
-    ray.shutdown()
-    cluster.shutdown()
+    # It's okey to add duplicate entries.
+    run_one_command("RAY.SET_ADD", 1, 1, 3, 1)
+    run_one_command("RAY.SET_REMOVE", 1, 1, 3, 1)
+    # It's okey to remove duplicate entries.
+    run_one_command("RAY.SET_REMOVE", 1, 1, 3, 1)
 
 
 # Note that this test will take at least 10 seconds because it must wait for
 # the monitor to detect enough missed heartbeats.
-def test_warning_for_dead_node(ray_start_two_nodes):
-    cluster = ray_start_two_nodes
+def test_warning_for_dead_node(ray_start_cluster_2_nodes):
+    cluster = ray_start_cluster_2_nodes
     cluster.wait_for_nodes()
 
-    client_ids = {item["ClientID"] for item in ray.global_state.client_table()}
+    client_ids = {item["ClientID"] for item in ray.nodes()}
 
     # Try to make sure that the monitor has received at least one heartbeat
     # from the node.
@@ -701,7 +678,7 @@ def test_warning_for_dead_node(ray_start_two_nodes):
 
 
 def test_raylet_crash_when_get(ray_start_regular):
-    nonexistent_id = ray.ObjectID(_random_string())
+    nonexistent_id = ray.ObjectID.from_random()
 
     def sleep_to_kill_raylet():
         # Don't kill raylet before default workers get connected.
@@ -736,7 +713,7 @@ def test_connect_with_disconnected_node(shutdown_only):
     # This node is killed by SIGTERM, ray_monitor will not mark it again.
     removing_node = cluster.add_node(num_cpus=0, _internal_config=config)
     cluster.remove_node(removing_node, allow_graceful=True)
-    with pytest.raises(Exception, match=('Timing out of wait.')):
+    with pytest.raises(Exception, match=("Timing out of wait.")):
         wait_for_errors(ray_constants.REMOVED_NODE_ERROR, 3, timeout=2)
     # There is no connection error to a dead node.
     info = relevant_errors(ray_constants.RAYLET_CONNECTION_ERROR)

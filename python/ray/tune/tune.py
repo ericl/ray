@@ -11,6 +11,7 @@ from ray.tune.error import TuneError
 from ray.tune.experiment import convert_to_experiment_list, Experiment
 from ray.tune.suggest import BasicVariantGenerator
 from ray.tune.trial import Trial, DEBUG_PRINT_INTERVAL
+from ray.tune.ray_trial_executor import RayTrialExecutor
 from ray.tune.log_sync import wait_for_log_sync
 from ray.tune.trial_runner import TrialRunner
 from ray.tune.schedulers import (HyperBandScheduler, AsyncHyperBandScheduler,
@@ -90,12 +91,13 @@ def run(run_or_experiment,
         queue_trials=False,
         reuse_actors=False,
         trial_executor=None,
-        raise_on_failed_trial=True):
+        raise_on_failed_trial=True,
+        ray_auto_init=True):
     """Executes training.
 
     Args:
         run_or_experiment (function|class|str|Experiment): If
-            function|class|str, this is the algorithm  or model to train.
+            function|class|str, this is the algorithm or model to train.
             This may refer to the name of a built-on algorithm
             (e.g. RLLib's DQN or PPO), a user-defined trainable
             function or class, or the string identifier of a
@@ -166,6 +168,9 @@ def run(run_or_experiment,
         trial_executor (TrialExecutor): Manage the execution of trials.
         raise_on_failed_trial (bool): Raise TuneError if there exists failed
             trial (of ERROR state) when the experiments complete.
+        ray_auto_init (bool): Automatically starts a local Ray cluster
+            if using a RayTrialExecutor (which is the default) and
+            if Ray is not initialized. Defaults to True.
 
     Returns:
         List of Trial objects.
@@ -187,13 +192,29 @@ def run(run_or_experiment,
                 }
             )
     """
+    trial_executor = trial_executor or RayTrialExecutor(
+        queue_trials=queue_trials,
+        reuse_actors=reuse_actors,
+        ray_auto_init=ray_auto_init)
     experiment = run_or_experiment
     if not isinstance(run_or_experiment, Experiment):
         experiment = Experiment(
-            name, run_or_experiment, stop, config, resources_per_trial,
-            num_samples, local_dir, upload_dir, trial_name_creator, loggers,
-            sync_function, checkpoint_freq, checkpoint_at_end, export_formats,
-            max_failures, restore)
+            name=name,
+            run=run_or_experiment,
+            stop=stop,
+            config=config,
+            resources_per_trial=resources_per_trial,
+            num_samples=num_samples,
+            local_dir=local_dir,
+            upload_dir=upload_dir,
+            trial_name_creator=trial_name_creator,
+            loggers=loggers,
+            sync_function=sync_function,
+            checkpoint_freq=checkpoint_freq,
+            checkpoint_at_end=checkpoint_at_end,
+            export_formats=export_formats,
+            max_failures=max_failures,
+            restore=restore)
     else:
         logger.debug("Ignoring some parameters passed into tune.run.")
 
@@ -217,14 +238,12 @@ def run(run_or_experiment,
         search_alg.add_configurations([experiment])
 
         runner = TrialRunner(
-            search_alg,
+            search_alg=search_alg,
             scheduler=scheduler,
             metadata_checkpoint_dir=checkpoint_dir,
             launch_web_server=with_server,
             server_port=server_port,
             verbose=bool(verbose > 1),
-            queue_trials=queue_trials,
-            reuse_actors=reuse_actors,
             trial_executor=trial_executor)
 
     if verbose:

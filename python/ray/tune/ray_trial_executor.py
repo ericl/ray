@@ -4,13 +4,14 @@ from __future__ import division
 from __future__ import print_function
 
 import logging
+import math
 import os
 import random
 import time
 import traceback
 
 import ray
-from ray.tune.error import TuneError, AbortTrialExecution
+from ray.tune.error import AbortTrialExecution
 from ray.tune.logger import NoopLogger
 from ray.tune.trial import Trial, Resources, Checkpoint
 from ray.tune.trial_executor import TrialExecutor
@@ -38,6 +39,7 @@ class RayTrialExecutor(TrialExecutor):
     def __init__(self,
                  queue_trials=False,
                  reuse_actors=False,
+                 ray_auto_init=False,
                  refresh_period=RESOURCE_REFRESH_PERIOD):
         super(RayTrialExecutor, self).__init__(queue_trials)
         self._running = {}
@@ -54,6 +56,12 @@ class RayTrialExecutor(TrialExecutor):
         self._refresh_period = refresh_period
         self._last_resource_refresh = float("-inf")
         self._last_nontrivial_wait = time.time()
+        if not ray.is_initialized() and ray_auto_init:
+            logger.info("Initializing Ray automatically."
+                        "For cluster usage or custom Ray initialization, "
+                        "call `ray.init(...)` before `tune.run`.")
+            ray.init()
+
         if ray.is_initialized():
             self._update_avail_resources()
 
@@ -96,7 +104,8 @@ class RayTrialExecutor(TrialExecutor):
             # Set the working dir in the remote process, for user file writes
             if not os.path.exists(remote_logdir):
                 os.makedirs(remote_logdir)
-            os.chdir(remote_logdir)
+            if not ray.worker._mode() == ray.worker.LOCAL_MODE:
+                os.chdir(remote_logdir)
             return NoopLogger(config, remote_logdir)
 
         # Logging for trials is handled centrally by TrialRunner, so
@@ -165,7 +174,7 @@ class RayTrialExecutor(TrialExecutor):
 
         try:
             trial.write_error_log(error_msg)
-            if hasattr(trial, 'runner') and trial.runner:
+            if hasattr(trial, "runner") and trial.runner:
                 if (not error and self._reuse_actors
                         and self._cached_actor is None):
                     logger.debug("Reusing actor for {}".format(trial.runner))
@@ -354,7 +363,7 @@ class RayTrialExecutor(TrialExecutor):
     def _update_avail_resources(self, num_retries=5):
         for i in range(num_retries):
             try:
-                resources = ray.global_state.cluster_resources()
+                resources = ray.cluster_resources()
             except Exception:
                 # TODO(rliaw): Remove this when local mode is fixed.
                 # https://github.com/ray-project/ray/issues/4147
@@ -362,17 +371,22 @@ class RayTrialExecutor(TrialExecutor):
                 resources = ray.services.check_and_update_resources(
                     None, None, None)
             if not resources:
-                logger.warning("Cluster resources not detected. Retrying...")
+                logger.warning(
+                    "Cluster resources not detected or are 0. Retrying...")
                 time.sleep(0.5)
 
-        if not resources or "CPU" not in resources:
-            raise TuneError("Cluster resources cannot be detected. "
-                            "You can resume this experiment by passing in "
-                            "`resume=True` to `run`.")
+        if not resources:
+            # NOTE: This hides the possibility that Ray may be waiting for
+            # clients to connect.
+            resources.setdefault("CPU", 0)
+            resources.setdefault("GPU", 0)
+            logger.warning("Cluster resources cannot be detected or are 0. "
+                           "You can resume this experiment by passing in "
+                           "`resume=True` to `run`.")
 
         resources = resources.copy()
-        num_cpus = resources.pop("CPU")
-        num_gpus = resources.pop("GPU")
+        num_cpus = resources.pop("CPU", 0)
+        num_gpus = resources.pop("GPU", 0)
         custom_resources = resources
 
         self._avail_resources = Resources(
@@ -469,9 +483,43 @@ class RayTrialExecutor(TrialExecutor):
         if storage == Checkpoint.MEMORY:
             trial._checkpoint.value = trial.runner.save_to_object.remote()
         else:
-            with warn_if_slow("save_to_disk"):
-                trial._checkpoint.value = ray.get(trial.runner.save.remote())
+            # Keeps only highest performing checkpoints if enabled
+            if trial.keep_checkpoints_num:
+                try:
+                    last_attr_val = trial.last_result[
+                        trial.checkpoint_score_attr]
+                    if (trial.compare_checkpoints(last_attr_val)
+                            and not math.isnan(last_attr_val)):
+                        trial.best_checkpoint_attr_value = last_attr_val
+                        self._checkpoint_and_erase(trial)
+                except KeyError:
+                    logger.warning(
+                        "Result dict has no key: {}. keep"
+                        "_checkpoints_num flag will not work".format(
+                            trial.checkpoint_score_attr))
+            else:
+                with warn_if_slow("save_to_disk"):
+                    trial._checkpoint.value = ray.get(
+                        trial.runner.save.remote())
+
         return trial._checkpoint.value
+
+    def _checkpoint_and_erase(self, trial):
+        """Checkpoints the model and erases old checkpoints
+            if needed.
+        Parameters
+        ----------
+            trial : trial to save
+        """
+
+        with warn_if_slow("save_to_disk"):
+            trial._checkpoint.value = ray.get(trial.runner.save.remote())
+
+        if len(trial.history) >= trial.keep_checkpoints_num:
+            ray.get(trial.runner.delete_checkpoint.remote(trial.history[-1]))
+            trial.history.pop()
+
+        trial.history.insert(0, trial._checkpoint.value)
 
     def restore(self, trial, checkpoint=None):
         """Restores training state from a given model checkpoint.

@@ -16,9 +16,8 @@ import ray.cloudpickle as pickle
 import ray.gcs_utils
 import ray.utils
 import ray.ray_constants as ray_constants
-from ray.services import get_ip_address, get_port
-from ray.utils import (binary_to_hex, binary_to_object_id, hex_to_binary,
-                       setup_logger)
+from ray.utils import (binary_to_hex, binary_to_object_id, binary_to_task_id,
+                       hex_to_binary, setup_logger)
 
 logger = logging.getLogger(__name__)
 
@@ -32,25 +31,22 @@ class Monitor(object):
 
     Attributes:
         redis: A connection to the Redis server.
-        subscribe_client: A pubsub client for the Redis server. This is used to
-            receive notifications about failed components.
+        primary_subscribe_client: A pubsub client for the Redis server.
+            This is used to receive notifications about failed components.
     """
 
     def __init__(self, redis_address, autoscaling_config, redis_password=None):
         # Initialize the Redis clients.
-        self.state = ray.experimental.state.GlobalState()
-        redis_ip_address = get_ip_address(args.redis_address)
-        redis_port = get_port(args.redis_address)
-        self.state._initialize_global_state(
-            redis_ip_address, redis_port, redis_password=redis_password)
+        ray.state.state._initialize_global_state(
+            args.redis_address, redis_password=redis_password)
         self.redis = ray.services.create_redis_client(
             redis_address, password=redis_password)
         # Setup subscriptions to the primary Redis server and the Redis shards.
         self.primary_subscribe_client = self.redis.pubsub(
             ignore_subscribe_messages=True)
-        # Keep a mapping from local scheduler client ID to IP address to use
+        # Keep a mapping from raylet client ID to IP address to use
         # for updating the load metrics.
-        self.local_scheduler_id_to_ip_map = {}
+        self.raylet_id_to_ip_map = {}
         self.load_metrics = LoadMetrics()
         if autoscaling_config:
             self.autoscaler = StandardAutoscaler(autoscaling_config,
@@ -115,7 +111,7 @@ class Monitor(object):
         for j in range(message.BatchLength()):
             heartbeat_message = message.Batch(j)
 
-            num_resources = heartbeat_message.ResourcesAvailableLabelLength()
+            num_resources = heartbeat_message.ResourcesTotalLabelLength()
             static_resources = {}
             dynamic_resources = {}
             for i in range(num_resources):
@@ -126,9 +122,9 @@ class Monitor(object):
                 static_resources[static] = (
                     heartbeat_message.ResourcesTotalCapacity(i))
 
-            # Update the load metrics for this local scheduler.
+            # Update the load metrics for this raylet.
             client_id = ray.utils.binary_to_hex(heartbeat_message.ClientId())
-            ip = self.local_scheduler_id_to_ip_map.get(client_id)
+            ip = self.raylet_id_to_ip_map.get(client_id)
             if ip:
                 self.load_metrics.update(ip, static_resources,
                                          dynamic_resources)
@@ -152,7 +148,7 @@ class Monitor(object):
         xray_object_table_prefix = (
             ray.gcs_utils.TablePrefix_OBJECT_string.encode("ascii"))
 
-        task_table_objects = self.state.task_table()
+        task_table_objects = ray.tasks()
         driver_id_hex = binary_to_hex(driver_id)
         driver_task_id_bins = set()
         for task_id_hex, task_info in task_table_objects.items():
@@ -164,7 +160,7 @@ class Monitor(object):
             driver_task_id_bins.add(hex_to_binary(task_id_hex))
 
         # Get objects associated with the driver.
-        object_table_objects = self.state.object_table()
+        object_table_objects = ray.objects()
         driver_object_id_bins = set()
         for object_id, _ in object_table_objects.items():
             task_id_bin = ray._raylet.compute_task_id(object_id).binary()
@@ -172,11 +168,15 @@ class Monitor(object):
                 driver_object_id_bins.add(object_id.binary())
 
         def to_shard_index(id_bin):
-            return binary_to_object_id(id_bin).redis_shard_hash() % len(
-                self.state.redis_clients)
+            if len(id_bin) == ray.TaskID.size():
+                return binary_to_task_id(id_bin).redis_shard_hash() % len(
+                    ray.state.state.redis_clients)
+            else:
+                return binary_to_object_id(id_bin).redis_shard_hash() % len(
+                    ray.state.state.redis_clients)
 
         # Form the redis keys to delete.
-        sharded_keys = [[] for _ in range(len(self.state.redis_clients))]
+        sharded_keys = [[] for _ in range(len(ray.state.state.redis_clients))]
         for task_id_bin in driver_task_id_bins:
             sharded_keys[to_shard_index(task_id_bin)].append(
                 xray_task_table_prefix + task_id_bin)
@@ -189,7 +189,7 @@ class Monitor(object):
             keys = sharded_keys[shard_index]
             if len(keys) == 0:
                 continue
-            redis = self.state.redis_clients[shard_index]
+            redis = ray.state.state.redis_clients[shard_index]
             num_deleted = redis.delete(*keys)
             logger.info("Monitor: "
                         "Removed {} dead redis entries of the "
@@ -243,7 +243,7 @@ class Monitor(object):
 
                 # Determine the appropriate message handler.
                 if channel == ray.gcs_utils.XRAY_HEARTBEAT_BATCH_CHANNEL:
-                    # Similar functionality as local scheduler info channel
+                    # Similar functionality as raylet info channel
                     message_handler = self.xray_heartbeat_batch_handler
                 elif channel == ray.gcs_utils.XRAY_DRIVER_CHANNEL:
                     # Handles driver death.
@@ -254,16 +254,15 @@ class Monitor(object):
                 # Call the handler.
                 message_handler(channel, data)
 
-    def update_local_scheduler_map(self):
-        local_schedulers = self.state.client_table()
-        self.local_scheduler_id_to_ip_map = {}
-        for local_scheduler_info in local_schedulers:
-            client_id = local_scheduler_info.get("DBClientID") or \
-                local_scheduler_info["ClientID"]
-            ip_address = (
-                local_scheduler_info.get("AuxAddress")
-                or local_scheduler_info["NodeManagerAddress"]).split(":")[0]
-            self.local_scheduler_id_to_ip_map[client_id] = ip_address
+    def update_raylet_map(self):
+        all_raylet_nodes = ray.nodes()
+        self.raylet_id_to_ip_map = {}
+        for raylet_info in all_raylet_nodes:
+            client_id = (raylet_info.get("DBClientID")
+                         or raylet_info["ClientID"])
+            ip_address = (raylet_info.get("AuxAddress")
+                          or raylet_info["NodeManagerAddress"]).split(":")[0]
+            self.raylet_id_to_ip_map[client_id] = ip_address
 
     def _maybe_flush_gcs(self):
         """Experimental: issue a flush request to the GCS.
@@ -311,9 +310,9 @@ class Monitor(object):
 
         # Handle messages from the subscription channels.
         while True:
-            # Update the mapping from local scheduler client ID to IP address.
+            # Update the mapping from raylet client ID to IP address.
             # This is only used to update the load metrics for the autoscaler.
-            self.update_local_scheduler_map()
+            self.update_raylet_map()
 
             # Process autoscaling actions
             if self.autoscaler:

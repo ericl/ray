@@ -41,7 +41,7 @@ def run_and_get_output(command):
         p = subprocess.Popen(command, stdout=tmp, stderr=tmp)
         if p.wait() != 0:
             raise RuntimeError("ray start did not terminate properly")
-        with open(tmp.name, 'r') as f:
+        with open(tmp.name, "r") as f:
             result = f.readlines()
             return "\n".join(result)
 
@@ -84,7 +84,7 @@ def run_string_as_driver_nonblocking(driver_script):
 
 
 def relevant_errors(error_type):
-    return [info for info in ray.error_info() if info["type"] == error_type]
+    return [info for info in ray.errors() if info["type"] == error_type]
 
 
 def wait_for_errors(error_type, num_errors, timeout=10):

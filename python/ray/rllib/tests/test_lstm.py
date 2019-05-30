@@ -6,16 +6,17 @@ import gym
 import numpy as np
 import pickle
 import unittest
-import tensorflow as tf
-import tensorflow.contrib.rnn as rnn
 
 import ray
-from ray.rllib.agents.ppo import PPOAgent
+from ray.rllib.agents.ppo import PPOTrainer
 from ray.rllib.models import ModelCatalog
 from ray.rllib.models.lstm import add_time_dimension, chop_into_sequences
 from ray.rllib.models.misc import linear, normc_initializer
 from ray.rllib.models.model import Model
 from ray.tune.registry import register_env
+from ray.rllib.utils import try_import_tf
+
+tf = try_import_tf()
 
 
 class LSTMUtilsTest(unittest.TestCase):
@@ -25,8 +26,9 @@ class LSTMUtilsTest(unittest.TestCase):
         f = [[101, 102, 103, 201, 202, 203, 204, 205],
              [[101], [102], [103], [201], [202], [203], [204], [205]]]
         s = [[209, 208, 207, 109, 108, 107, 106, 105]]
-        f_pad, s_init, seq_lens = chop_into_sequences(eps_ids, agent_ids, f, s,
-                                                      4)
+        f_pad, s_init, seq_lens = chop_into_sequences(eps_ids,
+                                                      np.ones_like(eps_ids),
+                                                      agent_ids, f, s, 4)
         self.assertEqual([f.tolist() for f in f_pad], [
             [101, 102, 103, 0, 201, 202, 203, 204, 205, 0, 0, 0],
             [[101], [102], [103], [0], [201], [202], [203], [204], [205], [0],
@@ -35,6 +37,17 @@ class LSTMUtilsTest(unittest.TestCase):
         self.assertEqual([s.tolist() for s in s_init], [[209, 109, 105]])
         self.assertEqual(seq_lens.tolist(), [3, 4, 1])
 
+    def testBatchId(self):
+        eps_ids = [1, 1, 1, 5, 5, 5, 5, 5]
+        batch_ids = [1, 1, 2, 2, 3, 3, 4, 4]
+        agent_ids = [1, 1, 1, 1, 1, 1, 1, 1]
+        f = [[101, 102, 103, 201, 202, 203, 204, 205],
+             [[101], [102], [103], [201], [202], [203], [204], [205]]]
+        s = [[209, 208, 207, 109, 108, 107, 106, 105]]
+        _, _, seq_lens = chop_into_sequences(eps_ids, batch_ids, agent_ids, f,
+                                             s, 4)
+        self.assertEqual(seq_lens.tolist(), [2, 1, 1, 2, 2])
+
     def testMultiAgent(self):
         eps_ids = [1, 1, 1, 5, 5, 5, 5, 5]
         agent_ids = [1, 1, 2, 1, 1, 2, 2, 3]
@@ -42,7 +55,13 @@ class LSTMUtilsTest(unittest.TestCase):
              [[101], [102], [103], [201], [202], [203], [204], [205]]]
         s = [[209, 208, 207, 109, 108, 107, 106, 105]]
         f_pad, s_init, seq_lens = chop_into_sequences(
-            eps_ids, agent_ids, f, s, 4, dynamic_max=False)
+            eps_ids,
+            np.ones_like(eps_ids),
+            agent_ids,
+            f,
+            s,
+            4,
+            dynamic_max=False)
         self.assertEqual(seq_lens.tolist(), [2, 1, 2, 2, 1])
         self.assertEqual(len(f_pad[0]), 20)
         self.assertEqual(len(s_init[0]), 5)
@@ -52,8 +71,9 @@ class LSTMUtilsTest(unittest.TestCase):
         agent_ids = [2, 2, 2]
         f = [[1, 1, 1]]
         s = [[1, 1, 1]]
-        f_pad, s_init, seq_lens = chop_into_sequences(eps_ids, agent_ids, f, s,
-                                                      4)
+        f_pad, s_init, seq_lens = chop_into_sequences(eps_ids,
+                                                      np.ones_like(eps_ids),
+                                                      agent_ids, f, s, 4)
         self.assertEqual([f.tolist() for f in f_pad], [[1, 0, 1, 1]])
         self.assertEqual([s.tolist() for s in s_init], [[1, 1]])
         self.assertEqual(seq_lens.tolist(), [1, 2])
@@ -85,7 +105,7 @@ class RNNSpyModel(Model):
         last_layer = add_time_dimension(features, self.seq_lens)
 
         # Setup the LSTM cell
-        lstm = rnn.BasicLSTMCell(cell_size, state_is_tuple=True)
+        lstm = tf.nn.rnn_cell.BasicLSTMCell(cell_size, state_is_tuple=True)
         self.state_init = [
             np.zeros(lstm.state_size.c, np.float32),
             np.zeros(lstm.state_size.h, np.float32)
@@ -102,7 +122,7 @@ class RNNSpyModel(Model):
         self.state_in = [c_in, h_in]
 
         # Setup LSTM outputs
-        state_in = rnn.LSTMStateTuple(c_in, h_in)
+        state_in = tf.nn.rnn_cell.LSTMStateTuple(c_in, h_in)
         lstm_out, lstm_state = tf.nn.dynamic_rnn(
             lstm,
             last_layer,
@@ -149,7 +169,7 @@ class RNNSequencing(unittest.TestCase):
     def testSimpleOptimizerSequencing(self):
         ModelCatalog.register_custom_model("rnn", RNNSpyModel)
         register_env("counter", lambda _: DebugCounterEnv())
-        ppo = PPOAgent(
+        ppo = PPOTrainer(
             env="counter",
             config={
                 "num_workers": 0,
@@ -205,7 +225,7 @@ class RNNSequencing(unittest.TestCase):
     def testMinibatchSequencing(self):
         ModelCatalog.register_custom_model("rnn", RNNSpyModel)
         register_env("counter", lambda _: DebugCounterEnv())
-        ppo = PPOAgent(
+        ppo = PPOTrainer(
             env="counter",
             config={
                 "num_workers": 0,

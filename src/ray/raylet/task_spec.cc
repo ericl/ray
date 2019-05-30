@@ -56,6 +56,10 @@ TaskSpecification::TaskSpecification(const std::string &string) {
   AssignSpecification(reinterpret_cast<const uint8_t *>(string.data()), string.size());
 }
 
+TaskSpecification::TaskSpecification(const uint8_t *spec, size_t spec_size) {
+  AssignSpecification(spec, spec_size);
+}
+
 TaskSpecification::TaskSpecification(
     const DriverID &driver_id, const TaskID &parent_task_id, int64_t parent_counter,
     const std::vector<std::shared_ptr<TaskArgument>> &task_arguments, int64_t num_returns,
@@ -88,20 +92,14 @@ TaskSpecification::TaskSpecification(
     arguments.push_back(argument->ToFlatbuffer(fbb));
   }
 
-  // Generate return ids.
-  std::vector<ray::ObjectID> returns;
-  for (int64_t i = 1; i < num_returns + 1; ++i) {
-    returns.push_back(ComputeReturnId(task_id, i));
-  }
-
   // Serialize the TaskSpecification.
   auto spec = CreateTaskInfo(
       fbb, to_flatbuf(fbb, driver_id), to_flatbuf(fbb, task_id),
       to_flatbuf(fbb, parent_task_id), parent_counter, to_flatbuf(fbb, actor_creation_id),
       to_flatbuf(fbb, actor_creation_dummy_object_id), max_actor_reconstructions,
       to_flatbuf(fbb, actor_id), to_flatbuf(fbb, actor_handle_id), actor_counter,
-      ids_to_flatbuf(fbb, new_actor_handles), fbb.CreateVector(arguments),
-      ids_to_flatbuf(fbb, returns), map_to_flatbuf(fbb, required_resources),
+      ids_to_flatbuf(fbb, new_actor_handles), fbb.CreateVector(arguments), num_returns,
+      map_to_flatbuf(fbb, required_resources),
       map_to_flatbuf(fbb, required_placement_resources), language,
       string_vec_to_flatbuf(fbb, function_descriptor));
   fbb.Finish(spec);
@@ -163,12 +161,12 @@ int64_t TaskSpecification::NumArgs() const {
 
 int64_t TaskSpecification::NumReturns() const {
   auto message = flatbuffers::GetRoot<TaskInfo>(spec_.data());
-  return (message->returns()->size() / kUniqueIDSize);
+  return message->num_returns();
 }
 
 ObjectID TaskSpecification::ReturnId(int64_t return_index) const {
   auto message = flatbuffers::GetRoot<TaskInfo>(spec_.data());
-  return ids_from_flatbuf<ObjectID>(*message->returns())[return_index];
+  return ObjectID::for_task_return(TaskId(), return_index + 1);
 }
 
 bool TaskSpecification::ArgByRef(int64_t arg_index) const {
@@ -197,13 +195,6 @@ const uint8_t *TaskSpecification::ArgVal(int64_t arg_index) const {
 size_t TaskSpecification::ArgValLength(int64_t arg_index) const {
   auto message = flatbuffers::GetRoot<TaskInfo>(spec_.data());
   return message->args()->Get(arg_index)->data()->size();
-}
-
-double TaskSpecification::GetRequiredResource(const std::string &resource_name) const {
-  RAY_CHECK(required_resources_.GetResourceMap().empty() == false);
-  auto it = required_resources_.GetResourceMap().find(resource_name);
-  RAY_CHECK(it != required_resources_.GetResourceMap().end());
-  return it->second;
 }
 
 const ResourceSet TaskSpecification::GetRequiredResources() const {

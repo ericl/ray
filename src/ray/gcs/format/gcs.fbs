@@ -39,6 +39,14 @@ enum TablePubsub:int {
   DRIVER,
 }
 
+// Enum for the entry type in the ClientTable
+enum EntryType:int {
+  INSERTION = 0,
+  DELETION,
+  RES_CREATEUPDATE,
+  RES_DELETE,
+}
+
 table Arg {
   // Object ID for pass-by-reference arguments. Normally there is only one
   // object ID in this list which represents the object that is being passed.
@@ -81,9 +89,8 @@ table TaskInfo {
   new_actor_handles: string;
   // Task arguments.
   args: [Arg];
-  // Object IDs of return values. This is a long string that concatenate
-  // all of the return object IDs of this task.
-  returns: string;
+  // Number of return objects.
+  num_returns: int;
   // The required_resources vector indicates the quantities of the different
   // resources required by this task.
   required_resources: [ResourcePair];
@@ -96,8 +103,6 @@ table TaskInfo {
   // uniquely describe a function.
   // For a Python function, it should be: [module_name, class_name, function_name]
   // For a Java function, it should be: [class_name, method_name, type_descriptor]
-  // TODO(hchen): after changing Python worker to use function_descriptor,
-  // function_id can be removed.
   function_descriptor: [string];
 }
 
@@ -153,11 +158,11 @@ enum SchedulingState:int {
 table TaskTableData {
   // The state of the task.
   scheduling_state: SchedulingState;
-  // A local scheduler ID.
-  scheduler_id: string;
+  // A raylet ID.
+  raylet_id: string;
   // A string of bytes representing the task's TaskExecutionDependencies.
   execution_dependencies: string;
-  // The number of times the task was spilled back by local schedulers.
+  // The number of times the task was spilled back by raylets.
   spillback_count: long;
   // A string of bytes representing the task specification.
   task_info: string;
@@ -166,7 +171,7 @@ table TaskTableData {
 }
 
 table TaskTableTestAndUpdate {
-  test_scheduler_id: string;
+  test_raylet_id: string;
   test_state_bitmask: SchedulingState;
   update_state: SchedulingState;
 }
@@ -204,8 +209,8 @@ table ActorTableData {
 }
 
 table ErrorTableData {
-  // The ID of the job that the error is for.
-  job_id: string;
+  // The ID of the driver that the error is for.
+  driver_id: string;
   // The type of the error.
   type: string;
   // The error message.
@@ -269,9 +274,8 @@ table ClientTableData {
   // The port at which the client's object manager is listening for TCP
   // connections from other object managers.
   object_manager_port: int;
-  // True if the message is about the addition of a client and false if it is
-  // about the deletion of a client.
-  is_insertion: bool;
+  // Enum to store the entry type in the log
+  entry_type: EntryType = INSERTION;
   resources_total_label: [string];
   resources_total_capacity: [double];
 }

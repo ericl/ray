@@ -12,13 +12,13 @@ import org.ray.api.exception.RayActorException;
 import org.ray.api.exception.RayException;
 import org.ray.api.exception.RayWorkerException;
 import org.ray.api.exception.UnreconstructableException;
-import org.ray.api.id.UniqueId;
+import org.ray.api.id.ObjectId;
 import org.ray.runtime.AbstractRayRuntime;
 import org.ray.runtime.RayDevRuntime;
 import org.ray.runtime.config.RunMode;
 import org.ray.runtime.generated.ErrorType;
+import org.ray.runtime.util.IdUtil;
 import org.ray.runtime.util.Serializer;
-import org.ray.runtime.util.UniqueIdUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,6 +35,8 @@ public class ObjectStoreProxy {
       .getBytes();
   private static final byte[] UNRECONSTRUCTABLE_EXCEPTION_META = String
       .valueOf(ErrorType.OBJECT_UNRECONSTRUCTABLE).getBytes();
+
+  private static final byte[] RAW_TYPE_META = "RAW".getBytes();
 
   private final AbstractRayRuntime runtime;
 
@@ -59,7 +61,7 @@ public class ObjectStoreProxy {
    * @param <T> Type of the object.
    * @return The GetResult object.
    */
-  public <T> GetResult<T> get(UniqueId id, int timeoutMs) {
+  public <T> GetResult<T> get(ObjectId id, int timeoutMs) {
     List<GetResult<T>> list = get(ImmutableList.of(id), timeoutMs);
     return list.get(0);
   }
@@ -72,8 +74,8 @@ public class ObjectStoreProxy {
    * @param <T> Type of these objects.
    * @return A list of GetResult objects.
    */
-  public <T> List<GetResult<T>> get(List<UniqueId> ids, int timeoutMs) {
-    byte[][] binaryIds = UniqueIdUtil.getIdBytes(ids);
+  public <T> List<GetResult<T>> get(List<ObjectId> ids, int timeoutMs) {
+    byte[][] binaryIds = IdUtil.getIdBytes(ids);
     List<ObjectStoreData> dataAndMetaList = objectStore.get().get(binaryIds, timeoutMs);
 
     List<GetResult<T>> results = new ArrayList<>();
@@ -83,9 +85,8 @@ public class ObjectStoreProxy {
 
       GetResult<T> result;
       if (meta != null) {
-        // If meta is not null, deserialize the exception.
-        RayException exception = deserializeRayExceptionFromMeta(meta, ids.get(i));
-        result = new GetResult<>(true, null, exception);
+        // If meta is not null, deserialize the object from meta.
+        result = deserializeFromMeta(meta, data, ids.get(i));
       } else if (data != null) {
         // If data is not null, deserialize the Java object.
         Object object = Serializer.decode(data, runtime.getWorkerContext().getCurrentClassLoader());
@@ -112,13 +113,16 @@ public class ObjectStoreProxy {
     return results;
   }
 
-  private RayException deserializeRayExceptionFromMeta(byte[] meta, UniqueId objectId) {
-    if (Arrays.equals(meta, WORKER_EXCEPTION_META)) {
-      return RayWorkerException.INSTANCE;
+  @SuppressWarnings("unchecked")
+  private <T> GetResult<T> deserializeFromMeta(byte[] meta, byte[] data, ObjectId objectId) {
+    if (Arrays.equals(meta, RAW_TYPE_META)) {
+      return (GetResult<T>) new GetResult<>(true, data, null);
+    } else if (Arrays.equals(meta, WORKER_EXCEPTION_META)) {
+      return new GetResult<>(true, null, RayWorkerException.INSTANCE);
     } else if (Arrays.equals(meta, ACTOR_EXCEPTION_META)) {
-      return RayActorException.INSTANCE;
+      return new GetResult<>(true, null, RayActorException.INSTANCE);
     } else if (Arrays.equals(meta, UNRECONSTRUCTABLE_EXCEPTION_META)) {
-      return new UnreconstructableException(objectId);
+      return new GetResult<>(true, null, new UnreconstructableException(objectId));
     }
     throw new IllegalArgumentException("Unrecognized metadata " + Arrays.toString(meta));
   }
@@ -129,9 +133,15 @@ public class ObjectStoreProxy {
    * @param id Id of the object.
    * @param object The object to put.
    */
-  public void put(UniqueId id, Object object) {
+  public void put(ObjectId id, Object object) {
     try {
-      objectStore.get().put(id.getBytes(), Serializer.encode(object), null);
+      if (object instanceof byte[]) {
+        // If the object is a byte array, skip serializing it and use a special metadata to
+        // indicate it's raw binary. So that this object can also be read by Python.
+        objectStore.get().put(id.getBytes(), (byte[]) object, RAW_TYPE_META);
+      } else {
+        objectStore.get().put(id.getBytes(), Serializer.encode(object), null);
+      }
     } catch (DuplicateObjectException e) {
       LOGGER.warn(e.getMessage());
     }
@@ -143,7 +153,7 @@ public class ObjectStoreProxy {
    * @param id Id of the object.
    * @param serializedObject The serialized object to put.
    */
-  public void putSerialized(UniqueId id, byte[] serializedObject) {
+  public void putSerialized(ObjectId id, byte[] serializedObject) {
     try {
       objectStore.get().put(id.getBytes(), serializedObject, null);
     } catch (DuplicateObjectException e) {

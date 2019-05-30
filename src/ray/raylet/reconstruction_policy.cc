@@ -1,5 +1,7 @@
 #include "reconstruction_policy.h"
 
+#include "ray/stats/stats.h"
+
 namespace ray {
 
 namespace raylet {
@@ -50,7 +52,7 @@ void ReconstructionPolicy::SetTaskTimeout(
             // required by the task are no longer needed soon after.  If the
             // task is still required after this initial period, then we now
             // subscribe to task lease notifications.
-            RAY_CHECK_OK(task_lease_pubsub_.RequestNotifications(JobID::nil(), task_id,
+            RAY_CHECK_OK(task_lease_pubsub_.RequestNotifications(DriverID::nil(), task_id,
                                                                  client_id_));
             it->second.subscribed = true;
           }
@@ -108,7 +110,7 @@ void ReconstructionPolicy::AttemptReconstruction(const TaskID &task_id,
   reconstruction_entry->num_reconstructions = reconstruction_attempt;
   reconstruction_entry->node_manager_id = client_id_.binary();
   RAY_CHECK_OK(task_reconstruction_log_.AppendAt(
-      JobID::nil(), task_id, reconstruction_entry,
+      DriverID::nil(), task_id, reconstruction_entry,
       /*success_callback=*/
       [this](gcs::AsyncGcsClient *client, const TaskID &task_id,
              const TaskReconstructionDataT &data) {
@@ -169,7 +171,7 @@ void ReconstructionPolicy::HandleTaskLeaseNotification(const TaskID &task_id,
 }
 
 void ReconstructionPolicy::ListenAndMaybeReconstruct(const ObjectID &object_id) {
-  TaskID task_id = ComputeTaskId(object_id);
+  TaskID task_id = object_id.task_id();
   auto it = listening_tasks_.find(task_id);
   // Add this object to the list of objects created by the same task.
   if (it == listening_tasks_.end()) {
@@ -183,7 +185,7 @@ void ReconstructionPolicy::ListenAndMaybeReconstruct(const ObjectID &object_id) 
 }
 
 void ReconstructionPolicy::Cancel(const ObjectID &object_id) {
-  TaskID task_id = ComputeTaskId(object_id);
+  TaskID task_id = object_id.task_id();
   auto it = listening_tasks_.find(task_id);
   if (it == listening_tasks_.end()) {
     // We already stopped listening for this task.
@@ -197,7 +199,7 @@ void ReconstructionPolicy::Cancel(const ObjectID &object_id) {
     // Cancel notifications for the task lease if we were subscribed to them.
     if (it->second.subscribed) {
       RAY_CHECK_OK(
-          task_lease_pubsub_.CancelNotifications(JobID::nil(), task_id, client_id_));
+          task_lease_pubsub_.CancelNotifications(DriverID::nil(), task_id, client_id_));
     }
     listening_tasks_.erase(it);
   }
@@ -208,6 +210,11 @@ std::string ReconstructionPolicy::DebugString() const {
   result << "ReconstructionPolicy:";
   result << "\n- num reconstructing: " << listening_tasks_.size();
   return result.str();
+}
+
+void ReconstructionPolicy::RecordMetrics() const {
+  stats::ReconstructionPolicyStats().Record(
+      listening_tasks_.size(), {{stats::ValueTypeKey, "num_reconstructing_tasks"}});
 }
 
 }  // namespace raylet

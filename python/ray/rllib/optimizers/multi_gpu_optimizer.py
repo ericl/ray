@@ -6,18 +6,21 @@ import logging
 import math
 import numpy as np
 from collections import defaultdict
-import tensorflow as tf
 
 import ray
-from ray.rllib.evaluation.tf_policy_graph import TFPolicyGraph
+from ray.rllib.evaluation.metrics import LEARNER_STATS_KEY
+from ray.rllib.policy.tf_policy import TFPolicy
 from ray.rllib.optimizers.policy_optimizer import PolicyOptimizer
 from ray.rllib.optimizers.multi_gpu_impl import LocalSyncParallelOptimizer
 from ray.rllib.optimizers.rollout import collect_samples, \
     collect_samples_straggler_mitigation
 from ray.rllib.utils.annotations import override
 from ray.rllib.utils.timer import TimerStat
-from ray.rllib.evaluation.sample_batch import SampleBatch, DEFAULT_POLICY_ID, \
+from ray.rllib.policy.sample_batch import SampleBatch, DEFAULT_POLICY_ID, \
     MultiAgentBatch
+from ray.rllib.utils import try_import_tf
+
+tf = try_import_tf()
 
 logger = logging.getLogger(__name__)
 
@@ -31,23 +34,26 @@ class LocalMultiGPUOptimizer(PolicyOptimizer):
     details, see `multi_gpu_impl.LocalSyncParallelOptimizer`.
 
     This optimizer is Tensorflow-specific and require the underlying
-    PolicyGraph to be a TFPolicyGraph instance that support `.copy()`.
+    Policy to be a TFPolicy instance that support `.copy()`.
 
-    Note that all replicas of the TFPolicyGraph will merge their
+    Note that all replicas of the TFPolicy will merge their
     extra_compute_grad and apply_grad feed_dicts and fetches. This
     may result in unexpected behavior.
     """
 
-    @override(PolicyOptimizer)
-    def _init(self,
-              sgd_batch_size=128,
-              num_sgd_iter=10,
-              sample_batch_size=200,
-              num_envs_per_worker=1,
-              train_batch_size=1024,
-              num_gpus=0,
-              standardize_fields=[],
-              straggler_mitigation=False):
+    def __init__(self,
+                 local_evaluator,
+                 remote_evaluators,
+                 sgd_batch_size=128,
+                 num_sgd_iter=10,
+                 sample_batch_size=200,
+                 num_envs_per_worker=1,
+                 train_batch_size=1024,
+                 num_gpus=0,
+                 standardize_fields=[],
+                 straggler_mitigation=False):
+        PolicyOptimizer.__init__(self, local_evaluator, remote_evaluators)
+
         self.batch_size = sgd_batch_size
         self.num_sgd_iter = num_sgd_iter
         self.num_envs_per_worker = num_envs_per_worker
@@ -77,7 +83,7 @@ class LocalMultiGPUOptimizer(PolicyOptimizer):
             self.local_evaluator.foreach_trainable_policy(lambda p, i: (i, p)))
         logger.debug("Policies to train: {}".format(self.policies))
         for policy_id, policy in self.policies.items():
-            if not isinstance(policy, TFPolicyGraph):
+            if not isinstance(policy, TFPolicy):
                 raise ValueError(
                     "Only TF policies are supported with multi-GPU. Try using "
                     "the simple optimizer instead.")
@@ -189,7 +195,7 @@ class LocalMultiGPUOptimizer(PolicyOptimizer):
                         batch_fetches = optimizer.optimize(
                             self.sess, permutation[batch_index] *
                             self.per_device_batch_size)
-                        for k, v in batch_fetches.items():
+                        for k, v in batch_fetches[LEARNER_STATS_KEY].items():
                             iter_extra_fetches[k].append(v)
                     logger.debug("{} {}".format(i,
                                                 _averaged(iter_extra_fetches)))
@@ -197,6 +203,7 @@ class LocalMultiGPUOptimizer(PolicyOptimizer):
 
         self.num_steps_sampled += samples.count
         self.num_steps_trained += tuples_per_device * len(self.devices)
+        self.learner_stats = fetches
         return fetches
 
     @override(PolicyOptimizer)
@@ -208,12 +215,13 @@ class LocalMultiGPUOptimizer(PolicyOptimizer):
                 "grad_time_ms": round(1000 * self.grad_timer.mean, 3),
                 "update_time_ms": round(1000 * self.update_weights_timer.mean,
                                         3),
+                "learner": self.learner_stats,
             })
 
 
 def _averaged(kv):
     out = {}
     for k, v in kv.items():
-        if v[0] is not None:
+        if v[0] is not None and not isinstance(v[0], dict):
             out[k] = np.mean(v)
     return out

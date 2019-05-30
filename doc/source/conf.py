@@ -26,6 +26,7 @@ MOCK_MODULES = [
     "ray.core.generated.ActorCheckpointIdData",
     "ray.core.generated.ClientTableData",
     "ray.core.generated.DriverTableData",
+    "ray.core.generated.EntryType",
     "ray.core.generated.ErrorTableData",
     "ray.core.generated.ErrorType",
     "ray.core.generated.GcsTableEntry",
@@ -74,6 +75,7 @@ sys.path.insert(0, os.path.abspath("../../python/"))
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
+    'sphinx.ext.viewcode',
     'sphinx.ext.napoleon',
     'sphinx_click.ext',
 ]

@@ -235,8 +235,8 @@ ray::Status RayletClient::SubmitTask(const std::vector<ObjectID> &execution_depe
 ray::Status RayletClient::GetTask(
     std::unique_ptr<ray::raylet::TaskSpecification> *task_spec) {
   std::unique_ptr<uint8_t[]> reply;
-  // Receive a task from the raylet. This will block until the local
-  // scheduler gives this client a task.
+  // Receive a task from the raylet. This will block until the raylet
+  // gives this client a task.
   auto status =
       conn_->AtomicRequestReply(MessageType::GetTask, MessageType::ExecuteTask, reply);
   if (!status.ok()) return status;
@@ -349,10 +349,10 @@ ray::Status RayletClient::PushProfileEvents(const ProfileTableDataT &profile_eve
 }
 
 ray::Status RayletClient::FreeObjects(const std::vector<ray::ObjectID> &object_ids,
-                                      bool local_only) {
+                                      bool local_only, bool delete_creating_tasks) {
   flatbuffers::FlatBufferBuilder fbb;
-  auto message = ray::protocol::CreateFreeObjectsRequest(fbb, local_only,
-                                                         to_flatbuf(fbb, object_ids));
+  auto message = ray::protocol::CreateFreeObjectsRequest(
+      fbb, local_only, delete_creating_tasks, to_flatbuf(fbb, object_ids));
   fbb.Finish(message);
 
   auto status = conn_->WriteMessage(MessageType::FreeObjectsInObjectStoreRequest, &fbb);
@@ -385,4 +385,14 @@ ray::Status RayletClient::NotifyActorResumedFromCheckpoint(
   fbb.Finish(message);
 
   return conn_->WriteMessage(MessageType::NotifyActorResumedFromCheckpoint, &fbb);
+}
+
+ray::Status RayletClient::SetResource(const std::string &resource_name,
+                                      const double capacity,
+                                      const ray::ClientID &client_Id) {
+  flatbuffers::FlatBufferBuilder fbb;
+  auto message = ray::protocol::CreateSetResourceRequest(
+      fbb, fbb.CreateString(resource_name), capacity, to_flatbuf(fbb, client_Id));
+  fbb.Finish(message);
+  return conn_->WriteMessage(MessageType::SetResourceRequest, &fbb);
 }

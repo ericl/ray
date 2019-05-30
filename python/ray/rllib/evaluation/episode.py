@@ -27,7 +27,7 @@ class MultiAgentEpisode(object):
         user_data (dict): Dict that you can use for temporary storage.
 
     Use case 1: Model-based rollouts in multi-agent:
-        A custom compute_actions() function in a policy graph can inspect the
+        A custom compute_actions() function in a policy can inspect the
         current episode state and perform a number of rollouts based on the
         policies and state of other agents in the environment.
 
@@ -66,8 +66,21 @@ class MultiAgentEpisode(object):
         self._agent_reward_history = defaultdict(list)
 
     @DeveloperAPI
+    def soft_reset(self):
+        """Clears rewards and metrics, but retains RNN and other state.
+
+        This is used to carry state across multiple logical episodes in the
+        same env (i.e., if `soft_horizon` is set).
+        """
+        self.length = 0
+        self.episode_id = random.randrange(2e9)
+        self.total_reward = 0.0
+        self.agent_rewards = defaultdict(float)
+        self._agent_reward_history = defaultdict(list)
+
+    @DeveloperAPI
     def policy_for(self, agent_id=_DUMMY_AGENT_ID):
-        """Returns the policy graph for the specified agent.
+        """Returns the policy for the specified agent.
 
         If the agent is new, the policy mapping fn will be called to bind the
         agent to a policy for the duration of the episode.

@@ -29,7 +29,7 @@ class MockGcs : public gcs::TableInterface<TaskID, TaskLeaseData> {
  public:
   MOCK_METHOD4(
       Add,
-      ray::Status(const JobID &job_id, const TaskID &task_id,
+      ray::Status(const DriverID &driver_id, const TaskID &task_id,
                   std::shared_ptr<TaskLeaseDataT> &task_data,
                   const gcs::TableInterface<TaskID, TaskLeaseData>::WriteCallback &done));
 };
@@ -266,7 +266,7 @@ TEST_F(TaskDependencyManagerTest, TestTaskChain) {
 TEST_F(TaskDependencyManagerTest, TestDependentPut) {
   // Create a task with 3 arguments.
   auto task1 = ExampleTask({}, 0);
-  ObjectID put_id = ComputePutId(task1.GetTaskSpecification().TaskId(), 1);
+  ObjectID put_id = ObjectID::for_put(task1.GetTaskSpecification().TaskId(), 1);
   auto task2 = ExampleTask({put_id}, 0);
 
   // No objects have been registered in the task dependency manager, so the put

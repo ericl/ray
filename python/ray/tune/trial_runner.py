@@ -11,12 +11,16 @@ import re
 import time
 import traceback
 
+import ray.cloudpickle as cloudpickle
 from ray.tune import TuneError
 from ray.tune.ray_trial_executor import RayTrialExecutor
-from ray.tune.result import TIME_THIS_ITER_S
+from ray.tune.result import TIME_THIS_ITER_S, RESULT_DUPLICATE
 from ray.tune.trial import Trial, Checkpoint
+from ray.tune.sample import function
 from ray.tune.schedulers import FIFOScheduler, TrialScheduler
+from ray.tune.suggest import BasicVariantGenerator
 from ray.tune.util import warn_if_slow
+from ray.utils import binary_to_hex, hex_to_binary
 from ray.tune.web_server import TuneServer
 
 MAX_DEBUG_TRIALS = 20
@@ -39,11 +43,42 @@ def _find_newest_ckpt(ckpt_dir):
     return max(full_paths)
 
 
+class _TuneFunctionEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, function):
+            return self._to_cloudpickle(obj)
+        try:
+            return super(_TuneFunctionEncoder, self).default(obj)
+        except Exception:
+            logger.debug("Unable to encode. Falling back to cloudpickle.")
+            return self._to_cloudpickle(obj)
+
+    def _to_cloudpickle(self, obj):
+        return {
+            "_type": "CLOUDPICKLE_FALLBACK",
+            "value": binary_to_hex(cloudpickle.dumps(obj))
+        }
+
+
+class _TuneFunctionDecoder(json.JSONDecoder):
+    def __init__(self, *args, **kwargs):
+        json.JSONDecoder.__init__(
+            self, object_hook=self.object_hook, *args, **kwargs)
+
+    def object_hook(self, obj):
+        if obj.get("_type") == "CLOUDPICKLE_FALLBACK":
+            return self._from_cloudpickle(obj)
+        return obj
+
+    def _from_cloudpickle(self, obj):
+        return cloudpickle.loads(hex_to_binary(obj["value"]))
+
+
 class TrialRunner(object):
     """A TrialRunner implements the event loop for scheduling trials on Ray.
 
     Example:
-        runner = TrialRunner(BasicVariantGenerator())
+        runner = TrialRunner()
         runner.add_trial(Trial(...))
         runner.add_trial(Trial(...))
         while not runner.is_finished():
@@ -64,14 +99,12 @@ class TrialRunner(object):
     CKPT_FILE_TMPL = "experiment_state-{}.json"
 
     def __init__(self,
-                 search_alg,
+                 search_alg=None,
                  scheduler=None,
                  launch_web_server=False,
                  metadata_checkpoint_dir=None,
                  server_port=TuneServer.DEFAULT_PORT,
                  verbose=True,
-                 queue_trials=False,
-                 reuse_actors=False,
                  trial_executor=None):
         """Initializes a new TrialRunner.
 
@@ -85,29 +118,23 @@ class TrialRunner(object):
             server_port (int): Port number for launching TuneServer
             verbose (bool): Flag for verbosity. If False, trial results
                 will not be output.
-            queue_trials (bool): Whether to queue trials when the cluster does
-                not currently have enough resources to launch one. This should
-                be set to True when running on an autoscaling cluster to enable
-                automatic scale-up.
             reuse_actors (bool): Whether to reuse actors between different
                 trials when possible. This can drastically speed up experiments
                 that start and stop actors often (e.g., PBT in
                 time-multiplexing mode).
             trial_executor (TrialExecutor): Defaults to RayTrialExecutor.
         """
-        self._search_alg = search_alg
+        self._search_alg = search_alg or BasicVariantGenerator()
         self._scheduler_alg = scheduler or FIFOScheduler()
-        self.trial_executor = (trial_executor or RayTrialExecutor(
-            queue_trials=queue_trials, reuse_actors=reuse_actors))
+        self.trial_executor = trial_executor or RayTrialExecutor()
 
         # For debugging, it may be useful to halt trials after some time has
         # elapsed. TODO(ekl) consider exposing this in the API.
         self._global_time_limit = float(
-            os.environ.get("TRIALRUNNER_WALLTIME_LIMIT", float('inf')))
+            os.environ.get("TRIALRUNNER_WALLTIME_LIMIT", float("inf")))
         self._total_time = 0
         self._iteration = 0
         self._verbose = verbose
-        self._queue_trials = queue_trials
 
         self._server = None
         self._server_port = server_port
@@ -145,12 +172,15 @@ class TrialRunner(object):
             "checkpoints": list(
                 self.trial_executor.get_checkpoints().values()),
             "runner_data": self.__getstate__(),
-            "timestamp": time.time()
+            "stats": {
+                "start_time": self._start_time,
+                "timestamp": time.time()
+            }
         }
         tmp_file_name = os.path.join(metadata_checkpoint_dir,
                                      ".tmp_checkpoint")
         with open(tmp_file_name, "w") as f:
-            json.dump(runner_state, f, indent=2)
+            json.dump(runner_state, f, indent=2, cls=_TuneFunctionEncoder)
 
         os.rename(
             tmp_file_name,
@@ -183,7 +213,7 @@ class TrialRunner(object):
 
         newest_ckpt_path = _find_newest_ckpt(metadata_checkpoint_dir)
         with open(newest_ckpt_path, "r") as f:
-            runner_state = json.load(f)
+            runner_state = json.load(f, cls=_TuneFunctionDecoder)
 
         logger.warning("".join([
             "Attempting to resume experiment from {}. ".format(
@@ -192,11 +222,8 @@ class TrialRunner(object):
             "This will ignore any new changes to the specification."
         ]))
 
-        from ray.tune.suggest import BasicVariantGenerator
         runner = TrialRunner(
-            search_alg or BasicVariantGenerator(),
-            scheduler=scheduler,
-            trial_executor=trial_executor)
+            search_alg, scheduler=scheduler, trial_executor=trial_executor)
 
         runner.__setstate__(runner_state["runner_data"])
 
@@ -407,6 +434,16 @@ class TrialRunner(object):
     def _process_trial(self, trial):
         try:
             result = self.trial_executor.fetch_result(trial)
+
+            is_duplicate = RESULT_DUPLICATE in result
+            # TrialScheduler and SearchAlgorithm still receive a
+            # notification because there may be special handling for
+            # the `on_trial_complete` hook.
+            if is_duplicate:
+                logger.debug("Trial finished without logging 'done'.")
+                result = trial.last_result
+                result.update(done=True)
+
             self._total_time += result[TIME_THIS_ITER_S]
 
             if trial.should_stop(result):
@@ -415,7 +452,6 @@ class TrialRunner(object):
                 self._search_alg.on_trial_complete(
                     trial.trial_id, result=result)
                 decision = TrialScheduler.STOP
-
             else:
                 with warn_if_slow("scheduler.on_trial_result"):
                     decision = self._scheduler_alg.on_trial_result(
@@ -426,8 +462,10 @@ class TrialRunner(object):
                     with warn_if_slow("search_alg.on_trial_complete"):
                         self._search_alg.on_trial_complete(
                             trial.trial_id, early_terminated=True)
-            trial.update_last_result(
-                result, terminate=(decision == TrialScheduler.STOP))
+
+            if not is_duplicate:
+                trial.update_last_result(
+                    result, terminate=(decision == TrialScheduler.STOP))
 
             # Checkpoints to disk. This should be checked even if
             # the scheduler decision is STOP or PAUSE. Note that

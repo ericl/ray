@@ -6,7 +6,7 @@ import org.ray.api.Ray;
 import org.ray.api.RayObject;
 import org.ray.api.TestUtils;
 import org.ray.api.exception.RayException;
-import org.ray.api.id.UniqueId;
+import org.ray.api.id.ObjectId;
 import org.ray.runtime.RayObjectImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,7 +20,7 @@ public class ClientExceptionTest extends BaseTest {
   @Test
   public void testWaitAndCrash() {
     TestUtils.skipTestUnderSingleProcess();
-    UniqueId randomId = UniqueId.randomId();
+    ObjectId randomId = ObjectId.randomId();
     RayObject<String> notExisting = new RayObjectImpl(randomId);
 
     Thread thread = new Thread(() -> {
@@ -37,12 +37,12 @@ public class ClientExceptionTest extends BaseTest {
       Ray.wait(ImmutableList.of(notExisting), 1, 2000);
       Assert.fail("Should not reach here");
     } catch (RayException e) {
-      LOGGER.debug(String.format("Expected runtime exception: {}", e));
+      LOGGER.debug("Expected runtime exception: {}", e);
     }
     try {
       thread.join();
     } catch (Exception e) {
-      LOGGER.error(String.format("Excpetion caught: {}", e));
+      LOGGER.error("Excpetion caught: {}", e);
     }
   }
 }
