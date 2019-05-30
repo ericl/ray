@@ -278,7 +278,11 @@ def clip_action(action, space):
     """
 
     if isinstance(space, gym.spaces.Box):
-        return np.clip(action, space.low, space.high)
+        assert np.all(action >= -1.0) and np.all(action <= 1.0), 'expected range within [-1, 1], e.g. use tanh'
+        low = space.low
+        high = space.high
+        action = low + (1.0 + action)*(high - low)/2.0
+        return np.clip(action, low, high)
     elif isinstance(space, gym.spaces.Tuple):
         if type(action) not in (tuple, list):
             raise ValueError("Expected tuple space for actions {}: {}".format(

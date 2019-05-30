@@ -5,7 +5,8 @@ from __future__ import print_function
 import time
 
 from ray.rllib import optimizers
-from ray.rllib.agents.agent import Agent, with_common_config
+from ray.rllib.agents.agent import Agent
+from ray.rllib.agents.trainer import with_common_config
 from ray.rllib.agents.dqn import DQNAgent
 from ray.rllib.agents.sac.sac_policy_graph import SACPolicyGraph
 from ray.rllib.utils.annotations import override
@@ -146,7 +147,7 @@ class SACAgent(DQNAgent):
     """Soft Actor-Critic implementation in TensorFlow."""
     _agent_name = "SAC"
     _default_config = DEFAULT_CONFIG
-    _policy_graph = SACPolicyGraph
+    _policy = SACPolicyGraph
     _optimizer_shared_configs = OPTIMIZER_SHARED_CONFIGS
 
     def __getstate__(self):

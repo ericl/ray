@@ -91,7 +91,7 @@ class SACPolicyGraph(TFPolicyGraph):
 
     @override(TFPolicyGraph)
     def extra_compute_grad_fetches(self):
-        return self.diagnostics
+        return {"learner_stats": self.diagnostics}
 
     def _init_placeholders(self, observation_space, action_space):
         observation_shape = observation_space.shape
@@ -217,7 +217,7 @@ class SACPolicyGraph(TFPolicyGraph):
         return optimizer
 
     @override(TFPolicyGraph)
-    def gradients(self, optimizer):
+    def gradients(self, optimizer, loss):
         policy_grads_and_vars = optimizer.compute_gradients(
             self.policy_loss, var_list=self.policy.trainable_variables)
         Q_grads_and_vars = optimizer.compute_gradients(
@@ -240,11 +240,12 @@ class SACPolicyGraph(TFPolicyGraph):
         return
 
     def update_target(self, tau=None):
-        tau = tau or self.config["tau"]
+        with self.session.as_default():
+            tau = tau or self.config["tau"]
 
-        source_params = self.Q.get_weights()
-        target_params = self.Q_target.get_weights()
-        self.Q_target.set_weights([
-            tau * source + (1.0 - tau) * target
-            for source, target in zip(source_params, target_params)
-        ])
+            source_params = self.Q.get_weights()
+            target_params = self.Q_target.get_weights()
+            self.Q_target.set_weights([
+                tau * source + (1.0 - tau) * target
+                for source, target in zip(source_params, target_params)
+            ])
