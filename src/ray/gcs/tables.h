@@ -3,8 +3,9 @@
 
 #include <map>
 #include <string>
-#include <unordered_map>
 #include <unordered_set>
+
+#include "absl/container/flat_hash_map.h"
 
 #include "ray/common/constants.h"
 #include "ray/common/id.h"
@@ -465,7 +466,7 @@ class Set : private Log<ID, Data>,
 template <typename ID, typename Data>
 class HashInterface {
  public:
-  using DataMap = std::unordered_map<std::string, std::shared_ptr<Data>>;
+  using DataMap = absl::flat_hash_map<std::string, std::shared_ptr<Data>>;
   // Reuse Log's SubscriptionCallback when Subscribe is successfully called.
   using SubscriptionCallback = typename Log<ID, Data>::SubscriptionCallback;
 
@@ -554,7 +555,7 @@ class Hash : private Log<ID, Data>,
              public HashInterface<ID, Data>,
              virtual public PubsubInterface<ID> {
  public:
-  using DataMap = std::unordered_map<std::string, std::shared_ptr<Data>>;
+  using DataMap = absl::flat_hash_map<std::string, std::shared_ptr<Data>>;
   using HashCallback = typename HashInterface<ID, Data>::HashCallback;
   using HashRemoveCallback = typename HashInterface<ID, Data>::HashRemoveCallback;
   using HashNotificationCallback =
@@ -906,7 +907,7 @@ class ClientTable : public Log<ClientID, GcsNodeInfo> {
   /// Get the information of all clients.
   ///
   /// \return The client ID to client information map.
-  const std::unordered_map<ClientID, GcsNodeInfo> &GetAllClients() const;
+  const absl::flat_hash_map<ClientID, GcsNodeInfo> &GetAllClients() const;
 
   /// Lookup the client data in the client table.
   ///
@@ -941,7 +942,7 @@ class ClientTable : public Log<ClientID, GcsNodeInfo> {
   /// The callback to call when a client is removed.
   ClientTableCallback client_removed_callback_;
   /// A cache for information about all nodes.
-  std::unordered_map<ClientID, GcsNodeInfo> node_cache_;
+  absl::flat_hash_map<ClientID, GcsNodeInfo> node_cache_;
   /// The set of removed nodes.
   std::unordered_set<ClientID> removed_nodes_;
 };

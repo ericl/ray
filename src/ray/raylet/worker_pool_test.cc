@@ -1,6 +1,8 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
+#include "absl/container/flat_hash_map.h"
+
 #include "ray/common/constants.h"
 #include "ray/raylet/node_manager.h"
 #include "ray/raylet/worker_pool.h"
@@ -65,7 +67,7 @@ class WorkerPoolMock : public WorkerPool {
  private:
   int last_worker_pid_;
   // The worker commands by pid.
-  std::unordered_map<int, std::vector<std::string>> worker_commands_by_pid;
+  absl::flat_hash_map<int, std::vector<std::string>> worker_commands_by_pid;
 };
 
 class WorkerPoolTest : public ::testing::Test {

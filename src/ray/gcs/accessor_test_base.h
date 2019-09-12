@@ -65,7 +65,7 @@ class AccessorTestBase : public ::testing::Test {
   boost::asio::io_service io_service_;
   std::unique_ptr<std::thread> work_thread_;
 
-  std::unordered_map<ID, std::shared_ptr<Data>> id_to_data_;
+  absl::flat_hash_map<ID, std::shared_ptr<Data>> id_to_data_;
 
   std::atomic<int> pending_count_{0};
   std::chrono::milliseconds wait_pending_timeout_{10000};

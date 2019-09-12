@@ -3,9 +3,11 @@
 
 #include <array>
 #include <list>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+#include "absl/container/flat_hash_map.h"
+#include "absl/container/node_hash_map.h"
 
 #include "ray/common/task/task.h"
 #include "ray/util/logging.h"
@@ -102,7 +104,7 @@ class TaskQueue {
   /// A list of tasks.
   std::list<Task> task_list_;
   /// A hash to speed up looking up a task.
-  std::unordered_map<TaskID, std::list<Task>::iterator> task_map_;
+  absl::flat_hash_map<TaskID, std::list<Task>::iterator> task_map_;
   /// Aggregate resources of all the tasks in this queue.
   ResourceSet current_resource_load_;
 };
@@ -132,12 +134,12 @@ class ReadyQueue : public TaskQueue {
   /// \brief Get a mapping from resource shape to tasks.
   ///
   /// \return Mapping from resource set to task IDs with these resource requirements.
-  const std::unordered_map<ResourceSet, ordered_set<TaskID>> &GetTasksWithResources()
+  const absl::node_hash_map<ResourceSet, ordered_set<TaskID>> &GetTasksWithResources()
       const;
 
  private:
   /// Index from resource shape to tasks that require these resources.
-  std::unordered_map<ResourceSet, ordered_set<TaskID>> tasks_with_resources_;
+  absl::node_hash_map<ResourceSet, ordered_set<TaskID>> tasks_with_resources_;
 };
 
 /// \class SchedulingQueue
@@ -183,7 +185,7 @@ class SchedulingQueue {
   /// Get a reference to the queue of ready tasks.
   ///
   /// \return A reference to the queue of ready tasks.
-  const std::unordered_map<ResourceSet, ordered_set<TaskID>> &GetReadyTasksWithResources()
+  const absl::node_hash_map<ResourceSet, ordered_set<TaskID>> &GetReadyTasksWithResources()
       const;
 
   /// Get a task from the queue of a given state. The caller must ensure that

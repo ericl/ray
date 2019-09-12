@@ -95,7 +95,7 @@ class MockGcs : public gcs::TableInterface<TaskID, TaskTableData>,
     }
   }
 
-  const std::unordered_map<TaskID, std::shared_ptr<TaskTableData>> &TaskTable() const {
+  const absl::flat_hash_map<TaskID, std::shared_ptr<TaskTableData>> &TaskTable() const {
     return task_table_;
   }
 
@@ -106,7 +106,7 @@ class MockGcs : public gcs::TableInterface<TaskID, TaskTableData>,
   const int NumTaskAdds() const { return num_task_adds_; }
 
  private:
-  std::unordered_map<TaskID, std::shared_ptr<TaskTableData>> task_table_;
+  absl::flat_hash_map<TaskID, std::shared_ptr<TaskTableData>> task_table_;
   std::vector<std::pair<gcs::raylet::TaskTable::WriteCallback, TaskID>> callbacks_;
   gcs::raylet::TaskTable::WriteCallback notification_callback_;
   std::unordered_set<TaskID> subscribed_tasks_;

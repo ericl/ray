@@ -14,11 +14,11 @@ SchedulingPolicy::SchedulingPolicy(const SchedulingQueue &scheduling_queue)
     : scheduling_queue_(scheduling_queue),
       gen_(std::chrono::high_resolution_clock::now().time_since_epoch().count()) {}
 
-std::unordered_map<TaskID, ClientID> SchedulingPolicy::Schedule(
-    std::unordered_map<ClientID, SchedulingResources> &cluster_resources,
+absl::flat_hash_map<TaskID, ClientID> SchedulingPolicy::Schedule(
+    absl::flat_hash_map<ClientID, SchedulingResources> &cluster_resources,
     const ClientID &local_client_id) {
   // The policy decision to be returned.
-  std::unordered_map<TaskID, ClientID> decision;
+  absl::flat_hash_map<TaskID, ClientID> decision;
 #ifndef NDEBUG
   RAY_LOG(DEBUG) << "Cluster resource map: ";
   for (const auto &client_resource_pair : cluster_resources) {

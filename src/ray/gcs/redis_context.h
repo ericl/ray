@@ -4,7 +4,8 @@
 #include <functional>
 #include <memory>
 #include <mutex>
-#include <unordered_map>
+
+#include "absl/container/flat_hash_map.h"
 
 #include "ray/common/id.h"
 #include "ray/common/status.h"
@@ -106,7 +107,7 @@ class RedisCallbackManager {
   std::mutex mutex_;
 
   int64_t num_callbacks_ = 0;
-  std::unordered_map<int64_t, CallbackItem> callback_items_;
+  absl::flat_hash_map<int64_t, CallbackItem> callback_items_;
 };
 
 class RedisContext {

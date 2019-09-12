@@ -4,8 +4,9 @@
 #include <ray/protobuf/gcs.pb.h>
 #include <unistd.h>
 #include <mutex>
-#include <unordered_map>
 #include <vector>
+
+#include "absl/container/flat_hash_map.h"
 
 #include "ray/common/status.h"
 #include "ray/common/task/task_spec.h"

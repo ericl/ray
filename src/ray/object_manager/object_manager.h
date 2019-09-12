@@ -56,7 +56,7 @@ struct LocalObjectInfo {
   object_manager::protocol::ObjectInfoT object_info;
   /// A map from the ID of a remote object manager to the timestamp of when
   /// the object was last pushed to that object manager (if a push took place).
-  std::unordered_map<ClientID, int64_t> recent_pushes;
+  absl::flat_hash_map<ClientID, int64_t> recent_pushes;
 };
 
 class ObjectManagerInterface {
@@ -376,7 +376,7 @@ class ObjectManager : public ObjectManagerInterface,
 
   /// Mapping from locally available objects to information about those objects
   /// including when the object was last pushed to other object managers.
-  std::unordered_map<ObjectID, LocalObjectInfo> local_objects_;
+  absl::flat_hash_map<ObjectID, LocalObjectInfo> local_objects_;
 
   /// This is used as the callback identifier in Pull for
   /// SubscribeObjectLocations. We only need one identifier because we never need to
@@ -384,18 +384,18 @@ class ObjectManager : public ObjectManagerInterface,
   UniqueID object_directory_pull_callback_id_ = UniqueID::FromRandom();
 
   /// A set of active wait requests.
-  std::unordered_map<UniqueID, WaitState> active_wait_requests_;
+  absl::flat_hash_map<UniqueID, WaitState> active_wait_requests_;
 
   /// Maintains a map of push requests that have not been fulfilled due to an object not
   /// being local. Objects are removed from this map after push_timeout_ms have elapsed.
-  std::unordered_map<
+  absl::flat_hash_map<
       ObjectID,
-      std::unordered_map<ClientID, std::unique_ptr<boost::asio::deadline_timer>>>
+      absl::flat_hash_map<ClientID, std::unique_ptr<boost::asio::deadline_timer>>>
       unfulfilled_push_requests_;
 
   /// The objects that this object manager is currently trying to fetch from
   /// remote object managers.
-  std::unordered_map<ObjectID, PullRequest> pull_requests_;
+  absl::flat_hash_map<ObjectID, PullRequest> pull_requests_;
 
   /// Profiling events that are to be batched together and added to the profile
   /// table in the GCS.
@@ -418,7 +418,7 @@ class ObjectManager : public ObjectManagerInterface,
   rpc::ClientCallManager client_call_manager_;
 
   /// Client id - object manager gRPC client.
-  std::unordered_map<ClientID, std::shared_ptr<rpc::ObjectManagerClient>>
+  absl::flat_hash_map<ClientID, std::shared_ptr<rpc::ObjectManagerClient>>
       remote_object_manager_clients_;
 };
 

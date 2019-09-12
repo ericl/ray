@@ -207,7 +207,7 @@ void Log<ID, Data>::Delete(const JobID &job_id, const std::vector<ID> &ids) {
   if (ids.empty()) {
     return;
   }
-  std::unordered_map<RedisContext *, std::ostringstream> sharded_data;
+  absl::flat_hash_map<RedisContext *, std::ostringstream> sharded_data;
   for (const auto &id : ids) {
     sharded_data[GetRedisContext(id).get()] << id.Binary();
   }
@@ -618,8 +618,8 @@ Status ClientTable::Connect(const GcsNodeInfo &local_node_info) {
     auto notification_callback = [this](RedisGcsClient *client, const UniqueID &log_key,
                                         const std::vector<GcsNodeInfo> &notifications) {
       RAY_CHECK(log_key == client_log_key_);
-      std::unordered_map<std::string, GcsNodeInfo> connected_nodes;
-      std::unordered_map<std::string, GcsNodeInfo> disconnected_nodes;
+      absl::flat_hash_map<std::string, GcsNodeInfo> connected_nodes;
+      absl::flat_hash_map<std::string, GcsNodeInfo> disconnected_nodes;
       for (auto &notification : notifications) {
         // This is temporary fix for Issue 4140 to avoid connect to dead nodes.
         // TODO(yuhguo): remove this temporary fix after GCS entry is removable.
@@ -688,7 +688,7 @@ void ClientTable::GetClient(const ClientID &node_id, GcsNodeInfo &node_info) con
   }
 }
 
-const std::unordered_map<ClientID, GcsNodeInfo> &ClientTable::GetAllClients() const {
+const absl::flat_hash_map<ClientID, GcsNodeInfo> &ClientTable::GetAllClients() const {
   return node_cache_;
 }
 

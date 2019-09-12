@@ -2,6 +2,7 @@
 #define RAY_RAYLET_MONITOR_H
 
 #include <memory>
+#include <unordered_map>
 #include <unordered_set>
 
 #include "ray/common/id.h"

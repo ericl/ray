@@ -3,8 +3,9 @@
 
 #include <cstddef>
 #include <string>
-#include <unordered_map>
 #include <vector>
+
+#include "absl/container/flat_hash_map.h"
 
 #include "ray/common/grpc_util.h"
 #include "ray/common/id.h"

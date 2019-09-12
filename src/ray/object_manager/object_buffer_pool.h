@@ -185,9 +185,9 @@ class ObjectBufferPool {
   /// Determines the maximum chunk size to be transferred by a single thread.
   const uint64_t default_chunk_size_;
   /// The state of a buffer that's currently being used.
-  std::unordered_map<ray::ObjectID, GetBufferState> get_buffer_state_;
+  absl::flat_hash_map<ray::ObjectID, GetBufferState> get_buffer_state_;
   /// The state of a buffer that's currently being used.
-  std::unordered_map<ray::ObjectID, CreateBufferState> create_buffer_state_;
+  absl::flat_hash_map<ray::ObjectID, CreateBufferState> create_buffer_state_;
 
   /// Plasma client pool.
   plasma::PlasmaClient store_client_;

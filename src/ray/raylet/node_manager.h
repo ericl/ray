@@ -3,6 +3,9 @@
 
 #include <boost/asio/steady_timer.hpp>
 
+#include "absl/container/flat_hash_map.h"
+#include "absl/container/node_hash_map.h"
+
 // clang-format off
 #include "ray/rpc/client_call.h"
 #include "ray/rpc/node_manager/node_manager_server.h"
@@ -256,7 +259,7 @@ class NodeManager : public rpc::NodeManagerServiceHandler {
   /// consider the local node manager and the node managers in the keys of the
   /// resource_map argument.
   /// \return Void.
-  void ScheduleTasks(std::unordered_map<ClientID, SchedulingResources> &resource_map);
+  void ScheduleTasks(absl::flat_hash_map<ClientID, SchedulingResources> &resource_map);
   /// Handle a task whose return value(s) must be reconstructed.
   ///
   /// \param task_id The relevant task ID.
@@ -304,7 +307,7 @@ class NodeManager : public rpc::NodeManagerServiceHandler {
   /// \param tasks_with_resources Mapping from resource shapes to tasks with
   /// that resource shape.
   void DispatchTasks(
-      const std::unordered_map<ResourceSet, ordered_set<TaskID>> &tasks_with_resources);
+      const absl::node_hash_map<ResourceSet, ordered_set<TaskID>> &tasks_with_resources);
 
   /// Handle a task that is blocked. This could be a task assigned to a worker,
   /// an out-of-band task (e.g., a thread created by the application), or a
@@ -528,7 +531,7 @@ class NodeManager : public rpc::NodeManagerServiceHandler {
   const NodeManagerConfig initial_config_;
   /// The resources (and specific resource IDs) that are currently available.
   ResourceIdSet local_available_resources_;
-  std::unordered_map<ClientID, SchedulingResources> cluster_resource_map_;
+  absl::flat_hash_map<ClientID, SchedulingResources> cluster_resource_map_;
   /// A pool of workers.
   WorkerPool worker_pool_;
   /// A set of queues to maintain tasks.
@@ -543,11 +546,11 @@ class NodeManager : public rpc::NodeManagerServiceHandler {
   LineageCache lineage_cache_;
   /// A mapping from actor ID to registration information about that actor
   /// (including which node manager owns it).
-  std::unordered_map<ActorID, ActorRegistration> actor_registry_;
+  absl::flat_hash_map<ActorID, ActorRegistration> actor_registry_;
 
   /// This map stores actor ID to the ID of the checkpoint that will be used to
   /// restore the actor.
-  std::unordered_map<ActorID, ActorCheckpointID> checkpoint_id_to_restore_;
+  absl::flat_hash_map<ActorID, ActorCheckpointID> checkpoint_id_to_restore_;
 
   /// The RPC server.
   rpc::GrpcServer node_manager_server_;
@@ -560,7 +563,7 @@ class NodeManager : public rpc::NodeManagerServiceHandler {
   rpc::ClientCallManager client_call_manager_;
 
   /// Map from node ids to clients of the remote node managers.
-  std::unordered_map<ClientID, std::unique_ptr<rpc::NodeManagerClient>>
+  absl::flat_hash_map<ClientID, std::unique_ptr<rpc::NodeManagerClient>>
       remote_node_manager_clients_;
 };
 

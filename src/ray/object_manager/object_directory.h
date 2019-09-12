@@ -3,10 +3,10 @@
 
 #include <memory>
 #include <mutex>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "plasma/client.h"
 
 #include "ray/common/id.h"
@@ -175,7 +175,7 @@ class ObjectDirectory : public ObjectDirectoryInterface {
   /// Callbacks associated with a call to GetLocations.
   struct LocationListenerState {
     /// The callback to invoke when object locations are found.
-    std::unordered_map<UniqueID, OnLocationsFound> callbacks;
+    absl::flat_hash_map<UniqueID, OnLocationsFound> callbacks;
     /// The current set of known locations of this object.
     std::unordered_set<ClientID> current_object_locations;
     /// This flag will get set to true if received any notification of the object.
@@ -191,7 +191,7 @@ class ObjectDirectory : public ObjectDirectoryInterface {
   /// Reference to the gcs client.
   std::shared_ptr<gcs::RedisGcsClient> gcs_client_;
   /// Info about subscribers to object locations.
-  std::unordered_map<ObjectID, LocationListenerState> listeners_;
+  absl::flat_hash_map<ObjectID, LocationListenerState> listeners_;
 };
 
 }  // namespace ray

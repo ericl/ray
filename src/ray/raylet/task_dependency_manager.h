@@ -1,6 +1,8 @@
 #ifndef RAY_RAYLET_TASK_DEPENDENCY_MANAGER_H
 #define RAY_RAYLET_TASK_DEPENDENCY_MANAGER_H
 
+#include "absl/container/flat_hash_map.h"
+
 // clang-format off
 #include "ray/common/id.h"
 #include "ray/common/task/task.h"
@@ -231,14 +233,14 @@ class TaskDependencyManager {
   gcs::TableInterface<TaskID, TaskLeaseData> &task_lease_table_;
   /// A mapping from task ID of each subscribed task to its list of object
   /// dependencies, either task arguments or objects passed into `ray.get`.
-  std::unordered_map<ray::TaskID, TaskDependencies> task_dependencies_;
+  absl::flat_hash_map<ray::TaskID, TaskDependencies> task_dependencies_;
   /// A mapping from worker ID to each object that the worker called `ray.wait` on.
-  std::unordered_map<ray::WorkerID, WorkerDependencies> worker_dependencies_;
+  absl::flat_hash_map<ray::WorkerID, WorkerDependencies> worker_dependencies_;
   /// All tasks whose outputs are required by a subscribed task. This is a
   /// mapping from task ID to information about the objects that the task
   /// creates, either by return value or by `ray.put`. For each object, we
   /// store the IDs of the subscribed tasks that are dependent on the object.
-  std::unordered_map<ray::TaskID, std::unordered_map<ObjectID, ObjectDependencies>>
+  absl::flat_hash_map<ray::TaskID, absl::flat_hash_map<ObjectID, ObjectDependencies>>
       required_tasks_;
   /// Objects that are required by a subscribed task, are not local, and are
   /// not created by a pending task. For these objects, there are pending
@@ -248,7 +250,7 @@ class TaskDependencyManager {
   std::unordered_set<ray::ObjectID> local_objects_;
   /// The set of tasks that are pending execution. Any objects created by these
   /// tasks that are not already local are pending creation.
-  std::unordered_map<ray::TaskID, PendingTask> pending_tasks_;
+  absl::flat_hash_map<ray::TaskID, PendingTask> pending_tasks_;
 };
 
 }  // namespace raylet

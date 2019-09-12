@@ -1,6 +1,7 @@
 #include "ray/raylet/node_manager.h"
 
 #include <fstream>
+#include <unordered_map>
 
 #include "ray/common/status.h"
 
@@ -20,7 +21,7 @@ namespace {
 /// the task's counter is equal to the returned value, then the task should be
 /// the next to run.
 int64_t GetExpectedTaskCounter(
-    const std::unordered_map<ray::ActorID, ray::raylet::ActorRegistration>
+    const absl::flat_hash_map<ray::ActorID, ray::raylet::ActorRegistration>
         &actor_registry,
     const ray::ActorID &actor_id, const ray::ActorHandleID &actor_handle_id) {
   auto actor_entry = actor_registry.find(actor_id);
@@ -43,7 +44,7 @@ struct ActorStats {
 
 /// A helper function to return the statistical data of actors in this node manager.
 ActorStats GetActorStatisticalData(
-    std::unordered_map<ray::ActorID, ray::raylet::ActorRegistration> actor_registry) {
+    absl::flat_hash_map<ray::ActorID, ray::raylet::ActorRegistration> actor_registry) {
   ActorStats item;
   for (auto &pair : actor_registry) {
     if (pair.second.GetState() == ray::rpc::ActorTableData::ALIVE) {
@@ -189,7 +190,7 @@ ray::Status NodeManager::RegisterGcs() {
       [this](
           gcs::RedisGcsClient *client, const ClientID &id,
           const gcs::GcsChangeMode change_mode,
-          const std::unordered_map<std::string, std::shared_ptr<gcs::ResourceTableData>>
+          const absl::flat_hash_map<std::string, std::shared_ptr<gcs::ResourceTableData>>
               &data) {
         if (change_mode == gcs::GcsChangeMode::APPEND_OR_ADD) {
           ResourceSet resource_set;
@@ -461,7 +462,7 @@ void NodeManager::ClientAdded(const GcsNodeInfo &node_info) {
   RAY_CHECK_OK(gcs_client_->resource_table().Lookup(
       JobID::Nil(), client_id,
       [this](gcs::RedisGcsClient *client, const ClientID &client_id,
-             const std::unordered_map<std::string,
+             const absl::flat_hash_map<std::string,
                                       std::shared_ptr<gcs::ResourceTableData>> &pairs) {
         ResourceSet resource_set;
         for (auto &resource_entry : pairs) {
@@ -751,9 +752,9 @@ void NodeManager::ProcessNewClient(LocalClientConnection &client) {
 
 // A helper function to create a mapping from resource shapes to
 // tasks with that resource shape from a given list of tasks.
-std::unordered_map<ResourceSet, ordered_set<TaskID>> MakeTasksWithResources(
+absl::node_hash_map<ResourceSet, ordered_set<TaskID>> MakeTasksWithResources(
     const std::vector<Task> &tasks) {
-  std::unordered_map<ResourceSet, ordered_set<TaskID>> result;
+  absl::node_hash_map<ResourceSet, ordered_set<TaskID>> result;
   for (const auto &task : tasks) {
     auto spec = task.GetTaskSpecification();
     result[spec.GetRequiredResources()].push_back(spec.TaskId());
@@ -762,7 +763,7 @@ std::unordered_map<ResourceSet, ordered_set<TaskID>> MakeTasksWithResources(
 }
 
 void NodeManager::DispatchTasks(
-    const std::unordered_map<ResourceSet, ordered_set<TaskID>> &tasks_with_resources) {
+    const absl::node_hash_map<ResourceSet, ordered_set<TaskID>> &tasks_with_resources) {
   std::unordered_set<TaskID> removed_task_ids;
   for (const auto &it : tasks_with_resources) {
     const auto &task_resources = it.first;
@@ -1328,7 +1329,7 @@ void NodeManager::ProcessSetResourceRequest(
     RAY_CHECK_OK(gcs_client_->resource_table().RemoveEntries(JobID::Nil(), client_id,
                                                              {resource_name}, nullptr));
   } else {
-    std::unordered_map<std::string, std::shared_ptr<gcs::ResourceTableData>> data_map;
+    absl::flat_hash_map<std::string, std::shared_ptr<gcs::ResourceTableData>> data_map;
     auto resource_table_data = std::make_shared<gcs::ResourceTableData>();
     resource_table_data->set_resource_capacity(capacity);
     data_map.emplace(resource_name, resource_table_data);
@@ -1338,7 +1339,7 @@ void NodeManager::ProcessSetResourceRequest(
 }
 
 void NodeManager::ScheduleTasks(
-    std::unordered_map<ClientID, SchedulingResources> &resource_map) {
+    absl::flat_hash_map<ClientID, SchedulingResources> &resource_map) {
   const ClientID &local_client_id = gcs_client_->client_table().GetLocalClientId();
 
   // If the resource map contains the local raylet, update load before calling policy.

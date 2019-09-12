@@ -22,7 +22,7 @@ ReconstructionPolicy::ReconstructionPolicy(
       task_reconstruction_log_(task_reconstruction_log) {}
 
 void ReconstructionPolicy::SetTaskTimeout(
-    std::unordered_map<TaskID, ReconstructionTask>::iterator task_it,
+    absl::flat_hash_map<TaskID, ReconstructionTask>::iterator task_it,
     int64_t timeout_ms) {
   task_it->second.expires_at = current_time_ms() + timeout_ms;
   auto timeout = boost::posix_time::milliseconds(timeout_ms);

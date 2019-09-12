@@ -138,7 +138,7 @@ boost::optional<LineageEntry> Lineage::PopEntry(const TaskID &task_id) {
   }
 }
 
-const std::unordered_map<const TaskID, LineageEntry> &Lineage::GetEntries() const {
+const absl::flat_hash_map<const TaskID, LineageEntry> &Lineage::GetEntries() const {
   return entries_;
 }
 

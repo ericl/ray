@@ -2,10 +2,11 @@
 #define RAY_RAYLET_RECONSTRUCTION_POLICY_H
 
 #include <functional>
-#include <unordered_map>
 #include <unordered_set>
 
 #include <boost/asio.hpp>
+
+#include "absl/container/flat_hash_map.h"
 
 #include "ray/common/id.h"
 #include "ray/gcs/tables.h"
@@ -107,7 +108,7 @@ class ReconstructionPolicy : public ReconstructionPolicyInterface {
   /// are received within the timeout, then reconstruction will be triggered.
   /// If the timer was previously set, this method will cancel it and reset the
   /// timer to the new timeout.
-  void SetTaskTimeout(std::unordered_map<TaskID, ReconstructionTask>::iterator task_it,
+  void SetTaskTimeout(absl::flat_hash_map<TaskID, ReconstructionTask>::iterator task_it,
                       int64_t timeout_ms);
 
   /// Attempt to re-execute a task to reconstruct the required object.
@@ -145,7 +146,7 @@ class ReconstructionPolicy : public ReconstructionPolicyInterface {
   std::shared_ptr<ObjectDirectoryInterface> object_directory_;
   gcs::LogInterface<TaskID, TaskReconstructionData> &task_reconstruction_log_;
   /// The tasks that we are currently subscribed to in the GCS.
-  std::unordered_map<TaskID, ReconstructionTask> listening_tasks_;
+  absl::flat_hash_map<TaskID, ReconstructionTask> listening_tasks_;
 };
 
 }  // namespace raylet

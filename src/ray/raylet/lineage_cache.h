@@ -4,6 +4,8 @@
 #include <gtest/gtest_prod.h>
 #include <boost/optional.hpp>
 
+#include "absl/container/flat_hash_map.h"
+
 #include "ray/common/id.h"
 #include "ray/common/status.h"
 #include "ray/common/task/task.h"
@@ -163,7 +165,7 @@ class Lineage {
   /// Get all entries in the lineage.
   ///
   /// \return A const reference to the lineage entries.
-  const std::unordered_map<const TaskID, LineageEntry> &GetEntries() const;
+  const absl::flat_hash_map<const TaskID, LineageEntry> &GetEntries() const;
 
   /// Return the IDs of tasks in the lineage that are dependent on the given
   /// task.
@@ -179,9 +181,9 @@ class Lineage {
 
  private:
   /// The lineage entries.
-  std::unordered_map<const TaskID, LineageEntry> entries_;
+  absl::flat_hash_map<const TaskID, LineageEntry> entries_;
   /// A mapping from each task in the lineage to its children.
-  std::unordered_map<TaskID, std::unordered_set<TaskID>> children_;
+  absl::flat_hash_map<TaskID, std::unordered_set<TaskID>> children_;
 
   /// Record the fact that the child task depends on the parent task.
   void AddChild(const TaskID &parent_id, const TaskID &child_id);

@@ -34,7 +34,7 @@ class TestObjectManagerBase : public ::testing::Test {
                                          std::string store_socket_name) {
     // Configuration for the node manager.
     ray::raylet::NodeManagerConfig node_manager_config;
-    std::unordered_map<std::string, double> static_resource_conf;
+    absl::flat_hash_map<std::string, double> static_resource_conf;
     static_resource_conf = {{"CPU", 1}, {"GPU", 1}};
     node_manager_config.resource_config =
         ray::raylet::ResourceSet(std::move(static_resource_conf));

@@ -2,7 +2,8 @@
 #define COMMON_PROTOCOL_H
 
 #include <flatbuffers/flatbuffers.h>
-#include <unordered_map>
+
+#include "absl/container/flat_hash_map.h"
 
 #include "ray/common/id.h"
 #include "ray/util/logging.h"

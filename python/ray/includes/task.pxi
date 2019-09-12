@@ -208,7 +208,7 @@ cdef class TaskSpec:
         """Return the resource dictionary of the task."""
         cdef:
             unordered_map[c_string, double] resource_map = (
-                self.task_spec.get().GetRequiredResources().GetResourceMap())
+                self.task_spec.get().GetRequiredResources().GetResourceStdMap())
             c_string resource_name
             double resource_value
             unordered_map[c_string, double].iterator iterator = (

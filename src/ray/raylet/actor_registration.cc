@@ -55,7 +55,7 @@ const int64_t ActorRegistration::GetRemainingReconstructions() const {
   return actor_table_data_.remaining_reconstructions();
 }
 
-const std::unordered_map<ActorHandleID, ActorRegistration::FrontierLeaf>
+const absl::flat_hash_map<ActorHandleID, ActorRegistration::FrontierLeaf>
     &ActorRegistration::GetFrontier() const {
   return frontier_;
 }

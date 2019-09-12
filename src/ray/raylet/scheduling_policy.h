@@ -2,7 +2,8 @@
 #define RAY_RAYLET_SCHEDULING_POLICY_H
 
 #include <random>
-#include <unordered_map>
+
+#include "absl/container/flat_hash_map.h"
 
 #include "ray/common/task/scheduling_resources.h"
 #include "ray/raylet/scheduling_queue.h"
@@ -32,8 +33,8 @@ class SchedulingPolicy {
   /// \param local_client_id The ID of the node manager that owns this
   /// SchedulingPolicy object.
   /// \return Scheduling decision, mapping tasks to raylets for placement.
-  std::unordered_map<TaskID, ClientID> Schedule(
-      std::unordered_map<ClientID, SchedulingResources> &cluster_resources,
+  absl::flat_hash_map<TaskID, ClientID> Schedule(
+      absl::flat_hash_map<ClientID, SchedulingResources> &cluster_resources,
       const ClientID &local_client_id);
 
   /// \brief Given a set of cluster resources perform a spill-over scheduling operation.

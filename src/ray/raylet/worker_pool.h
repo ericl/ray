@@ -2,9 +2,10 @@
 #define RAY_RAYLET_WORKER_POOL_H
 
 #include <inttypes.h>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+#include "absl/container/flat_hash_map.h"
 
 #include "ray/common/client_connection.h"
 #include "ray/common/task/task.h"
@@ -17,7 +18,7 @@ namespace ray {
 namespace raylet {
 
 using WorkerCommandMap =
-    std::unordered_map<Language, std::vector<std::string>, std::hash<int>>;
+    absl::flat_hash_map<Language, std::vector<std::string>, std::hash<int>>;
 
 class Worker;
 
@@ -161,11 +162,11 @@ class WorkerPool {
     int num_workers_per_process;
     /// The pool of dedicated workers for actor creation tasks
     /// with prefix or suffix worker command.
-    std::unordered_map<TaskID, std::shared_ptr<Worker>> idle_dedicated_workers;
+    absl::flat_hash_map<TaskID, std::shared_ptr<Worker>> idle_dedicated_workers;
     /// The pool of idle non-actor workers.
     std::unordered_set<std::shared_ptr<Worker>> idle;
     /// The pool of idle actor workers.
-    std::unordered_map<ActorID, std::shared_ptr<Worker>> idle_actor;
+    absl::flat_hash_map<ActorID, std::shared_ptr<Worker>> idle_actor;
     /// All workers that have registered and are still connected, including both
     /// idle and executing.
     std::unordered_set<std::shared_ptr<Worker>> registered_workers;
@@ -173,12 +174,12 @@ class WorkerPool {
     std::unordered_set<std::shared_ptr<Worker>> registered_drivers;
     /// A map from the pids of starting worker processes
     /// to the number of their unregistered workers.
-    std::unordered_map<pid_t, int> starting_worker_processes;
+    absl::flat_hash_map<pid_t, int> starting_worker_processes;
     /// A map for looking up the task with dynamic options by the pid of
     /// worker. Note that this is used for the dedicated worker processes.
-    std::unordered_map<pid_t, TaskID> dedicated_workers_to_tasks;
+    absl::flat_hash_map<pid_t, TaskID> dedicated_workers_to_tasks;
     /// A map for speeding up looking up the pending worker for the given task.
-    std::unordered_map<TaskID, pid_t> tasks_to_dedicated_workers;
+    absl::flat_hash_map<TaskID, pid_t> tasks_to_dedicated_workers;
     /// We'll push a warning to the user every time a multiple of this many
     /// worker processes has been started.
     int multiple_for_warning;
@@ -188,7 +189,7 @@ class WorkerPool {
   };
 
   /// Pool states per language.
-  std::unordered_map<Language, State, std::hash<int>> states_by_lang_;
+  absl::flat_hash_map<Language, State, std::hash<int>> states_by_lang_;
 
  private:
   /// A helper function that returns the reference of the pool state

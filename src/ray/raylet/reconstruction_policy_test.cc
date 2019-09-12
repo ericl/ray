@@ -81,7 +81,7 @@ class MockObjectDirectory : public ObjectDirectoryInterface {
 
  private:
   std::vector<std::pair<ObjectID, OnLocationsFound>> callbacks_;
-  std::unordered_map<ObjectID, std::unordered_set<ClientID>> locations_;
+  absl::flat_hash_map<ObjectID, std::unordered_set<ClientID>> locations_;
 };
 
 class MockGcs : public gcs::PubsubInterface<TaskID>,
@@ -152,9 +152,9 @@ class MockGcs : public gcs::PubsubInterface<TaskID>,
  private:
   gcs::TaskLeaseTable::WriteCallback notification_callback_;
   gcs::TaskLeaseTable::FailureCallback failure_callback_;
-  std::unordered_map<TaskID, std::shared_ptr<TaskLeaseData>> task_lease_table_;
+  absl::flat_hash_map<TaskID, std::shared_ptr<TaskLeaseData>> task_lease_table_;
   std::unordered_set<TaskID> subscribed_tasks_;
-  std::unordered_map<TaskID, std::vector<TaskReconstructionData>>
+  absl::flat_hash_map<TaskID, std::vector<TaskReconstructionData>>
       task_reconstruction_log_;
 };
 
@@ -235,7 +235,7 @@ class ReconstructionPolicyTest : public ::testing::Test {
   uint64_t reconstruction_timeout_ms_;
   std::shared_ptr<ReconstructionPolicy> reconstruction_policy_;
   bool timer_canceled_;
-  std::unordered_map<TaskID, int> reconstructed_tasks_;
+  absl::flat_hash_map<TaskID, int> reconstructed_tasks_;
 };
 
 TEST_F(ReconstructionPolicyTest, TestReconstructionSimple) {

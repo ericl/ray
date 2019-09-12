@@ -71,8 +71,8 @@ int main(int argc, char *argv[]) {
 
   // Configuration for the node manager.
   ray::raylet::NodeManagerConfig node_manager_config;
-  std::unordered_map<std::string, double> static_resource_conf;
-  std::unordered_map<std::string, std::string> raylet_config;
+  absl::flat_hash_map<std::string, double> static_resource_conf;
+  absl::flat_hash_map<std::string, std::string> raylet_config;
 
   // Parse the configuration list.
   std::istringstream config_string(config_list);

@@ -1,7 +1,7 @@
 #ifndef RAY_RAYLET_ACTOR_REGISTRATION_H
 #define RAY_RAYLET_ACTOR_REGISTRATION_H
 
-#include <unordered_map>
+#include "absl/container/flat_hash_map.h"
 
 #include "ray/common/id.h"
 #include "ray/common/task/task.h"
@@ -97,10 +97,10 @@ class ActorRegistration {
   ///
   /// \return The actor frontier, a map from handle ID to execution state for
   /// that handle.
-  const std::unordered_map<ActorHandleID, FrontierLeaf> &GetFrontier() const;
+  const absl::flat_hash_map<ActorHandleID, FrontierLeaf> &GetFrontier() const;
 
   /// Get all the dummy objects of this actor's tasks.
-  const std::unordered_map<ObjectID, int64_t> &GetDummyObjects() const {
+  const absl::flat_hash_map<ObjectID, int64_t> &GetDummyObjects() const {
     return dummy_objects_;
   }
 
@@ -150,7 +150,7 @@ class ActorRegistration {
   /// The execution frontier of the actor, which represents which tasks have
   /// executed so far and which tasks may execute next, based on execution
   /// dependencies. This is indexed by handle.
-  std::unordered_map<ActorHandleID, FrontierLeaf> frontier_;
+  absl::flat_hash_map<ActorHandleID, FrontierLeaf> frontier_;
   /// This map is used to track all the unreleased dummy objects for this
   /// actor.  The map key is the dummy object ID, and the map value is the
   /// number of actor handles that depend on that dummy object. When the map
@@ -168,7 +168,7 @@ class ActorRegistration {
   /// 2. Any handles that were forked from H after T finished, and before T's
   /// next task finishes. Such handles depend on D until their first tasks
   /// finish since D will be their first tasks' execution dependencies.
-  std::unordered_map<ObjectID, int64_t> dummy_objects_;
+  absl::flat_hash_map<ObjectID, int64_t> dummy_objects_;
 };
 
 }  // namespace raylet

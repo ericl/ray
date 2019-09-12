@@ -2,9 +2,10 @@
 #define RAY_COMMON_TASK_SCHEDULING_RESOURCES_H
 
 #include <string>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+#include "absl/container/flat_hash_map.h"
 
 #include "ray/raylet/format/node_manager_generated.h"
 
@@ -23,7 +24,7 @@ const std::string kCPU_ResourceLabel = "CPU";
 class FractionalResourceQuantity {
  public:
   /// \brief Construct a FractionalResourceQuantity representing zero
-  /// resources. This constructor is used by std::unordered_map when we try
+  /// resources. This constructor is used by absl::flat_hash_map when we try
   /// to add a new FractionalResourceQuantity in ResourceSets.
   FractionalResourceQuantity();
 
@@ -69,10 +70,10 @@ class ResourceSet {
 
   /// \brief Constructs ResourceSet from the specified resource map.
   ResourceSet(
-      const std::unordered_map<std::string, FractionalResourceQuantity> &resource_map);
+      const absl::flat_hash_map<std::string, FractionalResourceQuantity> &resource_map);
 
   /// \brief Constructs ResourceSet from the specified resource map.
-  ResourceSet(const std::unordered_map<std::string, double> &resource_map);
+  ResourceSet(const absl::flat_hash_map<std::string, double> &resource_map);
 
   /// \brief Constructs ResourceSet from two equal-length vectors with label and capacity
   /// specification.
@@ -180,20 +181,22 @@ class ResourceSet {
   /// regular units and does not need to be multiplied by kResourceConversionFactor.
   ///
   /// \return map of resource in string to size in double.
-  const std::unordered_map<std::string, double> GetResourceMap() const;
+  const absl::flat_hash_map<std::string, double> GetResourceMap() const;
+
+  const std::unordered_map<std::string, double> GetResourceStdMap() const;
 
   /// \brief Return a map of the resource and size in FractionalResourceQuantity. Note,
   /// size is in kResourceConversionFactor of a unit.
   ///
   /// \return map of resource in string to size in FractionalResourceQuantity.
-  const std::unordered_map<std::string, FractionalResourceQuantity>
+  const absl::flat_hash_map<std::string, FractionalResourceQuantity>
       &GetResourceAmountMap() const;
 
   const std::string ToString() const;
 
  private:
   /// Resource capacity map.
-  std::unordered_map<std::string, FractionalResourceQuantity> resource_capacity_;
+  absl::flat_hash_map<std::string, FractionalResourceQuantity> resource_capacity_;
 };
 
 /// \class ResourceIds
@@ -345,7 +348,7 @@ class ResourceIdSet {
   /// \brief Construct a ResourceIdSet from a mapping from resource names to ResourceIds.
   ///
   /// \param resource_set A mapping from resource name to IDs.
-  ResourceIdSet(const std::unordered_map<std::string, ResourceIds> &available_resources);
+  ResourceIdSet(const absl::flat_hash_map<std::string, ResourceIds> &available_resources);
 
   /// \brief See if a requested collection of resources is contained.
   ///
@@ -405,7 +408,7 @@ class ResourceIdSet {
   /// \brief Get the underlying mapping from resource name to resource IDs.
   ///
   /// \return The resource name to resource IDs mapping.
-  const std::unordered_map<std::string, ResourceIds> &AvailableResources() const;
+  const absl::flat_hash_map<std::string, ResourceIds> &AvailableResources() const;
 
   /// Return the CPU resources.
   ///
@@ -437,7 +440,7 @@ class ResourceIdSet {
 
  private:
   /// A mapping from resource name to a set of resource IDs for that resource.
-  std::unordered_map<std::string, ResourceIds> available_resources_;
+  absl::flat_hash_map<std::string, ResourceIds> available_resources_;
 };
 
 /// \class SchedulingResources

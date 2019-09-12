@@ -4,6 +4,9 @@
 #include <google/protobuf/map.h>
 #include <google/protobuf/repeated_field.h>
 #include <grpcpp/grpcpp.h>
+
+#include "absl/container/flat_hash_map.h"
+
 #include "status.h"
 
 namespace ray {
@@ -95,8 +98,8 @@ inline std::vector<ID> IdVectorFromProtobuf(
 
 /// Converts a Protobuf map to a `unordered_map`.
 template <class K, class V>
-inline std::unordered_map<K, V> MapFromProtobuf(::google::protobuf::Map<K, V> pb_map) {
-  return std::unordered_map<K, V>(pb_map.begin(), pb_map.end());
+inline absl::flat_hash_map<K, V> MapFromProtobuf(::google::protobuf::Map<K, V> pb_map) {
+  return absl::flat_hash_map<K, V>(pb_map.begin(), pb_map.end());
 }
 
 }  // namespace ray

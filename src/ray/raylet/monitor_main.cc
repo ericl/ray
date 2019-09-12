@@ -24,7 +24,7 @@ int main(int argc, char *argv[]) {
   const std::string redis_password = FLAGS_redis_password;
   gflags::ShutDownCommandLineFlags();
 
-  std::unordered_map<std::string, std::string> raylet_config;
+  absl::flat_hash_map<std::string, std::string> raylet_config;
 
   // Parse the configuration list.
   std::istringstream config_string(config_list);

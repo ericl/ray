@@ -2,8 +2,8 @@
 #define RAY_STATS_METRIC_H
 
 #include <memory>
-#include <unordered_map>
 
+#include "absl/container/flat_hash_map.h"
 #include "opencensus/exporters/stats/prometheus/prometheus_exporter.h"
 #include "opencensus/stats/stats.h"
 #include "opencensus/tags/tag_key.h"

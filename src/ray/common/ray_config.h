@@ -2,7 +2,8 @@
 #define RAY_CONFIG_H
 
 #include <sstream>
-#include <unordered_map>
+
+#include "absl/container/flat_hash_map.h"
 
 #include "ray/util/logging.h"
 
@@ -42,7 +43,7 @@ class RayConfig {
     continue;                                 \
   }
 
-  void initialize(const std::unordered_map<std::string, std::string> &config_map) {
+  void initialize(const absl::flat_hash_map<std::string, std::string> &config_map) {
     RAY_CHECK(!initialized_);
     for (auto const &pair : config_map) {
       // We use a big chain of if else statements because C++ doesn't allow

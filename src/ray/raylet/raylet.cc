@@ -94,7 +94,7 @@ ray::Status Raylet::RegisterGcs(const std::string &node_ip_address,
   RAY_RETURN_NOT_OK(gcs_client_->client_table().Connect(node_info));
 
   // Add resource information.
-  std::unordered_map<std::string, std::shared_ptr<gcs::ResourceTableData>> resources;
+  absl::flat_hash_map<std::string, std::shared_ptr<gcs::ResourceTableData>> resources;
   for (const auto &resource_pair : node_manager_config.resource_config.GetResourceMap()) {
     auto resource = std::make_shared<gcs::ResourceTableData>();
     resource->set_resource_capacity(resource_pair.second);

@@ -59,7 +59,7 @@ extern RedisChainModule module;
 namespace internal_redis_commands {
 
 /// Map from pub sub channel to clients that are waiting on that channel.
-std::unordered_map<std::string, std::vector<std::string>> notification_map;
+absl::flat_hash_map<std::string, std::vector<std::string>> notification_map;
 
 /// Parse a Redis string into a TablePubsub channel.
 Status ParseTablePubsub(TablePubsub *out, const RedisModuleString *pubsub_channel_str) {

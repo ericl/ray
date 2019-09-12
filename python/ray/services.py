@@ -383,8 +383,8 @@ def start_ray_process(command,
         command = ["valgrind", "--tool=callgrind"] + command
 
     if use_perftools_profiler:
-        modified_env["LD_PRELOAD"] = os.environ["PERFTOOLS_PATH"]
-        modified_env["CPUPROFILE"] = os.environ["PERFTOOLS_LOGFILE"]
+        modified_env["LD_PRELOAD"] = os.environ["RAYLET_PERFTOOLS_PATH"]
+        modified_env["CPUPROFILE"] = os.environ["RAYLET_PERFTOOLS_LOGFILE"]
 
     if use_tmux:
         # The command has to be created exactly as below to ensure that it

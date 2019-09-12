@@ -4,13 +4,14 @@
 #include <cstdint>
 #include <functional>
 #include <map>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 #include <boost/asio.hpp>
 #include <boost/asio/error.hpp>
 #include <boost/bind.hpp>
+
+#include "absl/container/flat_hash_map.h"
 
 #include "ray/common/id.h"
 #include "ray/common/status.h"
@@ -31,7 +32,7 @@ class ObjectTable {
 
  private:
   std::vector<ClientID> empty_set_;
-  std::unordered_map<ObjectID, std::unordered_set<ClientID>> client_lookup;
+  absl::flat_hash_map<ObjectID, std::unordered_set<ClientID>> client_lookup;
 };
 
 class ClientInformation {
@@ -51,7 +52,7 @@ class ClientInformation {
 
 class ClientTable {
  public:
-  typedef std::unordered_map<ClientID, ClientInformation> info_type;
+  typedef absl::flat_hash_map<ClientID, ClientInformation> info_type;
 
   using ClientIDsCallback = std::function<void(std::vector<ray::ClientID>)>;
   using SingleInfoCallback = std::function<void(ClientInformation info)>;

@@ -8,7 +8,8 @@
 #include <random>
 #include <sstream>
 #include <string>
-#include <unordered_map>
+
+#include "absl/container/flat_hash_map.h"
 
 #include "ray/common/status.h"
 
@@ -105,7 +106,7 @@ struct EnumClassHash {
 
 /// unordered_map for enum class type.
 template <typename Key, typename T>
-using EnumUnorderedMap = std::unordered_map<Key, T, EnumClassHash>;
+using EnumUnorderedMap = absl::flat_hash_map<Key, T, EnumClassHash>;
 
 /// A helper function to fill random bytes into the `data`.
 template <typename T>

@@ -63,7 +63,6 @@ void ObjectManager::HandleObjectAdded(
   // Notify the object directory that the object has been added to this node.
   ObjectID object_id = ObjectID::FromPlasmaIdBinary(object_info.object_id);
   RAY_LOG(DEBUG) << "Object added " << object_id;
-  RAY_CHECK(local_objects_.count(object_id) == 0);
   local_objects_[object_id].object_info = object_info;
   ray::Status status =
       object_directory_->ReportObjectAdded(object_id, client_id_, object_info);

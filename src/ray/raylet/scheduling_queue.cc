@@ -109,7 +109,7 @@ bool ReadyQueue::RemoveTask(const TaskID &task_id, std::vector<Task> *removed_ta
   return TaskQueue::RemoveTask(task_id, removed_tasks);
 }
 
-const std::unordered_map<ResourceSet, ordered_set<TaskID>>
+const absl::node_hash_map<ResourceSet, ordered_set<TaskID>>
     &ReadyQueue::GetTasksWithResources() const {
   return tasks_with_resources_;
 }
@@ -119,7 +119,7 @@ const std::list<Task> &SchedulingQueue::GetTasks(TaskState task_state) const {
   return queue->GetTasks();
 }
 
-const std::unordered_map<ResourceSet, ordered_set<TaskID>>
+const absl::node_hash_map<ResourceSet, ordered_set<TaskID>>
     &SchedulingQueue::GetReadyTasksWithResources() const {
   return ready_queue_->GetTasksWithResources();
 }
