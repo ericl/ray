@@ -60,31 +60,31 @@ void ObjectManager::StopRpcService() {
 
 void ObjectManager::HandleObjectAdded(
     const object_manager::protocol::ObjectInfoT &object_info) {
-  // Notify the object directory that the object has been added to this node.
-  ObjectID object_id = ObjectID::FromPlasmaIdBinary(object_info.object_id);
-  RAY_LOG(DEBUG) << "Object added " << object_id;
-  local_objects_[object_id].object_info = object_info;
-  ray::Status status =
-      object_directory_->ReportObjectAdded(object_id, client_id_, object_info);
-
-  // Handle the unfulfilled_push_requests_ which contains the push request that is not
-  // completed due to unsatisfied local objects.
-  auto iter = unfulfilled_push_requests_.find(object_id);
-  if (iter != unfulfilled_push_requests_.end()) {
-    for (auto &pair : iter->second) {
-      auto &client_id = pair.first;
-      main_service_->post([this, object_id, client_id]() { Push(object_id, client_id); });
-      // When push timeout is set to -1, there will be an empty timer in pair.second.
-      if (pair.second != nullptr) {
-        pair.second->cancel();
-      }
-    }
-    unfulfilled_push_requests_.erase(iter);
-  }
-
-  // The object is local, so we no longer need to Pull it from a remote
-  // manager. Cancel any outstanding Pull requests for this object.
-  CancelPull(object_id);
+//  // Notify the object directory that the object has been added to this node.
+//  ObjectID object_id = ObjectID::FromPlasmaIdBinary(object_info.object_id);
+//  RAY_LOG(DEBUG) << "Object added " << object_id;
+//  local_objects_[object_id].object_info = object_info;
+//  ray::Status status =
+//      object_directory_->ReportObjectAdded(object_id, client_id_, object_info);
+//
+//  // Handle the unfulfilled_push_requests_ which contains the push request that is not
+//  // completed due to unsatisfied local objects.
+//  auto iter = unfulfilled_push_requests_.find(object_id);
+//  if (iter != unfulfilled_push_requests_.end()) {
+//    for (auto &pair : iter->second) {
+//      auto &client_id = pair.first;
+//      main_service_->post([this, object_id, client_id]() { Push(object_id, client_id); });
+//      // When push timeout is set to -1, there will be an empty timer in pair.second.
+//      if (pair.second != nullptr) {
+//        pair.second->cancel();
+//      }
+//    }
+//    unfulfilled_push_requests_.erase(iter);
+//  }
+//
+//  // The object is local, so we no longer need to Pull it from a remote
+//  // manager. Cancel any outstanding Pull requests for this object.
+//  CancelPull(object_id);
 }
 
 void ObjectManager::NotifyDirectoryObjectDeleted(const ObjectID &object_id) {

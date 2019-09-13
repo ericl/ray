@@ -333,40 +333,7 @@ void TaskDependencyManager::TaskPending(const Task &task) {
 }
 
 void TaskDependencyManager::AcquireTaskLease(const TaskID &task_id) {
-  auto it = pending_tasks_.find(task_id);
-  int64_t now_ms = current_time_ms();
-  if (it == pending_tasks_.end()) {
-    return;
-  }
-
-  // Check that we were able to renew the task lease before the previous one
-  // expired.
-  if (now_ms > it->second.expires_at) {
-    RAY_LOG(WARNING) << "Task " << task_id << " lease to renew has already expired by "
-                     << (it->second.expires_at - now_ms) << "ms";
-  }
-
-  auto task_lease_data = std::make_shared<TaskLeaseData>();
-  task_lease_data->set_node_manager_id(client_id_.Hex());
-  task_lease_data->set_acquired_at(current_sys_time_ms());
-  task_lease_data->set_timeout(it->second.lease_period);
-  RAY_CHECK_OK(task_lease_table_.Add(JobID::Nil(), task_id, task_lease_data, nullptr));
-
-  auto period = boost::posix_time::milliseconds(it->second.lease_period / 2);
-  it->second.lease_timer->expires_from_now(period);
-  it->second.lease_timer->async_wait(
-      [this, task_id](const boost::system::error_code &error) {
-        if (!error) {
-          AcquireTaskLease(task_id);
-        } else {
-          // Check that the error was due to the timer being canceled.
-          RAY_CHECK(error == boost::asio::error::operation_aborted);
-        }
-      });
-
-  it->second.expires_at = now_ms + it->second.lease_period;
-  it->second.lease_period = std::min(it->second.lease_period * 2,
-                                     RayConfig::instance().max_task_lease_timeout_ms());
+  return;
 }
 
 void TaskDependencyManager::TaskCanceled(const TaskID &task_id) {

@@ -265,24 +265,24 @@ Lineage LineageCache::GetUncommittedLineage(const TaskID &task_id,
 
 void LineageCache::FlushTask(const TaskID &task_id) {
   auto entry = lineage_.GetEntryMutable(task_id);
-  RAY_CHECK(entry);
-  RAY_CHECK(entry->GetStatus() < GcsStatus::COMMITTING);
-
-  gcs::raylet::TaskTable::WriteCallback task_callback =
-      [this](ray::gcs::RedisGcsClient *client, const TaskID &id,
-             const TaskTableData &data) { HandleEntryCommitted(id); };
-  auto task = lineage_.GetEntry(task_id);
-  auto task_data = std::make_shared<TaskTableData>();
-  task_data->mutable_task()->mutable_task_spec()->CopyFrom(
-      task->TaskData().GetTaskSpecification().GetMessage());
-  task_data->mutable_task()->mutable_task_execution_spec()->CopyFrom(
-      task->TaskData().GetTaskExecutionSpec().GetMessage());
-  RAY_CHECK_OK(task_storage_.Add(JobID(task->TaskData().GetTaskSpecification().JobId()),
-                                 task_id, task_data, task_callback));
-
-  // We successfully wrote the task, so mark it as committing.
-  // TODO(swang): Use a batched interface and write with all object entries.
-  RAY_CHECK(entry->SetStatus(GcsStatus::COMMITTING));
+//  RAY_CHECK(entry);
+//  RAY_CHECK(entry->GetStatus() < GcsStatus::COMMITTING);
+//
+//  gcs::raylet::TaskTable::WriteCallback task_callback =
+//      [this](ray::gcs::RedisGcsClient *client, const TaskID &id,
+//             const TaskTableData &data) { HandleEntryCommitted(id); };
+//  auto task = lineage_.GetEntry(task_id);
+//  auto task_data = std::make_shared<TaskTableData>();
+//  task_data->mutable_task()->mutable_task_spec()->CopyFrom(
+//      task->TaskData().GetTaskSpecification().GetMessage());
+//  task_data->mutable_task()->mutable_task_execution_spec()->CopyFrom(
+//      task->TaskData().GetTaskExecutionSpec().GetMessage());
+//  RAY_CHECK_OK(task_storage_.Add(JobID(task->TaskData().GetTaskSpecification().JobId()),
+//                                 task_id, task_data, task_callback));
+//
+//  // We successfully wrote the task, so mark it as committing.
+//  // TODO(swang): Use a batched interface and write with all object entries.
+  RAY_CHECK(entry->SetStatus(GcsStatus::COMMITTED));
 }
 
 bool LineageCache::SubscribeTask(const TaskID &task_id) {
