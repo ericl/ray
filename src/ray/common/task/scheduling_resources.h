@@ -50,6 +50,9 @@ class FractionalResourceQuantity {
   bool operator<=(const FractionalResourceQuantity &rhs) const;
   bool operator>=(const FractionalResourceQuantity &rhs) const;
 
+  /// \brief Return if the resources is zero.
+  bool IsEmpty() const;
+
   /// \brief Return actual resource amount as a double.
   double ToDouble() const;
 
@@ -78,6 +81,28 @@ class ResourceSet {
   /// specification.
   ResourceSet(const std::vector<std::string> &resource_labels,
               const std::vector<double> resource_capacity);
+
+  ResourceSet(const ResourceSet& other) : cpu_(other.cpu_) {
+    if (other.other_resources_ != nullptr) {
+      // Copy the resources map if it exists, to avoid sharing a mutable map.
+      other_resources_.reset(
+        new std::unordered_map<std::string, FractionalResourceQuantity>(
+          *other.other_resources_));
+    }
+  }
+
+  ResourceSet& operator=(const ResourceSet& other) {
+    cpu_ = other.cpu_;
+    if (other.other_resources_ != nullptr) {
+      // Copy the resources map if it exists, to avoid sharing a mutable map.
+      other_resources_.reset(
+        new std::unordered_map<std::string, FractionalResourceQuantity>(
+          *other.other_resources_));
+    } else {
+      other_resources_.reset();
+    }
+    return *this;
+  }
 
   /// \brief Empty ResourceSet destructor.
   ~ResourceSet();
@@ -187,13 +212,18 @@ class ResourceSet {
   ///
   /// \return map of resource in string to size in FractionalResourceQuantity.
   const std::unordered_map<std::string, FractionalResourceQuantity>
-      &GetResourceAmountMap() const;
+      GetResourceAmountMap() const;
 
   const std::string ToString() const;
 
  private:
-  /// Resource capacity map.
-  std::unordered_map<std::string, FractionalResourceQuantity> resource_capacity_;
+  /// Tracks the CPU resource separately to speed up the common case.
+  FractionalResourceQuantity cpu_;
+
+  /// Resource capacity map for non-CPU resources. Invariant: this will be set to
+  /// nullptr if all other resources are empty.
+  std::unique_ptr<
+    std::unordered_map<std::string, FractionalResourceQuantity>> other_resources_;
 };
 
 /// \class ResourceIds

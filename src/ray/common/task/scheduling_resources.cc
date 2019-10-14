@@ -67,6 +67,10 @@ bool FractionalResourceQuantity::operator>=(const FractionalResourceQuantity &rh
   return result;
 }
 
+bool FractionalResourceQuantity::IsEmpty() const {
+  return resource_quantity_ == 0;
+}
+
 double FractionalResourceQuantity::ToDouble() const {
   return static_cast<double>(resource_quantity_) / kResourceConversionFactor;
 }
@@ -74,18 +78,31 @@ double FractionalResourceQuantity::ToDouble() const {
 ResourceSet::ResourceSet() {}
 
 ResourceSet::ResourceSet(
-    const std::unordered_map<std::string, FractionalResourceQuantity> &resource_map)
-    : resource_capacity_(resource_map) {
+    const std::unordered_map<std::string, FractionalResourceQuantity> &resource_map) {
   for (auto const &resource_pair : resource_map) {
-    RAY_CHECK(resource_pair.second > 0);
+    if (resource_pair.first == kCPU_ResourceLabel) {
+      cpu_ = resource_pair.second;
+    } else {
+      if (other_resources_ == nullptr) {
+        other_resources_.reset(
+            new std::unordered_map<std::string, FractionalResourceQuantity>());
+      }
+      other_resources_->insert(resource_pair);
+    }
   }
 }
 
 ResourceSet::ResourceSet(const std::unordered_map<std::string, double> &resource_map) {
   for (auto const &resource_pair : resource_map) {
-    RAY_CHECK(resource_pair.second > 0);
-    resource_capacity_[resource_pair.first] =
-        FractionalResourceQuantity(resource_pair.second);
+    if (resource_pair.first == kCPU_ResourceLabel) {
+      cpu_ = FractionalResourceQuantity(resource_pair.second);
+    } else {
+      if (other_resources_ == nullptr) {
+        other_resources_.reset(
+            new std::unordered_map<std::string, FractionalResourceQuantity>());
+      }
+      other_resources_->insert(std::make_pair(resource_pair.first, FractionalResourceQuantity(resource_pair.second)));
+    }
   }
 }
 
@@ -94,8 +111,14 @@ ResourceSet::ResourceSet(const std::vector<std::string> &resource_labels,
   RAY_CHECK(resource_labels.size() == resource_capacity.size());
   for (uint i = 0; i < resource_labels.size(); i++) {
     RAY_CHECK(resource_capacity[i] > 0);
-    resource_capacity_[resource_labels[i]] =
-        FractionalResourceQuantity(resource_capacity[i]);
+    if (resource_labels[i] == kCPU_ResourceLabel) {
+      cpu_ = FractionalResourceQuantity(resource_capacity[i]);
+    } else {
+      if (other_resources_ == nullptr) {
+        other_resources_.reset(new std::unordered_map<std::string, FractionalResourceQuantity>());
+      }
+      other_resources_->insert(std::make_pair(resource_labels[i], resource_capacity[i]));
+    }
   }
 }
 
@@ -106,19 +129,23 @@ bool ResourceSet::operator==(const ResourceSet &rhs) const {
 }
 
 bool ResourceSet::IsEmpty() const {
-  // Check whether the capacity of each resource type is zero. Exit early if not.
-  return resource_capacity_.empty();
+  return cpu_.IsEmpty() && other_resources_ == nullptr;
 }
 
 bool ResourceSet::IsSubset(const ResourceSet &other) const {
-  // Check to make sure all keys of this are in other.
-  for (const auto &resource_pair : resource_capacity_) {
-    const auto &resource_name = resource_pair.first;
-    const FractionalResourceQuantity &lhs_quantity = resource_pair.second;
-    const FractionalResourceQuantity &rhs_quantity = other.GetResource(resource_name);
-    if (lhs_quantity > rhs_quantity) {
-      // Resource found in rhs, but lhs capacity exceeds rhs capacity.
-      return false;
+  if (cpu_ > other.cpu_) {
+    return false;
+  }
+  if (other_resources_ != nullptr) {
+    // Check to make sure all keys of this are in other.
+    for (const auto &resource_pair : *other_resources_) {
+      const auto &resource_name = resource_pair.first;
+      const FractionalResourceQuantity &lhs_quantity = resource_pair.second;
+      const FractionalResourceQuantity &rhs_quantity = other.GetResource(resource_name);
+      if (lhs_quantity > rhs_quantity) {
+        // Resource found in rhs, but lhs capacity exceeds rhs capacity.
+        return false;
+      }
     }
   }
   return true;
@@ -137,53 +164,93 @@ bool ResourceSet::IsEqual(const ResourceSet &rhs) const {
 void ResourceSet::AddOrUpdateResource(const std::string &resource_name,
                                       const FractionalResourceQuantity &capacity) {
   if (capacity > 0) {
-    resource_capacity_[resource_name] = capacity;
+    if (resource_name == kCPU_ResourceLabel) {
+      cpu_ = capacity;
+    } else {
+      if (other_resources_ == nullptr) {
+        other_resources_.reset(
+            new std::unordered_map<std::string, FractionalResourceQuantity>());
+      }
+      (*other_resources_)[resource_name] = capacity;
+    }
   }
 }
 
 bool ResourceSet::DeleteResource(const std::string &resource_name) {
-  if (resource_capacity_.count(resource_name) == 1) {
-    resource_capacity_.erase(resource_name);
-    return true;
+  if (resource_name == kCPU_ResourceLabel) {
+    if (cpu_.IsEmpty()) {
+      return false;
+    } else {
+      cpu_ = FractionalResourceQuantity(0);
+      return true;
+    }
   } else {
-    return false;
+    if (other_resources_->count(resource_name) == 1) {
+      other_resources_->erase(resource_name);
+      if (other_resources_->size() == 0) {
+        other_resources_.reset();
+      }
+      return true;
+    } else {
+      return false;
+    }
   }
 }
 
 void ResourceSet::SubtractResources(const ResourceSet &other) {
-  // Subtract the resources, make sure none goes below zero and delete any if new capacity
-  // is zero.
-  for (const auto &resource_pair : other.GetResourceAmountMap()) {
-    const std::string &resource_label = resource_pair.first;
-    const FractionalResourceQuantity &resource_capacity = resource_pair.second;
-    if (resource_capacity_.count(resource_label) == 1) {
-      resource_capacity_[resource_label] -= resource_capacity;
+  cpu_ -= other.cpu_;
+  if (cpu_ <= 0) {
+    cpu_ = FractionalResourceQuantity();
+  }
+
+  if (other.other_resources_ != nullptr && other_resources_ != nullptr) {
+    // Subtract the resources, make sure none goes below zero and delete any if new capacity
+    // is zero.
+    for (const auto &resource_pair : *other.other_resources_) {
+      const std::string &resource_label = resource_pair.first;
+      const FractionalResourceQuantity &resource_capacity = resource_pair.second;
+      if (other_resources_->count(resource_label) == 1) {
+        (*other_resources_)[resource_label] -= resource_capacity;
+      }
+      if ((*other_resources_)[resource_label] <= 0) {
+        other_resources_->erase(resource_label);
+      }
     }
-    if (resource_capacity_[resource_label] <= 0) {
-      resource_capacity_.erase(resource_label);
+    if (other_resources_->size() == 0) {
+      other_resources_.reset();
     }
   }
 }
 
 void ResourceSet::SubtractResourcesStrict(const ResourceSet &other) {
-  // Subtract the resources, make sure none goes below zero and delete any if new capacity
-  // is zero.
-  for (const auto &resource_pair : other.GetResourceAmountMap()) {
-    const std::string &resource_label = resource_pair.first;
-    const FractionalResourceQuantity &resource_capacity = resource_pair.second;
-    RAY_CHECK(resource_capacity_.count(resource_label) == 1)
-        << "Attempt to acquire unknown resource: " << resource_label << " capacity "
-        << resource_capacity.ToDouble();
-    resource_capacity_[resource_label] -= resource_capacity;
+  cpu_ -= other.cpu_;
+  RAY_CHECK(cpu_ >= 0) << "Capacity of CPU after subtraction is negative, "
+      << cpu_.ToDouble() << ".";
 
-    // Ensure that quantity is positive. Note, we have to have the check before
-    // erasing the object to make sure that it doesn't get added back.
-    RAY_CHECK(resource_capacity_[resource_label] >= 0)
-        << "Capacity of resource after subtraction is negative, "
-        << resource_capacity_[resource_label].ToDouble() << ".";
+  if (other.other_resources_ != nullptr) {
+    RAY_CHECK(other_resources_ != nullptr) << "Tried to subtract resources we don't have.";
+    // Subtract the resources, make sure none goes below zero and delete any if new capacity
+    // is zero.
+    for (const auto &resource_pair : *other.other_resources_) {
+      const std::string &resource_label = resource_pair.first;
+      const FractionalResourceQuantity &resource_capacity = resource_pair.second;
+      RAY_CHECK(other_resources_->count(resource_label) == 1)
+          << "Attempt to acquire unknown resource: " << resource_label << " capacity "
+          << resource_capacity.ToDouble();
+      (*other_resources_)[resource_label] -= resource_capacity;
 
-    if (resource_capacity_[resource_label] == 0) {
-      resource_capacity_.erase(resource_label);
+      // Ensure that quantity is positive. Note, we have to have the check before
+      // erasing the object to make sure that it doesn't get added back.
+      RAY_CHECK((*other_resources_)[resource_label] >= 0)
+          << "Capacity of resource after subtraction is negative, "
+          << (*other_resources_)[resource_label].ToDouble() << ".";
+
+      if ((*other_resources_)[resource_label] == 0) {
+        other_resources_->erase(resource_label);
+      }
+    }
+    if (other_resources_->size() == 0) {
+      other_resources_.reset();
     }
   }
 }
@@ -192,55 +259,67 @@ void ResourceSet::SubtractResourcesStrict(const ResourceSet &other) {
 // capacity from the total_resource set
 void ResourceSet::AddResourcesCapacityConstrained(const ResourceSet &other,
                                                   const ResourceSet &total_resources) {
-  const std::unordered_map<std::string, FractionalResourceQuantity> &total_resource_map =
-      total_resources.GetResourceAmountMap();
-  for (const auto &resource_pair : other.GetResourceAmountMap()) {
-    const std::string &to_add_resource_label = resource_pair.first;
-    const FractionalResourceQuantity &to_add_resource_capacity = resource_pair.second;
-    if (total_resource_map.count(to_add_resource_label) != 0) {
-      // If resource exists in total map, add to the local capacity map.
-      // If the new capacity will be greater the total capacity, set the new capacity to
-      // total capacity (capping to the total)
-      const FractionalResourceQuantity &total_capacity =
-          total_resource_map.at(to_add_resource_label);
-      resource_capacity_[to_add_resource_label] =
-          std::min(resource_capacity_[to_add_resource_label] + to_add_resource_capacity,
-                   total_capacity);
-    } else {
-      // Resource does not exist in the total map, it probably got deleted from the total.
-      // Don't panic, do nothing and simply continue.
-      RAY_LOG(DEBUG) << "[AddResourcesCapacityConstrained] Resource "
-                     << to_add_resource_label
-                     << " not found in the total resource map. It probably got deleted, "
-                        "not adding back to resource_capacity_.";
+  cpu_ += other.cpu_;
+  if (cpu_ > total_resources.cpu_) {
+    cpu_ = total_resources.cpu_;
+  }
+
+  if (other.other_resources_ != nullptr) {
+    if (other_resources_ == nullptr) {
+      other_resources_.reset(new std::unordered_map<std::string, FractionalResourceQuantity>());
+    }
+    const auto& total_resource_map = *total_resources.other_resources_;
+    for (const auto &resource_pair : *other.other_resources_) {
+      const std::string &to_add_resource_label = resource_pair.first;
+      const FractionalResourceQuantity &to_add_resource_capacity = resource_pair.second;
+      if (total_resource_map.count(to_add_resource_label) != 0) {
+        // If resource exists in total map, add to the local capacity map.
+        // If the new capacity will be greater the total capacity, set the new capacity to
+        // total capacity (capping to the total)
+        const FractionalResourceQuantity &total_capacity =
+            total_resource_map.at(to_add_resource_label);
+        (*other_resources_)[to_add_resource_label] =
+            std::min((*other_resources_)[to_add_resource_label] + to_add_resource_capacity,
+                     total_capacity);
+      } else {
+        // Resource does not exist in the total map, it probably got deleted from the total.
+        // Don't panic, do nothing and simply continue.
+        RAY_LOG(DEBUG) << "[AddResourcesCapacityConstrained] Resource "
+                       << to_add_resource_label
+                       << " not found in the total resource map. It probably got deleted, "
+                          "not adding back to other_resources_.";
+      }
     }
   }
 }
 
 // Perform an outer join.
 void ResourceSet::AddResources(const ResourceSet &other) {
-  for (const auto &resource_pair : other.GetResourceAmountMap()) {
-    const std::string &resource_label = resource_pair.first;
-    const FractionalResourceQuantity &resource_capacity = resource_pair.second;
-    resource_capacity_[resource_label] += resource_capacity;
+  cpu_ += other.cpu_;
+  if (other.other_resources_ != nullptr) {
+    for (const auto &resource_pair : *other.other_resources_) {
+      const std::string &resource_label = resource_pair.first;
+      const FractionalResourceQuantity &resource_capacity = resource_pair.second;
+      (*other_resources_)[resource_label] += resource_capacity;
+    }
   }
 }
 
 FractionalResourceQuantity ResourceSet::GetResource(
     const std::string &resource_name) const {
-  if (resource_capacity_.count(resource_name) == 0) {
+  if (resource_name == kCPU_ResourceLabel) {
+    return cpu_;
+  }
+  if (other_resources_ == nullptr || other_resources_->count(resource_name) == 0) {
     return 0;
   }
-  const FractionalResourceQuantity &capacity = resource_capacity_.at(resource_name);
+  const FractionalResourceQuantity &capacity = other_resources_->at(resource_name);
   return capacity;
 }
 
 const ResourceSet ResourceSet::GetNumCpus() const {
   ResourceSet cpu_resource_set;
-  const FractionalResourceQuantity cpu_quantity = GetResource(kCPU_ResourceLabel);
-  if (cpu_quantity > 0) {
-    cpu_resource_set.resource_capacity_[kCPU_ResourceLabel] = cpu_quantity;
-  }
+  cpu_resource_set.cpu_ = cpu_;
   return cpu_resource_set;
 }
 
@@ -253,15 +332,18 @@ const std::string format_resource(std::string resource_name, double quantity) {
 }
 
 const std::string ResourceSet::ToString() const {
-  if (resource_capacity_.size() == 0) {
+  if (cpu_.IsEmpty() && other_resources_ == nullptr) {
     return "{}";
+  } else if (other_resources_ == nullptr) {
+    return "{CPU: " + format_resource(kCPU_ResourceLabel, cpu_.ToDouble()) + "}";
   } else {
     std::string return_string = "";
+    auto resources = GetResourceAmountMap();
 
-    auto it = resource_capacity_.begin();
+    auto it = resources.begin();
 
     // Convert the first element to a string.
-    if (it != resource_capacity_.end()) {
+    if (it != resources.end()) {
       double resource_amount = (it->second).ToDouble();
       return_string +=
           "{" + it->first + ": " + format_resource(it->first, resource_amount) + "}";
@@ -269,7 +351,7 @@ const std::string ResourceSet::ToString() const {
     }
 
     // Add the remaining elements to the string (along with a comma).
-    for (; it != resource_capacity_.end(); ++it) {
+    for (; it != resources.end(); ++it) {
       double resource_amount = (it->second).ToDouble();
       return_string +=
           ", {" + it->first + ": " + format_resource(it->first, resource_amount) + "}";
@@ -280,16 +362,40 @@ const std::string ResourceSet::ToString() const {
 }
 
 const std::unordered_map<std::string, double> ResourceSet::GetResourceMap() const {
-  std::unordered_map<std::string, double> result;
-  for (const auto resource_pair : resource_capacity_) {
-    result[resource_pair.first] = resource_pair.second.ToDouble();
+
+  if (other_resources_ == nullptr) {
+    if (cpu_.IsEmpty()) {
+      return {};
+    } else {
+      return {{kCPU_ResourceLabel, cpu_.ToDouble()}};
+    }
+  } else {
+    std::unordered_map<std::string, double> result;
+    for (const auto resource_pair : *other_resources_) {
+      result[resource_pair.first] = resource_pair.second.ToDouble();
+    }
+    if (!cpu_.IsEmpty()) {
+      result[kCPU_ResourceLabel] = cpu_.ToDouble();
+    }
+    return result;
   }
-  return result;
 };
 
 const std::unordered_map<std::string, FractionalResourceQuantity>
-    &ResourceSet::GetResourceAmountMap() const {
-  return resource_capacity_;
+    ResourceSet::GetResourceAmountMap() const {
+  if (other_resources_ == nullptr) {
+    if (cpu_.IsEmpty()) {
+      return {};
+    } else {
+      return {{kCPU_ResourceLabel, cpu_}};
+    }
+  } else {
+    std::unordered_map<std::string, FractionalResourceQuantity> result = *other_resources_;
+    if (!cpu_.IsEmpty()) {
+      result[kCPU_ResourceLabel] = cpu_;
+    }
+    return result;
+  }
 };
 
 /// ResourceIds class implementation
