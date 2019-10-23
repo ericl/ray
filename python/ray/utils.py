@@ -265,6 +265,7 @@ def get_cuda_visible_devices():
 
 last_set_gpu_ids = None
 
+
 def set_cuda_visible_devices(gpu_ids):
     """Set the CUDA_VISIBLE_DEVICES environment variable.
 

@@ -213,8 +213,7 @@ bool CoreWorkerDirectActorTaskSubmitter::IsActorAlive(const ActorID &actor_id) c
 CoreWorkerDirectActorTaskReceiver::CoreWorkerDirectActorTaskReceiver(
     WorkerContext &worker_context, CoreWorkerObjectInterface &object_interface,
     boost::asio::io_service &io_service, boost::asio::io_service &main_io_service,
-    rpc::GrpcServer &server,
-    const TaskHandler &task_handler)
+    rpc::GrpcServer &server, const TaskHandler &task_handler)
     : worker_context_(worker_context),
       io_service_(io_service),
       object_interface_(object_interface),

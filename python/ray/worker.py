@@ -403,9 +403,11 @@ class Worker(object):
                 range(ray_constants.DEFAULT_PUT_OBJECT_RETRIES)):
             try:
                 if self.use_pickle:
-                    self.store_with_plasma(object_id, value, put_async=put_async)
+                    self.store_with_plasma(
+                        object_id, value, put_async=put_async)
                 else:
-                    self._try_store_and_register(object_id, value, put_async=put_async)
+                    self._try_store_and_register(
+                        object_id, value, put_async=put_async)
                 break
             except ObjectStoreFullError as e:
                 if attempt:

@@ -481,7 +481,8 @@ cdef _check_worker_state(worker, CTaskType task_type, JobID job_id):
         assert worker.current_job_id == job_id
 
 
-cdef _store_task_outputs(worker, return_ids, outputs,
+cdef _store_task_outputs(
+        worker, return_ids, outputs,
         c_bool is_direct_call
         c_vector[shared_ptr[CRayObject]] *returns):
 
@@ -607,8 +608,8 @@ cdef execute_task(
 
             # Store the outputs in the object store.
             with profiling.profile("task:store_outputs"):
-                _store_task_outputs(worker, return_ids, outputs,
-                    is_direct_call, returns)
+                _store_task_outputs(
+                    worker, return_ids, outputs, is_direct_call, returns)
 
         except Exception as error:
             if (<int>task_type == <int>TASK_TYPE_ACTOR_CREATION_TASK):

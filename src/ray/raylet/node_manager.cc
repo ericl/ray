@@ -9,8 +9,8 @@
 #include "ray/common/id.h"
 #include "ray/raylet/format/node_manager_generated.h"
 #include "ray/stats/stats.h"
-#include "ray/util/util.h"
 #include "ray/util/sample.h"
+#include "ray/util/util.h"
 
 namespace {
 

@@ -36,8 +36,9 @@ class CoreWorkerRayletTaskReceiver : public CoreWorkerTaskReceiver,
  private:
   void ProcessAssignedTasks(rpc::SendReplyCallback send_reply_callback);
 
-  Status HandleAssignTask0(const flatbuffers::Vector<flatbuffers::Offset<ray::protocol::ResourceIdSetInfo> > *,
-                           const TaskSpecification &task_spec);
+  Status HandleAssignTask0(
+      const flatbuffers::Vector<flatbuffers::Offset<ray::protocol::ResourceIdSetInfo> > *,
+      const TaskSpecification &task_spec);
 
   // Worker context.
   WorkerContext &worker_context_;

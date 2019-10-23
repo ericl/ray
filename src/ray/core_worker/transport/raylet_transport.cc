@@ -8,8 +8,8 @@ namespace ray {
 CoreWorkerRayletTaskReceiver::CoreWorkerRayletTaskReceiver(
     WorkerContext &worker_context, std::unique_ptr<RayletClient> &raylet_client,
     CoreWorkerObjectInterface &object_interface, boost::asio::io_service &rpc_io_service,
-    boost::asio::io_service &main_io_service,
-    rpc::GrpcServer &server, const TaskHandler &task_handler)
+    boost::asio::io_service &main_io_service, rpc::GrpcServer &server,
+    const TaskHandler &task_handler)
     : worker_context_(worker_context),
       raylet_client_(raylet_client),
       object_interface_(object_interface),
@@ -64,9 +64,9 @@ void CoreWorkerRayletTaskReceiver::ProcessAssignedTasks(
     assigned_tasks_.pop_front();
     // Don't hold the lock while processing the task. This allows other RPCs to
     // steal remaining tasks from us while we are processing this one.
-    auto resource_infos =
-        flatbuffers::GetRoot<protocol::ResourceIdSetInfos>(assigned_req_.resource_ids().data())
-            ->resource_infos();
+    auto resource_infos = flatbuffers::GetRoot<protocol::ResourceIdSetInfos>(
+                              assigned_req_.resource_ids().data())
+                              ->resource_infos();
     mu_.Unlock();
     RAY_CHECK_OK(HandleAssignTask0(resource_infos, task_spec));
     num_tasks_completed += 1;
@@ -92,9 +92,9 @@ void CoreWorkerRayletTaskReceiver::ProcessAssignedTasks(
 }
 
 Status CoreWorkerRayletTaskReceiver::HandleAssignTask0(
-    const flatbuffers::Vector<flatbuffers::Offset<ray::protocol::ResourceIdSetInfo> > *resource_infos,
+    const flatbuffers::Vector<flatbuffers::Offset<ray::protocol::ResourceIdSetInfo>>
+        *resource_infos,
     const TaskSpecification &task_spec) {
-
   // Set the resource IDs for this task.
   // TODO: convert the resource map to protobuf and change this.
   ResourceMappingType resource_ids;
