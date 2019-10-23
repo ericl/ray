@@ -44,7 +44,7 @@ class CoreWorkerDirectActorTaskSubmitter {
   /// \param[in] task The task spec to submit.
   /// \return Status::Invalid if the task is not yet supported.
   Status SubmitTask(const TaskSpecification &task_spec);
-  Status SubmitTaskBatch(const std::vector<TaskSpecification> &tasks) override;
+  Status SubmitTaskBatch(const std::vector<TaskSpecification> &tasks);
 
   /// Handle an update about an actor.
   ///

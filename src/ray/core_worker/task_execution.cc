@@ -9,7 +9,7 @@ namespace ray {
 CoreWorkerTaskExecutionInterface::CoreWorkerTaskExecutionInterface(
     CoreWorker &core_worker, WorkerContext &worker_context,
     std::unique_ptr<RayletClient> &raylet_client,
-    CoreWorkerObjectInterface &object_interface,
+    CoreWorkerObjectInterface &object_interface, boost::asio::io_service &io_service,
     const std::shared_ptr<worker::Profiler> profiler,
     const TaskExecutionCallback &task_execution_callback)
     : core_worker_(core_worker),
@@ -18,6 +18,7 @@ CoreWorkerTaskExecutionInterface::CoreWorkerTaskExecutionInterface(
       profiler_(profiler),
       task_execution_callback_(task_execution_callback),
       worker_server_("Worker", 0 /* let grpc choose port */),
+      rpc_io_service_(io_service),
       main_service_(std::make_shared<boost::asio::io_service>()),
       main_work_(*main_service_) {
   RAY_CHECK(task_execution_callback_ != nullptr);

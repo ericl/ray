@@ -324,15 +324,20 @@ class Worker(object):
                     # that this object can also be read by Java.
                     self.core_worker.put_raw_buffer(
                         value, object_id, memcopy_threads=self.memcopy_threads)
-                    # TODO(ekl) support async put of raw buffers
+                    assert not put_async, "not implemented yet"
+                    assert not intercept_returns, "not implemented yet"
                 else:
                     serialization_context = self.get_serialization_context(
                         self.current_job_id)
-                    self.core_worker.put_serialized_object(
-                        pyarrow.serialize(value, serialization_context),
-                        object_id,
-                        memcopy_threads=self.memcopy_threads,
-                        put_async=put_async)
+                    value = pyarrow.serialize(value, serialization_context)
+                    if intercept_returns is not None:
+                        intercept_returns.append(value)
+                    else:
+                        self.core_worker.put_serialized_object(
+                            value,
+                            object_id,
+                            memcopy_threads=self.memcopy_threads,
+                            put_async=put_async)
                 break
             except pyarrow.SerializationCallbackError as e:
                 cls_type = type(e.example_object)
@@ -366,7 +371,11 @@ class Worker(object):
                                            "locally.".format(cls_type))
                         logger.warning(warning_message)
 
-    def put_object(self, object_id, value, put_async=False):
+    def put_object(self,
+                   object_id,
+                   value,
+                   put_async=False,
+                   intercept_returns=None):
         """Put value in the local object store with object id `objectid`.
 
         This assumes that the value for `objectid` has not yet been placed in
@@ -403,11 +412,15 @@ class Worker(object):
                 range(ray_constants.DEFAULT_PUT_OBJECT_RETRIES)):
             try:
                 if self.use_pickle:
+                    assert intercept_returns is None, "not implemented"
                     self.store_with_plasma(
                         object_id, value, put_async=put_async)
                 else:
                     self._try_store_and_register(
-                        object_id, value, put_async=put_async)
+                        object_id,
+                        value,
+                        put_async=put_async,
+                        intercept_returns=intercept_returns)
                 break
             except ObjectStoreFullError as e:
                 if attempt:

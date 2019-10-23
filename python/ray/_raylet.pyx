@@ -423,7 +423,7 @@ cdef deserialize_args(
         c_vector[shared_ptr[CRayObject]] by_reference_objects
 
     if c_args.size() == 0:
-        return []
+        return [], {}
 
     args = []
     by_reference_ids = []
@@ -483,33 +483,42 @@ cdef _check_worker_state(worker, CTaskType task_type, JobID job_id):
 
 cdef _store_task_outputs(
         worker, return_ids, outputs,
-        c_bool is_direct_call
+        c_bool is_direct_call,
         c_vector[shared_ptr[CRayObject]] *returns):
 
     if is_direct_call:
-        global last_outputs
-        global last_obj_returns
         if outputs == last_outputs:
             for ray_object in last_obj_returns:
                 returns.push_back(ray_object)
+            return  # the output was cached
         else:
-            to_ray_objects(outputs, returns)
-            last_outputs = outputs
-            last_obj_returns = returns[0]
+            intercept_returns = []
     else:
-        for i in range(len(return_ids)):
-            return_id, output = return_ids[i], outputs[i]
-            if isinstance(output, ray.actor.ActorHandle):
-                raise Exception("Returning an actor handle from a remote "
-                                "function is not allowed).")
-            if output is ray.experimental.no_return.NoReturn:
-                if not worker.core_worker.object_exists(return_id):
-                    raise RuntimeError(
-                        "Attempting to return 'ray.experimental.NoReturn' "
-                        "from a remote function, but the corresponding "
-                        "ObjectID does not exist in the local object store.")
-            else:
-                worker.put_object(return_id, output)
+        intercept_returns = None
+
+    for i in range(len(return_ids)):
+        return_id, output = return_ids[i], outputs[i]
+        if isinstance(output, ray.actor.ActorHandle):
+            raise Exception("Returning an actor handle from a remote "
+                            "function is not allowed).")
+        if output is ray.experimental.no_return.NoReturn:
+            if not worker.core_worker.object_exists(return_id):
+                raise RuntimeError(
+                    "Attempting to return 'ray.experimental.NoReturn' "
+                    "from a remote function, but the corresponding "
+                    "ObjectID does not exist in the local object store.")
+        else:
+            worker.put_object(
+                return_id, output, intercept_returns=intercept_returns)
+
+    if intercept_returns is not None:
+        assert len(return_ids) == len(intercept_returns), \
+            (return_ids, intercept_returns)
+        global last_outputs
+        global last_obj_returns
+        to_ray_objects(intercept_returns, returns)
+        last_outputs = intercept_returns
+        last_obj_returns = returns[0]
 
 
 cdef object last_outputs
@@ -525,7 +534,7 @@ cdef execute_task(
         const c_vector[shared_ptr[CRayObject]] &c_args,
         const c_vector[CObjectID] &c_arg_reference_ids,
         const c_vector[CObjectID] &c_return_ids,
-        c_bool is_direct_call
+        c_bool is_direct_call,
         c_vector[shared_ptr[CRayObject]] *returns):
 
     worker = ray.worker.global_worker
@@ -675,7 +684,7 @@ cdef CRayStatus task_execution_handler(
         const c_vector[shared_ptr[CRayObject]] &c_args,
         const c_vector[CObjectID] &c_arg_reference_ids,
         const c_vector[CObjectID] &c_return_ids,
-        c_bool is_direct_call
+        c_bool is_direct_call,
         c_vector[shared_ptr[CRayObject]] *returns) nogil:
 
     with gil:

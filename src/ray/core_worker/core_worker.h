@@ -261,6 +261,7 @@ class CoreWorker {
   /// Protects task_batch_.
   std::recursive_mutex task_batch_lock_;
   bool flushing_ = false;
+  std::vector<TaskSpecification> task_batch_;
 
   friend class CoreWorkerTest;
 };

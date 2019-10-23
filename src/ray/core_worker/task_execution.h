@@ -38,6 +38,7 @@ class CoreWorkerTaskExecutionInterface {
   CoreWorkerTaskExecutionInterface(CoreWorker &core_worker, WorkerContext &worker_context,
                                    std::unique_ptr<RayletClient> &raylet_client,
                                    CoreWorkerObjectInterface &object_interface,
+                                   boost::asio::io_service &io_service,
                                    const std::shared_ptr<worker::Profiler> profiler,
                                    const TaskExecutionCallback &task_execution_callback);
 
