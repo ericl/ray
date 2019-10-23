@@ -306,7 +306,8 @@ class ActorClass(object):
                 num_gpus=None,
                 memory=None,
                 object_store_memory=None,
-                resources=None):
+                resources=None,
+                is_direct_call=None):
         """Create an actor.
 
         This method allows more flexibility than the remote method because
@@ -323,6 +324,7 @@ class ActorClass(object):
                 this actor when creating objects.
             resources: The custom resources required by the actor creation
                 task.
+            is_direct_call: Use direct actor calls.
 
         Returns:
             A handle to the newly created actor.
@@ -401,7 +403,7 @@ class ActorClass(object):
             actor_id = worker.core_worker.create_actor(
                 function_descriptor.get_function_descriptor_list(),
                 creation_args, meta.max_reconstructions, resources,
-                actor_placement_resources)
+                actor_placement_resources, is_direct_call)
 
         actor_handle = ActorHandle(
             actor_id,
@@ -468,6 +470,12 @@ class ActorHandle(object):
         self._ray_class_name = class_name
         self._ray_actor_method_cpus = actor_method_cpus
         self._ray_session_and_job = session_and_job
+        self._ray_function_descriptor_lists = {
+            method_name: FunctionDescriptor(
+                self._ray_module_name, method_name,
+                self._ray_class_name).get_function_descriptor_list()
+            for method_name in self._ray_method_signatures.keys()
+        }
 
     def _actor_method_call(self,
                            method_name,
@@ -506,12 +514,12 @@ class ActorHandle(object):
             if worker.mode == ray.LOCAL_MODE:
                 function = getattr(worker.actors[self._actor_id], method_name)
                 object_ids = worker.local_mode_manager.execute(
-                    function, function_descriptor, args, kwargs,
+                    function, method_name, args, kwargs,
                     num_return_vals)
             else:
                 object_ids = worker.core_worker.submit_actor_task(
                     self._ray_actor_id,
-                    function_descriptor.get_function_descriptor_list(),
+                    self._ray_function_descriptor_lists[method_name],
                     list_args, num_return_vals,
                     {"CPU": self._ray_actor_method_cpus})
 

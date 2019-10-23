@@ -34,7 +34,7 @@ CoreWorkerTaskExecutionInterface::CoreWorkerTaskExecutionInterface(
       TaskTransportType::DIRECT_ACTOR,
       std::unique_ptr<CoreWorkerDirectActorTaskReceiver>(
           new CoreWorkerDirectActorTaskReceiver(worker_context_, object_interface_,
-                                                rpc_io_service_, worker_server_, func)));
+                                                rpc_io_service_, *main_service_, worker_server_, func)));
 
   // Start RPC server after all the task receivers are properly initialized.
   worker_server_.Run();
@@ -78,7 +78,9 @@ Status CoreWorkerTaskExecutionInterface::ExecuteTask(
   }
   status = task_execution_callback_(task_type, func, task_spec.JobId(), actor_id,
                                     task_spec.GetRequiredResources().GetResourceMap(),
-                                    args, arg_reference_ids, return_ids, results);
+                                    args, arg_reference_ids, return_ids,
+                                    worker_context_.CurrentActorUseDirectCall(),
+                                    results);
 
   // TODO(zhijunfu):
   // 1. Check and handle failure.

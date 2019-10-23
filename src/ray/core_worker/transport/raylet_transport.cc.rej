@@ -1,0 +1,16 @@
+diff a/src/ray/core_worker/transport/raylet_transport.cc b/src/ray/core_worker/transport/raylet_transport.cc	(rejected hunks)
+@@ -103,12 +107,10 @@ void CoreWorkerRayletTaskReceiver::ProcessAssignedTasks(
+ }
+ 
+ Status CoreWorkerRayletTaskReceiver::HandleAssignTask0(
+-    const rpc::AssignTaskRequest &request, const TaskSpecification &task_spec) {
++    const flatbuffers::Vector<flatbuffers::Offset<ray::protocol::ResourceIdSetInfo> > *resource_infos,
++    const TaskSpecification &task_spec) {
+   // Set the resource IDs for this task.
+   ResourceMappingType resource_ids;
+-  auto resource_infos =
+-      flatbuffers::GetRoot<protocol::ResourceIdSetInfos>(request.resource_ids().data())
+-          ->resource_infos();
+   for (size_t i = 0; i < resource_infos->size(); ++i) {
+     auto const &fractional_resource_ids = resource_infos->Get(i);
+     auto &acquired_resources =

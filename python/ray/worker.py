@@ -155,6 +155,10 @@ class Worker(object):
         # postprocessor must take two arguments ("object_ids", and "values").
         self._post_get_hooks = []
 
+        self._cached = False
+        self._cached_value = None
+        self._cached_value_serialized = None
+
     @property
     def connected(self):
         return self.node is not None
@@ -199,6 +203,8 @@ class Worker(object):
                 # random task ID so that the backend can differentiate
                 # between different threads.
                 self._task_context.current_task_id = TaskID.for_fake_task()
+                import traceback
+                traceback.print_stack()
                 if getattr(self, "_multithreading_warned", False) is not True:
                     logger.warning(
                         "Calling ray.get or ray.wait in a separate thread "
@@ -283,7 +289,12 @@ class Worker(object):
         """
         self.mode = mode
 
-    def store_and_register(self, object_id, value, depth=100, put_async=False):
+    def store_and_register(self,
+                           object_id,
+                           value,
+                           depth=100,
+                           put_async=False,
+                           intercept_returns=None):
         """Store an object and attempt to register its class if needed.
 
         Args:
@@ -455,7 +466,11 @@ class Worker(object):
             logger.info("The object with ID {} already exists "
                         "in the object store.".format(object_id))
 
-    def _try_store_and_register(self, object_id, value, put_async=False):
+    def _try_store_and_register(self,
+                                object_id,
+                                value,
+                                put_async=False,
+                                intercept_returns=None):
         """Wraps `store_and_register` with cases for existence and pickling.
 
         Args:
@@ -465,7 +480,11 @@ class Worker(object):
             put_async: Whether to allow the put to be fulfilled async.
         """
         try:
-            self.store_and_register(object_id, value, put_async=put_async)
+            self.store_and_register(
+                object_id,
+                value,
+                put_async=put_async,
+                intercept_returns=intercept_returns)
         except TypeError:
             # TypeError can happen because one of the members of the object
             # may not be serializable for cloudpickle. So we need
@@ -476,7 +495,8 @@ class Worker(object):
                                "falling back to cloudpickle.".format(
                                    type(value)))
             logger.warning(warning_message)
-            self.store_and_register(object_id, value)
+            self.store_and_register(
+                object_id, value, intercept_returns=intercept_returns)
 
     def deserialize_objects(self,
                             data_metadata_pairs,
@@ -814,11 +834,22 @@ def _initialize_serialization(job_id, worker=global_worker):
     serialization_context.set_pickle(pickle.dumps, pickle.loads)
     pyarrow.register_torch_serialization_handlers(serialization_context)
 
+    def id_serializer(obj):
+        if isinstance(obj, ray.ObjectID) and obj.is_direct_actor_type():
+            raise NotImplementedError(
+                "Objects produced by direct actor calls cannot be "
+                "passed to other tasks as arguments.")
+        return pickle.dumps(obj)
+
+    def id_deserializer(serialized_obj):
+        return pickle.loads(serialized_obj)
+
     for id_type in ray._raylet._ID_TYPES:
         serialization_context.register_type(
             id_type,
             "{}.{}".format(id_type.__module__, id_type.__name__),
-            pickle=True)
+            custom_serializer=id_serializer,
+            custom_deserializer=id_deserializer)
 
     def actor_handle_serializer(obj):
         return obj._serialization_helper(True)
