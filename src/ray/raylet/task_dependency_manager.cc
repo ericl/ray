@@ -383,10 +383,16 @@ void TaskDependencyManager::AcquireTaskLease(const TaskID &task_id) {
                                      RayConfig::instance().max_task_lease_timeout_ms());
 }
 
-void TaskDependencyManager::TaskCanceled(const Task &task) {
+void TaskDependencyManager::TaskCanceled(const Task &task, int num_tasks_completed) {
+  RAY_CHECK(num_tasks_completed != 0);
   if (task.IsVectorTask()) {
+    int i = 0;
     for (const auto &task_spec : task.GetTaskSpecificationVector()) {
+      if (num_tasks_completed > 0 && i >= num_tasks_completed) {
+        break;
+      }
       TaskCanceled0(task_spec.TaskId());
+      i += 1;
     }
   } else {
     TaskCanceled0(task.GetTaskSpecification().TaskId());
@@ -400,7 +406,7 @@ void TaskDependencyManager::TaskCanceled0(const TaskID &task_id) {
   if (it == pending_tasks_.end()) {
     return;
   }
-  pending_tasks_.erase(it);  // TODO(ekl) handle vector tasks
+  pending_tasks_.erase(it);
 
   // Find any subscribed tasks that are dependent on objects created by the
   // canceled task.
@@ -414,6 +420,7 @@ void TaskDependencyManager::TaskCanceled0(const TaskID &task_id) {
   }
 }
 
+// TODO(ekl) this should handle vector tasks too
 void TaskDependencyManager::RemoveTasksAndRelatedObjects(
     const std::unordered_set<TaskID> &task_ids) {
   // Collect a list of all the unique objects that these tasks were subscribed
@@ -429,7 +436,7 @@ void TaskDependencyManager::RemoveTasksAndRelatedObjects(
     // The task no longer depends on anything.
     task_dependencies_.erase(*it);
     // The task is no longer pending execution.
-    pending_tasks_.erase(*it);  // TODO(ekl) handle vector tasks
+    pending_tasks_.erase(*it);
   }
 
   // Cancel all of the objects that were required by the removed tasks.

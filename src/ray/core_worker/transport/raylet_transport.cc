@@ -41,6 +41,7 @@ void CoreWorkerRayletTaskReceiver::HandleAssignTask(
     assigned_req_ = request;
     assigned_tasks_ = assigned;
     num_assigned_ = assigned.size();
+    num_stolen_ = 0;
   }
 
   // Let the main thread handle the actual task execution, so that we don't block
@@ -52,6 +53,7 @@ void CoreWorkerRayletTaskReceiver::HandleAssignTask(
 void CoreWorkerRayletTaskReceiver::ProcessAssignedTasks(
     rpc::SendReplyCallback send_reply_callback) {
   // Process each assigned task in order.
+  int num_tasks_completed = 0;
   while (true) {
     std::unique_lock<std::mutex> lock(mutex_);
     if (assigned_tasks_.empty()) {
@@ -63,6 +65,7 @@ void CoreWorkerRayletTaskReceiver::ProcessAssignedTasks(
     // steal remaining tasks from us while we are processing this one.
     lock.unlock();
     HandleAssignTask0(assigned_req_, task_spec);
+    num_tasks_completed += 1;
   }
 
   // Notify raylet that current task is done via a `TaskDone` message. This is to
@@ -76,7 +79,7 @@ void CoreWorkerRayletTaskReceiver::ProcessAssignedTasks(
   // rpc reply first before the NotifyUnblocked message arrives,
   // as they use different connections, the `TaskDone` message is sent
   // to raylet via the same connection so the order is guaranteed.
-  RAY_UNUSED(raylet_client_->TaskDone());
+  RAY_UNUSED(raylet_client_->TaskDone(num_tasks_completed));
   // Send rpc reply.
   send_reply_callback(Status::OK(), nullptr, nullptr);
 }
@@ -148,12 +151,11 @@ void CoreWorkerRayletTaskReceiver::HandleStealTasks(
     const rpc::StealTasksRequest &request, rpc::StealTasksReply *reply,
     rpc::SendReplyCallback send_reply_callback) {
   std::unique_lock<std::mutex> lock(mutex_);
-  int num_stolen = 0;
   // Avoid stealing all the tasks (steal up to N-1).
-  while (!assigned_tasks_.empty() && num_stolen < num_assigned_ - 1) {
+  while (!assigned_tasks_.empty() && num_stolen_ < num_assigned_ - 1) {
     reply->add_task_ids(assigned_tasks_.back().TaskId().Binary());
     assigned_tasks_.pop_back();
-    num_stolen += 1;
+    num_stolen_ += 1;
   }
   send_reply_callback(Status::OK(), nullptr, nullptr);
 }
