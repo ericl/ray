@@ -7,27 +7,82 @@ namespace ray {
 
 CoreWorkerRayletTaskReceiver::CoreWorkerRayletTaskReceiver(
     WorkerContext &worker_context, std::unique_ptr<RayletClient> &raylet_client,
-    CoreWorkerObjectInterface &object_interface, boost::asio::io_service &io_service,
+    CoreWorkerObjectInterface &object_interface, boost::asio::io_service &rpc_io_service,
+    boost::asio::io_service &main_io_service,
     rpc::GrpcServer &server, const TaskHandler &task_handler)
     : worker_context_(worker_context),
       raylet_client_(raylet_client),
       object_interface_(object_interface),
-      task_service_(io_service, *this),
-      task_handler_(task_handler) {
+      task_service_(rpc_io_service, *this),
+      task_handler_(task_handler),
+      task_main_io_service_(main_io_service) {
   server.RegisterService(task_service_);
 }
 
 void CoreWorkerRayletTaskReceiver::HandleAssignTask(
     const rpc::AssignTaskRequest &request, rpc::AssignTaskReply *reply,
     rpc::SendReplyCallback send_reply_callback) {
-  const Task task(request.task());
-  const auto &task_spec = task.GetTaskSpecification();
-  RAY_LOG(DEBUG) << "Received task " << task_spec.TaskId();
-  if (task_spec.IsActorTask() && worker_context_.CurrentActorUseDirectCall()) {
-    send_reply_callback(Status::Invalid("This actor only accepts direct calls."), nullptr,
-                        nullptr);
-    return;
+  Status status;
+  std::list<TaskSpecification> assigned;
+  for (int i = 0; i < request.tasks_size(); i++) {
+    Task task(request.tasks(i));
+    const auto &task_spec = task.GetTaskSpecification();
+    RAY_LOG(DEBUG) << "Received task " << task_spec.TaskId();
+    if (task_spec.IsActorTask() && worker_context_.CurrentActorUseDirectCall()) {
+      send_reply_callback(Status::Invalid("This actor only accepts direct calls."),
+                          nullptr, nullptr);
+      return;
+    }
+    assigned.push_back(task_spec);
   }
+
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    assigned_req_ = request;
+    assigned_tasks_ = assigned;
+    num_assigned_ = assigned.size();
+  }
+
+  // Let the main thread handle the actual task execution, so that we don't block
+  // other RPCs such as StealTasks().
+  task_main_io_service_.post(
+      [this, send_reply_callback]() { ProcessAssignedTasks(send_reply_callback); });
+}
+
+void CoreWorkerRayletTaskReceiver::ProcessAssignedTasks(
+    rpc::SendReplyCallback send_reply_callback) {
+  // Process each assigned task in order.
+  while (true) {
+    std::unique_lock<std::mutex> lock(mutex_);
+    if (assigned_tasks_.empty()) {
+      break;
+    }
+    auto task_spec = assigned_tasks_.front();
+    assigned_tasks_.pop_front();
+    // Don't hold the lock while processing the task. This allows other RPCs to
+    // steal remaining tasks from us while we are processing this one.
+    lock.unlock();
+    HandleAssignTask0(assigned_req_, task_spec);
+  }
+
+  // Notify raylet that current task is done via a `TaskDone` message. This is to
+  // ensure that the task is marked as finished by raylet only after previous
+  // raylet client calls are completed. For example, if the worker sends a
+  // NotifyUnblocked message that it is no longer blocked in a `ray.get`
+  // on the normal raylet socket, then completes an assigned task, we
+  // need to guarantee that raylet gets the former message first before
+  // marking the task as completed. This is why a `TaskDone` message
+  // is required - without it, it's possible that raylet receives
+  // rpc reply first before the NotifyUnblocked message arrives,
+  // as they use different connections, the `TaskDone` message is sent
+  // to raylet via the same connection so the order is guaranteed.
+  RAY_UNUSED(raylet_client_->TaskDone());
+  // Send rpc reply.
+  send_reply_callback(Status::OK(), nullptr, nullptr);
+}
+
+Status CoreWorkerRayletTaskReceiver::HandleAssignTask0(
+    const rpc::AssignTaskRequest &request, const TaskSpecification &task_spec) {
 
   // Set the resource IDs for this task.
   // TODO: convert the resource map to protobuf and change this.
@@ -86,20 +141,21 @@ void CoreWorkerRayletTaskReceiver::HandleAssignTask(
     }
   }
 
-  // Notify raylet that current task is done via a `TaskDone` message. This is to
-  // ensure that the task is marked as finished by raylet only after previous
-  // raylet client calls are completed. For example, if the worker sends a
-  // NotifyUnblocked message that it is no longer blocked in a `ray.get`
-  // on the normal raylet socket, then completes an assigned task, we
-  // need to guarantee that raylet gets the former message first before
-  // marking the task as completed. This is why a `TaskDone` message
-  // is required - without it, it's possible that raylet receives
-  // rpc reply first before the NotifyUnblocked message arrives,
-  // as they use different connections, the `TaskDone` message is sent
-  // to raylet via the same connection so the order is guaranteed.
-  RAY_UNUSED(raylet_client_->TaskDone());
-  // Send rpc reply.
-  send_reply_callback(status, nullptr, nullptr);
+  return status;
+}
+
+void CoreWorkerRayletTaskReceiver::HandleStealTasks(
+    const rpc::StealTasksRequest &request, rpc::StealTasksReply *reply,
+    rpc::SendReplyCallback send_reply_callback) {
+  std::unique_lock<std::mutex> lock(mutex_);
+  int num_stolen = 0;
+  // Avoid stealing all the tasks (steal up to N-1).
+  while (!assigned_tasks_.empty() && num_stolen < num_assigned_ - 1) {
+    reply->add_task_ids(assigned_tasks_.back().TaskId().Binary());
+    assigned_tasks_.pop_back();
+    num_stolen += 1;
+  }
+  send_reply_callback(Status::OK(), nullptr, nullptr);
 }
 
 }  // namespace ray
