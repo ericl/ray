@@ -16,7 +16,7 @@ import ray.ray_constants as ray_constants
 import ray._raylet
 import ray.signature as signature
 import ray.worker
-from ray import ActorID, ActorClassID, profiling
+from ray import ActorID, ActorClassID
 
 logger = logging.getLogger(__name__)
 
@@ -508,17 +508,15 @@ class ActorHandle(object):
         kwargs = kwargs or {}
 
         list_args = signature.flatten_args(function_signature, args, kwargs)
-        with profiling.profile("submit_task"):
-            if worker.mode == ray.LOCAL_MODE:
-                function = getattr(worker.actors[self._actor_id], method_name)
-                object_ids = worker.local_mode_manager.execute(
-                    function, method_name, args, kwargs, num_return_vals)
-            else:
-                object_ids = worker.core_worker.submit_actor_task(
-                    self._ray_actor_id,
-                    self._ray_function_descriptor_lists[method_name],
-                    list_args, num_return_vals,
-                    {"CPU": self._ray_actor_method_cpus})
+        if worker.mode == ray.LOCAL_MODE:
+            function = getattr(worker.actors[self._actor_id], method_name)
+            object_ids = worker.local_mode_manager.execute(
+                function, method_name, args, kwargs, num_return_vals)
+        else:
+            object_ids = worker.core_worker.submit_actor_task(
+                self._ray_actor_id,
+                self._ray_function_descriptor_lists[method_name], list_args,
+                num_return_vals, {"CPU": self._ray_actor_method_cpus})
 
         if len(object_ids) == 1:
             object_ids = object_ids[0]
