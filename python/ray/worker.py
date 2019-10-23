@@ -283,13 +283,14 @@ class Worker(object):
         """
         self.mode = mode
 
-    def store_and_register(self, object_id, value, depth=100):
+    def store_and_register(self, object_id, value, depth=100, put_async=False):
         """Store an object and attempt to register its class if needed.
 
         Args:
             object_id: The ID of the object to store.
             value: The value to put in the object store.
             depth: The maximum number of classes to recursively register.
+            put_async: Whether to allow the put to be fulfilled async.
 
         Raises:
             Exception: An exception is raised if the attempt to store the
@@ -312,13 +313,15 @@ class Worker(object):
                     # that this object can also be read by Java.
                     self.core_worker.put_raw_buffer(
                         value, object_id, memcopy_threads=self.memcopy_threads)
+                    # TODO(ekl) support async put of raw buffers
                 else:
                     serialization_context = self.get_serialization_context(
                         self.current_job_id)
                     self.core_worker.put_serialized_object(
                         pyarrow.serialize(value, serialization_context),
                         object_id,
-                        memcopy_threads=self.memcopy_threads)
+                        memcopy_threads=self.memcopy_threads,
+                        put_async=put_async)
                 break
             except pyarrow.SerializationCallbackError as e:
                 cls_type = type(e.example_object)
@@ -352,7 +355,7 @@ class Worker(object):
                                            "locally.".format(cls_type))
                         logger.warning(warning_message)
 
-    def put_object(self, object_id, value):
+    def put_object(self, object_id, value, put_async=False):
         """Put value in the local object store with object id `objectid`.
 
         This assumes that the value for `objectid` has not yet been placed in
@@ -366,6 +369,9 @@ class Worker(object):
             object_id (object_id.ObjectID): The object ID of the value to be
                 put.
             value: The value to put in the object store.
+            put_async: Whether to allow the put to be asynchronously
+                fulfilled. It is guaranteed when a batch of tasks completes
+                that all async puts will be flushed to the object store.
 
         Raises:
             ray.exceptions.ObjectStoreFullError: This is raised if the attempt
@@ -386,9 +392,9 @@ class Worker(object):
                 range(ray_constants.DEFAULT_PUT_OBJECT_RETRIES)):
             try:
                 if self.use_pickle:
-                    self.store_with_plasma(object_id, value)
+                    self.store_with_plasma(object_id, value, put_async=put_async)
                 else:
-                    self._try_store_and_register(object_id, value)
+                    self._try_store_and_register(object_id, value, put_async=put_async)
                 break
             except ObjectStoreFullError as e:
                 if attempt:
@@ -405,12 +411,13 @@ class Worker(object):
         logger.warning("Local object store memory usage:\n{}\n".format(
             self.core_worker.object_store_memory_usage_string()))
 
-    def store_with_plasma(self, object_id, value):
+    def store_with_plasma(self, object_id, value, put_async=False):
         """Serialize and store an object.
 
         Args:
             object_id: The ID of the object to store.
             value: The value to put in the object store.
+            put_async: Whether to allow the put to be fulfilled async.
 
         Raises:
             Exception: An exception is raised if the attempt to store the
@@ -418,6 +425,9 @@ class Worker(object):
                 with the same ID in the object store or if the object store is
                 full.
         """
+        if put_async:
+            raise NotImplementedError("async put with new serializer")
+
         try:
             if isinstance(value, bytes):
                 # If the object is a byte array, skip serializing it and
@@ -445,16 +455,17 @@ class Worker(object):
             logger.info("The object with ID {} already exists "
                         "in the object store.".format(object_id))
 
-    def _try_store_and_register(self, object_id, value):
+    def _try_store_and_register(self, object_id, value, put_async=False):
         """Wraps `store_and_register` with cases for existence and pickling.
 
         Args:
             object_id (object_id.ObjectID): The object ID of the value to be
                 put.
             value: The value to put in the object store.
+            put_async: Whether to allow the put to be fulfilled async.
         """
         try:
-            self.store_and_register(object_id, value)
+            self.store_and_register(object_id, value, put_async=put_async)
         except TypeError:
             # TypeError can happen because one of the members of the object
             # may not be serializable for cloudpickle. So we need
