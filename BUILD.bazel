@@ -98,6 +98,16 @@ cc_proto_library(
     deps = ["direct_actor_proto"],
 )
 
+proto_library(
+    name = "serialization_proto",
+    srcs = ["src/ray/protobuf/serialization.proto"],
+)
+
+cc_proto_library(
+    name = "serialization_cc_proto",
+    deps = ["serialization_proto"],
+)
+
 # === End of protobuf definitions ===
 
 # === Begin of rpc definitions ===
@@ -227,16 +237,6 @@ cc_library(
         "@boost//:asio",
         "@com_github_grpc_grpc//:grpc++",
         "@plasma//:plasma_client",
-    ],
-)
-
-cc_test(
-    name = "common_test",
-    srcs = glob(["src/ray/common/**/*_test.cc"]),
-    copts = COPTS,
-    deps = [
-        ":ray_common",
-        "@com_google_googletest//:gtest_main",
     ],
 )
 
@@ -482,6 +482,16 @@ cc_test(
 )
 
 cc_test(
+    name = "sample_test",
+    srcs = ["src/ray/util/sample_test.cc"],
+    copts = COPTS,
+    deps = [
+        ":ray_common",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
     name = "task_dependency_manager_test",
     srcs = ["src/ray/raylet/task_dependency_manager_test.cc"],
     copts = COPTS,
@@ -585,6 +595,7 @@ cc_library(
     deps = [
         ":sha256",
         "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/time",
         "@plasma//:plasma_client",
     ],
 )
@@ -735,6 +746,7 @@ pyx_library(
     deps = [
         "//:core_worker_lib",
         "//:raylet_lib",
+        "//:serialization_cc_proto",
     ],
 )
 
