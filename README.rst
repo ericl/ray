@@ -6,7 +6,7 @@
 |
 
 
-**Ray provides a simple, universal API for building distributed applications.**
+**Ray is an open source framework that provides a simple, universal API for building distributed applications.**
 
 Ray is packaged with the following libraries for accelerating machine learning workloads:
 
