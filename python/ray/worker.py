@@ -647,6 +647,9 @@ def init(
     if "RAY_ADDRESS" in os.environ:
         if address is None or address == "auto":
             address = os.environ["RAY_ADDRESS"]
+        elif address == os.environ["RAY_ADDRESS"]:
+            pass  # Sometimes the CLI passes in the exact same address, so
+                  # permit that case to avoid unnecessary erroring out.
         else:
             raise RuntimeError(
                 "Cannot use both the RAY_ADDRESS environment variable and "
