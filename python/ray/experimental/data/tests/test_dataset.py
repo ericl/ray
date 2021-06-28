@@ -104,6 +104,16 @@ def test_pyarrow(ray_start_regular_shared):
         .take() == [{"b": 2}, {"b": 20}]
 
 
+def test_split(ray_start_regular_shared):
+    ds = ray.experimental.data.range(20, parallelism=10)
+    assert ds.num_blocks() == 10
+    assert ds.sum() == 190
+    assert ds._block_sizes() == [2] * 10
+
+    datasets = ds.split(5)
+    assert [2, 2, 2, 2, 2] == [len(dataset._blocks) for dataset in datasets]
+
+
 if __name__ == "__main__":
     import sys
     sys.exit(pytest.main(["-v", __file__]))

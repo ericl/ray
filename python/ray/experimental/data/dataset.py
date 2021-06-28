@@ -9,6 +9,8 @@ if TYPE_CHECKING:
     import pyspark
     import ray.util.sgd
 
+import builtins
+import math
 import ray
 from ray.experimental.data.impl.compute import get_compute
 from ray.experimental.data.impl.shuffle import simple_shuffle
@@ -219,7 +221,13 @@ class Dataset(Generic[T]):
         Returns:
             A list of ``n`` disjoint dataset splits.
         """
-        raise NotImplementedError  # P1
+        assert n <= len(self._blocks)
+        chunk_size = math.ceil(len(self._blocks) / n)
+        chunks = [
+            self._blocks.slice(i, min(i + chunk_size, len(self._blocks)))
+            for i in builtins.range(0, len(self._blocks), chunk_size)
+        ]
+        return [Dataset(blocks) for blocks in chunks]
 
     def sort(self,
              key: Union[None, str, List[str], Callable[[T], Any]],
