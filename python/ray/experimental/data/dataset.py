@@ -9,13 +9,13 @@ if TYPE_CHECKING:
     import pyspark
     import ray.util.sgd
 
-import builtins
-import math
+import itertools
 import ray
 from ray.experimental.data.impl.compute import get_compute
 from ray.experimental.data.impl.shuffle import simple_shuffle
 from ray.experimental.data.impl.block import ObjectRef, Block
 from ray.experimental.data.impl.arrow_block import DelegatingArrowBlockBuilder
+from ray.experimental import get_object_locations
 
 T = TypeVar("T")
 U = TypeVar("U")
@@ -221,13 +221,92 @@ class Dataset(Generic[T]):
         Returns:
             A list of ``n`` disjoint dataset splits.
         """
-        assert n <= len(self._blocks)
-        chunk_size = math.ceil(len(self._blocks) / n)
-        chunks = [
-            self._blocks.slice(i, min(i + chunk_size, len(self._blocks)))
-            for i in builtins.range(0, len(self._blocks), chunk_size)
+        assert n > 0 and n <= len(self._blocks)
+        assert locality_hints is None or len(locality_hints) == n
+
+        # Split self._blocks into n chunks. the first {num_large_chunks} chunks
+        # have {small_chunk_size + 1} blocks, and remaining
+        # chunks have {small_chunk_size} blocks.
+        small_chunk_size = len(self._blocks) // n
+        num_large_chunks = len(self._blocks) - small_chunk_size * n
+
+        datasets = []
+        block_refs = list(self._blocks)
+
+        if locality_hints is None:
+            cur = 0
+            for i in range(n):
+                end = cur + small_chunk_size
+                if i < num_large_chunks:
+                    end = end + 1
+                datasets.append(Dataset(block_refs[cur:end]))
+                cur = end
+            return datasets
+
+        # If the locality_hints is set, we use a greedy algorithm
+        # to co-locate the blocks with the actors based on block
+        # and actor's node_id:
+        #
+        # 1. We get the node_id where the block resides in and store it in
+        # a map {node_id: [blocks]}. Note that each block could
+        # be located on multiple nodes. For simplicity, we use the first
+        # node_id so that there is one to one mapping from node_id to block
+        # in the map.
+        #
+        # 2. We do two round of allocations. In the first round, we allocate
+        # blocks for each actor based by sustract the blocks from the map
+        # we build from previous step.
+        #
+        # 3. Some actors might have more blocks than needed while the
+        # others don't have enough blocks. We do second round of allocation
+        # for the reminder blocks so that every actor have sufficient blocks.
+
+        # wait might affect the throughput due to stragglers?
+        ray.wait(block_refs)
+
+        # build node_id to block_refs map
+        block_ref_locations = get_object_locations(block_refs)
+        block_refs_by_node_id = {}
+        for block_ref in block_refs:
+            node_ids = block_ref_locations.get(block_ref, {}).get(
+                "node_ids", [])
+            node_id = node_ids[0] if node_ids else None
+            if node_id not in block_refs_by_node_id:
+                block_refs_by_node_id[node_id] = []
+            block_refs_by_node_id[node_id].append(block_ref)
+
+        # find the node_ids for each actors and the num of blocks
+        # needed for each actor
+        actors_state = ray.state.actors()
+        actor_node_ids = [
+            actors_state.get(actor._actor_id.hex(), {}).get("Address",
+                                                            {}).get("NodeID")
+            for actor in locality_hints
         ]
-        return [Dataset(blocks) for blocks in chunks]
+        num_blocks_by_actor = [small_chunk_size + 1] * num_large_chunks + [
+            small_chunk_size
+        ] * (n - num_large_chunks)
+
+        # first round of allocation by substracting the blocks from
+        # block_refs_by_node_id map based on each actor's node_id.
+        block_refs_by_actor = []
+        for i in range(n):
+            node_id = actor_node_ids[i]
+            block_refs = block_refs_by_node_id.get(node_id, [])
+            block_refs_by_actor.append(block_refs[:num_blocks_by_actor[i]])
+            del block_refs[:num_blocks_by_actor[i]]
+            num_blocks_by_actor[i] -= len(block_refs_by_actor[i])
+
+        # second round of allocation for remaining blocks
+        remaining_block_refs = list(
+            itertools.chain.from_iterable(block_refs_by_node_id.values()))
+
+        for i in range(n):
+            block_refs_by_actor[i].extend(
+                remaining_block_refs[:num_blocks_by_actor[i]])
+            del remaining_block_refs[:num_blocks_by_actor[i]]
+
+        return [Dataset(block_refs) for block_refs in block_refs_by_actor]
 
     def sort(self,
              key: Union[None, str, List[str], Callable[[T], Any]],

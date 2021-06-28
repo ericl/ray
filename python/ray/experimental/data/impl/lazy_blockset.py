@@ -1,14 +1,12 @@
-from typing import Callable, List, Optional
+from typing import Callable
 
 from ray.experimental.data.impl.block import Block, ObjectRef
 
 
 class LazyBlockSet:
-    def __init__(self,
-                 calls: Callable[[], ObjectRef[Block]],
-                 blocks: List[ObjectRef[Block]] = []):
+    def __init__(self, calls: Callable[[], ObjectRef[Block]]):
         self._calls = calls
-        self._blocks = blocks or [calls[0]()]
+        self._blocks = [calls[0]()]
 
     def __len__(self):
         return len(self._calls)
@@ -40,9 +38,3 @@ class LazyBlockSet:
             for c in self._calls[start:max(i + 1, start * 2)]:
                 self._blocks.append(c())
         return self._blocks[i]
-
-    def slice(self, start: int, end: int) -> "LazyBlockSet":
-        return LazyBlockSet(
-            self._calls[start:end],
-            self._blocks[min(start, len(self._blocks)):min(
-                end, len(self._blocks))])

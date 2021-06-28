@@ -112,6 +112,34 @@ def test_split(ray_start_regular_shared):
 
     datasets = ds.split(5)
     assert [2, 2, 2, 2, 2] == [len(dataset._blocks) for dataset in datasets]
+    assert 190 == sum([dataset.sum() for dataset in datasets])
+
+    datasets = ds.split(3)
+    assert [4, 3, 3] == [len(dataset._blocks) for dataset in datasets]
+    assert 190 == sum([dataset.sum() for dataset in datasets])
+
+    datasets = ds.split(1)
+    assert [10] == [len(dataset._blocks) for dataset in datasets]
+    assert 190 == sum([dataset.sum() for dataset in datasets])
+
+    datasets = ds.split(10)
+    assert [1] * 10 == [len(dataset._blocks) for dataset in datasets]
+    assert 190 == sum([dataset.sum() for dataset in datasets])
+
+
+def test_split_hints(ray_start_regular_shared):
+    @ray.remote
+    class Actor(object):
+        def __init__(self):
+            pass
+
+        def increment(self, value):
+            return value + 1
+
+    actors = [Actor.remote() for i in range(4)]
+    ds = ray.experimental.data.range(20, parallelism=10)
+    datasets = ds.split(4, actors)
+    assert 190 == sum([dataset.sum() for dataset in datasets])
 
 
 if __name__ == "__main__":
